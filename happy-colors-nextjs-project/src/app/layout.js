@@ -3,15 +3,13 @@
 import './globals.css';
 import styles from './page.module.css';
 import ClientLayout from './ClientLayout';
-
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL || 'https://happycolors.eu';
-
-const isProductionSite =
-  process.env.NEXT_PUBLIC_SITE_ENV === 'production';
+import {
+  metadataBaseUrl,
+  shouldIndexSite,
+} from '@/config/siteSeo';
 
 export const metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: metadataBaseUrl,
 
   title: {
     default: 'Плетени играчки, аксесоари и декорация за дома | Happy Colors',
@@ -21,13 +19,16 @@ export const metadata = {
   description: 'Ръчно изработени плетени играчки, аксесоари и декорация за дома от Happy Colors – оригинални идеи за подарък, уют и красиви изделия с характер.',
 
   robots: {
-    index: isProductionSite,
-    follow: isProductionSite,
+    index: shouldIndexSite,
+    follow: shouldIndexSite,
   },
-
-  alternates: {
-    canonical: '/',
-  },
+  ...(shouldIndexSite
+    ? {
+        alternates: {
+          canonical: '/',
+        },
+      }
+    : {}),
 
   icons: {
     icon: '/icon.svg',
