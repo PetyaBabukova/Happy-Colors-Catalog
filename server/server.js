@@ -11,13 +11,23 @@ function isLocalOrigin(origin = '') {
 function getAllowedOrigins() {
   const configuredOrigins = String(process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean);
 
-  const clientUrl = String(process.env.CLIENT_URL || '').trim();
+  const clientUrl = String(process.env.CLIENT_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+  const publicSiteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+  const renderExternalUrl = String(process.env.RENDER_EXTERNAL_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
 
   const defaults = [
     clientUrl,
+    publicSiteUrl,
+    renderExternalUrl,
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:3001',
@@ -46,15 +56,17 @@ export function createExpressApp() {
           return callback(null, true);
         }
 
-        if (!isProduction && isLocalOrigin(origin)) {
+        const normalizedOrigin = origin.replace(/\/+$/, '');
+
+        if (!isProduction && isLocalOrigin(normalizedOrigin)) {
           return callback(null, true);
         }
 
-        if (allowedOrigins.includes(origin)) {
+        if (allowedOrigins.includes(normalizedOrigin)) {
           return callback(null, true);
         }
 
-        return callback(new Error(`Not allowed by CORS: ${origin}`));
+        return callback(new Error(`Not allowed by CORS: ${normalizedOrigin}`));
       },
       credentials: true,
     })
