@@ -1,12 +1,15 @@
 // src/app/sitemap.js
 
-import { PROD_SITE_URL, shouldIndexSite } from '@/config/siteSeo';
+import {
+  PROD_SITE_URL,
+  shouldExposeSitemap,
+} from '@/config/siteSeo';
 import baseURL from '@/config';
 
 export const revalidate = 3600;
 
 export default async function sitemap() {
-  if (!shouldIndexSite) {
+  if (!shouldExposeSitemap) {
     return [];
   }
 
