@@ -12,7 +12,7 @@ import {
 const roboto = Roboto({
   subsets: ['latin', 'cyrillic'],
   weight: ['300', '400', '500', '700'],
-  display: 'swap',
+  display: 'optional',
 });
 
 export const metadata = {
