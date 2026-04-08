@@ -149,7 +149,7 @@ export default function ProductDetails({ product }) {
 							<b>Наличност:</b> {availabilityLabel}
 						</p>
 
-						<p>Цена {isCatalogMode ? 'при запитване' : `${product.price} €`}</p>
+						<p>Цена {isCatalogMode && !user ? 'при запитване' : `${product.price} €`}</p>
 
 						<div className={styles.actionButtonsContainer}>
 							{isCatalogMode ? (
