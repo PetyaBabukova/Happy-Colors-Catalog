@@ -3,10 +3,17 @@
 import './globals.css';
 import styles from './page.module.css';
 import ClientLayout from './ClientLayout';
+import { Roboto } from 'next/font/google';
 import {
   metadataBaseUrl,
   shouldIndexSite,
 } from '@/config/siteSeo';
+
+const roboto = Roboto({
+  subsets: ['latin', 'cyrillic'],
+  weight: ['300', '400', '500', '700'],
+  display: 'swap',
+});
 
 export const metadata = {
   metadataBase: metadataBaseUrl,
@@ -40,7 +47,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="bg">
-      <body>
+      <body className={roboto.className}>
         <ClientLayout>{children}</ClientLayout>
               <footer className={styles.footer}>
 				<p>© 2026 Happy Colors. Всички права запазени.</p>

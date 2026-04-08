@@ -17,8 +17,6 @@ export default function Header() {
   const cartItemCount = getTotalItems();
 
   // Показваме loader или нищо само докато върви заявката за user
-  if (loading) return null;
-
   return (
     <>
       <header className="header">

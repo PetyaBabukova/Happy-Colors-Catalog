@@ -1,17 +1,15 @@
 // happy-colors-nextjs-project/src/app/products/[productId]/page.js
 
 import ProductDetails from './ProductDetails';
-import baseURL from '@/config';
 import { notFound } from 'next/navigation';
+import { getProduct } from '@/lib/getProduct';
 
 export async function generateMetadata({ params: paramsPromise }) {
   const { productId } = await paramsPromise;
 
-  const res = await fetch(`${baseURL}/products/${productId}`, {
-    cache: 'no-store',
-  });
+  const product = await getProduct(productId);
 
-  if (!res.ok) {
+  if (!product) {
     return {
       title: 'Продуктът не е намерен',
       description: 'Опитайте отново или изберете друг продукт.',
@@ -21,8 +19,6 @@ export async function generateMetadata({ params: paramsPromise }) {
       },
     };
   }
-
-  const product = await res.json();
 
   const categoryName = product.category?.name;
   const titleParts = [product.title, categoryName].filter(Boolean);
@@ -41,15 +37,11 @@ export async function generateMetadata({ params: paramsPromise }) {
 export default async function ProductDetailsPage({ params: paramsPromise }) {
   const { productId } = await paramsPromise;
 
-  const res = await fetch(`${baseURL}/products/${productId}`, {
-    cache: 'no-store',
-  });
+  const product = await getProduct(productId);
 
-  if (!res.ok) {
+  if (!product) {
     notFound();
   }
-
-  const product = await res.json();
 
   return <ProductDetails product={product} />;
 }

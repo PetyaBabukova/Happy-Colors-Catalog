@@ -2,7 +2,7 @@
 
 import ContactForm from '../../components/contacts/ContactForm';
 import styles from '../../components/products/create.module.css';
-import baseURL from '@/config';
+import { getProduct } from '@/lib/getProduct';
 
 export const metadata = {
   title: 'Контакти',
@@ -17,11 +17,7 @@ async function fetchProduct(productId) {
   if (!productId) return null;
 
   try {
-    const res = await fetch(`${baseURL}/products/${productId}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return await res.json();
+    return await getProduct(productId);
   } catch {
     return null;
   }

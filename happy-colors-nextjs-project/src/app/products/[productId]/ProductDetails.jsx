@@ -9,6 +9,7 @@ import { isOwner } from '@/utils/isOwner';
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
+import Image from 'next/image';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -26,6 +27,24 @@ const deliveryContent = `
 Неналични продукти:
 Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
 `;
+
+function EmptyStarIcon() {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			aria-hidden="true"
+			className={styles.starIcon}
+		>
+			<path
+				d="M12 3.2l2.68 5.44 6 .88-4.34 4.23 1.02 5.97L12 16.9l-5.36 2.82 1.02-5.97L3.32 9.52l6-.88Z"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.7"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
 
 export default function ProductDetails({ product }) {
 	const { user } = useAuth();
@@ -92,7 +111,7 @@ export default function ProductDetails({ product }) {
 				<div className={styles.reviewContainer}>
 					<div className={styles.starsEmpty}>
 						{[...Array(5)].map((_, i) => (
-							<i key={i} className="fa-regular fa-star"></i>
+							<EmptyStarIcon key={i} />
 						))}
 					</div>
 				</div>
@@ -197,7 +216,15 @@ export default function ProductDetails({ product }) {
 						</button>
 					)}
 
-					{mainImage && <img src={mainImage} alt={product.title} />}
+					{mainImage && (
+						<Image
+							src={mainImage}
+							alt={product.title}
+							fill
+							sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
+							className={styles.productMainImage}
+						/>
+					)}
 
 					{hasMultipleImages && (
 						<button
