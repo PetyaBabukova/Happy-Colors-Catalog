@@ -51,8 +51,8 @@ export default function ProductDetails({ product }) {
 	const isAvailable = product?.availability !== 'unavailable';
 
 	const availabilityLabel = isAvailable
-		? 'Продукта е наличен'
-		: 'Продукта не е наличен';
+		? 'Продуктът е наличен'
+		: 'Продуктът не е наличен';
 
 	const mainImage = imageUrls[currentImageIndex] || product.imageUrl || '';
 	const hasMultipleImages = imageUrls.length > 1;

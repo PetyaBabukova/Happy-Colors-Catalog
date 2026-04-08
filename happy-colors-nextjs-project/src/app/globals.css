@@ -197,6 +197,12 @@ button:hover {
     width: 100%;
   }
 
+  footer {
+    flex-direction: column;
+    gap: 1em;
+    text-align: center;
+  }
+
   main{
     max-width: 90%;
   }

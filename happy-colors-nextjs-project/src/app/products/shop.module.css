@@ -36,17 +36,24 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  align-items: center;
+  align-items: stretch;
   gap: 2em;
   margin: 2em 0;
 }
 
 .product {
   flex: 0 1 22%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   padding: 1em;
   border: 1px solid var(--light-green);
   border-radius: 0.5em;
   background-color: var(--lightest-green);
+}
+
+.productTitle {
+  margin-top: 0.5em;
 }
 
 .productImageContainer {
