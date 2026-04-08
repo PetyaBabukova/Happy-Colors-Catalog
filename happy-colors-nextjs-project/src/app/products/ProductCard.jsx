@@ -12,7 +12,7 @@ export default function ProductCard({ product }) {
             <div className={styles.productImageContainer}>
                 <img src={product.imageUrl} alt={product.title} />
             </div>
-            <h4>{product.title}</h4>
+            <h4 className={styles.productTitle}>{product.title}</h4>
             {/* <p>{isCatalogMode ? 'Цена при запитване' : `Цена: ${product.price} €`}</p> */}
         </Link>
     );
