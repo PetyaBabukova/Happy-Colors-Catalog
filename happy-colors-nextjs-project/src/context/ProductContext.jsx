@@ -50,14 +50,13 @@ export function ProductProvider({ children }) {
     setReloadFlag(prev => !prev);
   };
 
-  if (loading) return null;
-
   return (
     <ProductContext.Provider
       value={{
         categories,
         visibleCategories,
         products,
+        loading,
         triggerCategoriesReload,
       }}
     >

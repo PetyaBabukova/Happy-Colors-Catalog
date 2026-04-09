@@ -2,13 +2,16 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { isOwner } from '@/utils/isOwner';
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
+import Image from 'next/image';
+import useImageSlideshow from '@/hooks/useImageSlideshow';
+import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -27,26 +30,52 @@ const deliveryContent = `
 Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
 `;
 
+// TODO: Ще се активира при имплементация на ревю система
+// function EmptyStarIcon() {
+// 	return (
+// 		<svg viewBox="0 0 24 24" aria-hidden="true" className={styles.starIcon}>
+// 			<path d="M12 3.2l2.68 5.44 6 .88-4.34 4.23 1.02 5.97L12 16.9l-5.36 2.82 1.02-5.97L3.32 9.52l6-.88Z"
+// 				fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+// 		</svg>
+// 	);
+// }
+
 export default function ProductDetails({ product }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
 	const canEdit = isOwner(product, user);
 	const router = useRouter();
+	const gestureRef = useRef(null);
+	const pointerIdRef = useRef(null);
+	const dragStartXRef = useRef(0);
 
-	const imageUrls = useMemo(() => {
-		if (Array.isArray(product?.imageUrls) && product.imageUrls.length > 0) {
-			return product.imageUrls.filter(Boolean);
+	const imageUrls = useMemo(() => normalizeImageUrls(product), [product]);
+	const loopedImageUrls = useMemo(() => {
+		if (imageUrls.length <= 1) {
+			return imageUrls;
 		}
 
-		if (product?.imageUrl) {
-			return [product.imageUrl];
-		}
-
-		return [];
-	}, [product]);
-
-	const [currentImageIndex, setCurrentImageIndex] = useState(0);
+		return [imageUrls[imageUrls.length - 1], ...imageUrls, imageUrls[0]];
+	}, [imageUrls]);
 	const [activeTab, setActiveTab] = useState('description');
+	const [isDragging, setIsDragging] = useState(false);
+	const [dragOffset, setDragOffset] = useState(0);
+	const {
+		currentIndex,
+		currentUrl,
+		hasMultiple,
+		trackIndex,
+		transitionEnabled,
+		showPrev,
+		showNext,
+		pause,
+		resume,
+		handleTrackTransitionEnd,
+	} = useImageSlideshow(
+		imageUrls,
+		5000,
+		{ resetKey: product._id }
+	);
 
 	const isAvailable = product?.availability !== 'unavailable';
 
@@ -54,15 +83,12 @@ export default function ProductDetails({ product }) {
 		? 'Продуктът е наличен'
 		: 'Продуктът не е наличен';
 
-	const mainImage = imageUrls[currentImageIndex] || product.imageUrl || '';
-	const hasMultipleImages = imageUrls.length > 1;
-
 	const handleAddToCart = () => {
 		addToCart({
 			_id: product._id,
 			title: product.title,
 			price: product.price,
-			image: mainImage,
+			image: currentUrl || product.imageUrl || '',
 		});
 
 		router.push('/cart');
@@ -72,16 +98,47 @@ export default function ProductDetails({ product }) {
 		router.push(`/contacts?productId=${product._id}`);
 	};
 
-	const showPrevImage = () => {
-		setCurrentImageIndex((prevIndex) =>
-			prevIndex === 0 ? imageUrls.length - 1 : prevIndex - 1
-		);
+	const handlePointerDown = (event) => {
+		if (!hasMultiple || event.target.closest('button')) {
+			return;
+		}
+
+		pointerIdRef.current = event.pointerId;
+		dragStartXRef.current = event.clientX;
+		setDragOffset(0);
+		setIsDragging(true);
+		pause();
+		event.currentTarget.setPointerCapture?.(event.pointerId);
 	};
 
-	const showNextImage = () => {
-		setCurrentImageIndex((prevIndex) =>
-			prevIndex === imageUrls.length - 1 ? 0 : prevIndex + 1
-		);
+	const handlePointerMove = (event) => {
+		if (!isDragging || pointerIdRef.current !== event.pointerId) {
+			return;
+		}
+
+		setDragOffset(event.clientX - dragStartXRef.current);
+	};
+
+	const finishDrag = (event) => {
+		if (!isDragging || pointerIdRef.current !== event.pointerId) {
+			return;
+		}
+
+		const containerWidth = gestureRef.current?.offsetWidth || 0;
+		const threshold = Math.max(50, containerWidth * 0.15);
+		const deltaX = event.clientX - dragStartXRef.current;
+
+		if (deltaX <= -threshold) {
+			showNext();
+		} else if (deltaX >= threshold) {
+			showPrev();
+		}
+
+		setIsDragging(false);
+		setDragOffset(0);
+		pointerIdRef.current = null;
+		event.currentTarget.releasePointerCapture?.(event.pointerId);
+		resume();
 	};
 
 	return (
@@ -89,13 +146,15 @@ export default function ProductDetails({ product }) {
 			<div className={styles.productDescriptionContainer}>
 				<h1>{product.title}</h1>
 
+				{/* TODO: Рейтинг звездички — ще се активират при имплементация на ревю система
 				<div className={styles.reviewContainer}>
 					<div className={styles.starsEmpty}>
 						{[...Array(5)].map((_, i) => (
-							<i key={i} className="fa-regular fa-star"></i>
+							<EmptyStarIcon key={i} />
 						))}
 					</div>
 				</div>
+				*/}
 
 				<ul className={styles.productDetailsBodyTabsContainer}>
 					<li
@@ -185,11 +244,18 @@ export default function ProductDetails({ product }) {
 			</div>
 
 			<div className={styles.productDetailsImagesContainer}>
-				<div className={styles.productDetailsMainImage}>
-					{hasMultipleImages && (
+				<div
+					ref={gestureRef}
+					className={styles.productDetailsMainImage}
+					onPointerDown={handlePointerDown}
+					onPointerMove={handlePointerMove}
+					onPointerUp={finishDrag}
+					onPointerCancel={finishDrag}
+				>
+					{hasMultiple && (
 						<button
 							type="button"
-							onClick={showPrevImage}
+							onClick={showPrev}
 							aria-label="Предишно изображение"
 							className={`${styles.imageNavBtn} ${styles.imageNavBtnLeft}`}
 						>
@@ -197,12 +263,51 @@ export default function ProductDetails({ product }) {
 						</button>
 					)}
 
-					{mainImage && <img src={mainImage} alt={product.title} />}
+					{imageUrls.length > 0 ? (
+						<div
+							className={styles.productImageTrack}
+							style={{
+								transform: `translateX(calc(-${trackIndex * 100}% + ${dragOffset}px))`,
+								transition: isDragging || !transitionEnabled ? 'none' : undefined,
+							}}
+							onTransitionEnd={handleTrackTransitionEnd}
+						>
+							{loopedImageUrls.map((url, index) => {
+								const isClone = imageUrls.length > 1 && (index === 0 || index === loopedImageUrls.length - 1);
+								const logicalIndex = imageUrls.length > 1
+									? index === 0
+										? imageUrls.length - 1
+										: index === loopedImageUrls.length - 1
+											? 0
+											: index - 1
+									: index;
 
-					{hasMultipleImages && (
+								return (
+									<div
+										key={`${url}-${index}`}
+										className={styles.productImageSlide}
+										aria-hidden={isClone || logicalIndex !== currentIndex}
+									>
+										<Image
+											src={url}
+											alt={product.title}
+											width={1600}
+											height={1600}
+											sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
+											className={styles.productMainImage}
+											priority={!isClone && logicalIndex === 0}
+											loading={!isClone && logicalIndex === 0 ? undefined : 'lazy'}
+										/>
+									</div>
+								);
+							})}
+						</div>
+					) : null}
+
+					{hasMultiple && (
 						<button
 							type="button"
-							onClick={showNextImage}
+							onClick={showNext}
 							aria-label="Следващо изображение"
 							className={`${styles.imageNavBtn} ${styles.imageNavBtnRight}`}
 						>

@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function CreateCategoryPage() {
   return (
-    <section className="p-4">
+    <section style={{ padding: '1rem' }}>
       <CreateCategory />
     </section>
   );
