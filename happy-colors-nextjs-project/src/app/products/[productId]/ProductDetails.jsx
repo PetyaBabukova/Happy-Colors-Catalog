@@ -190,21 +190,31 @@ export default function ProductDetails({ product }) {
 						</button>
 					)}
 
-					{imageUrls.map((url, index) => (
-						<Image
-							key={`${url}-${index}`}
-							src={url}
-							alt={product.title}
-							fill
-							sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
-							className={`${styles.productMainImage} ${styles.slideImage} ${
-								index === currentIndex ? styles.slideVisible : styles.slideHidden
-							}`}
-							aria-hidden={index !== currentIndex}
-							priority={index === 0}
-							loading={index === 0 ? undefined : 'lazy'}
-						/>
-					))}
+					{imageUrls.length > 0 ? (
+						<div
+							className={styles.productImageTrack}
+							style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+						>
+							{imageUrls.map((url, index) => (
+								<div
+									key={`${url}-${index}`}
+									className={styles.productImageSlide}
+									aria-hidden={index !== currentIndex}
+								>
+									<Image
+										src={url}
+										alt={product.title}
+										width={1600}
+										height={1600}
+										sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
+										className={styles.productMainImage}
+										priority={index === 0}
+										loading={index === 0 ? undefined : 'lazy'}
+									/>
+								</div>
+							))}
+						</div>
+					) : null}
 
 					{hasMultiple && (
 						<button
