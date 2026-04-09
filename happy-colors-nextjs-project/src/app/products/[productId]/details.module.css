@@ -124,6 +124,21 @@
   display: block;
 }
 
+.slideImage {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.6s ease;
+}
+
+.slideVisible {
+  opacity: 1;
+}
+
+.slideHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .productDetailsMainImage {
   position: relative;
   width: 100%;

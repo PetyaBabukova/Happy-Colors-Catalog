@@ -10,6 +10,8 @@ import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
 import Image from 'next/image';
+import useImageSlideshow from '@/hooks/useImageSlideshow';
+import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -44,20 +46,13 @@ export default function ProductDetails({ product }) {
 	const canEdit = isOwner(product, user);
 	const router = useRouter();
 
-	const imageUrls = useMemo(() => {
-		if (Array.isArray(product?.imageUrls) && product.imageUrls.length > 0) {
-			return product.imageUrls.filter(Boolean);
-		}
-
-		if (product?.imageUrl) {
-			return [product.imageUrl];
-		}
-
-		return [];
-	}, [product]);
-
-	const [currentImageIndex, setCurrentImageIndex] = useState(0);
+	const imageUrls = useMemo(() => normalizeImageUrls(product), [product]);
 	const [activeTab, setActiveTab] = useState('description');
+	const { currentIndex, currentUrl, hasMultiple, showPrev, showNext } = useImageSlideshow(
+		imageUrls,
+		5000,
+		{ resetKey: product._id }
+	);
 
 	const isAvailable = product?.availability !== 'unavailable';
 
@@ -65,15 +60,12 @@ export default function ProductDetails({ product }) {
 		? 'Продуктът е наличен'
 		: 'Продуктът не е наличен';
 
-	const mainImage = imageUrls[currentImageIndex] || product.imageUrl || '';
-	const hasMultipleImages = imageUrls.length > 1;
-
 	const handleAddToCart = () => {
 		addToCart({
 			_id: product._id,
 			title: product.title,
 			price: product.price,
-			image: mainImage,
+			image: currentUrl || product.imageUrl || '',
 		});
 
 		router.push('/cart');
@@ -81,18 +73,6 @@ export default function ProductDetails({ product }) {
 
 	const handleInquiry = () => {
 		router.push(`/contacts?productId=${product._id}`);
-	};
-
-	const showPrevImage = () => {
-		setCurrentImageIndex((prevIndex) =>
-			prevIndex === 0 ? imageUrls.length - 1 : prevIndex - 1
-		);
-	};
-
-	const showNextImage = () => {
-		setCurrentImageIndex((prevIndex) =>
-			prevIndex === imageUrls.length - 1 ? 0 : prevIndex + 1
-		);
 	};
 
 	return (
@@ -199,10 +179,10 @@ export default function ProductDetails({ product }) {
 
 			<div className={styles.productDetailsImagesContainer}>
 				<div className={styles.productDetailsMainImage}>
-					{hasMultipleImages && (
+					{hasMultiple && (
 						<button
 							type="button"
-							onClick={showPrevImage}
+							onClick={showPrev}
 							aria-label="Предишно изображение"
 							className={`${styles.imageNavBtn} ${styles.imageNavBtnLeft}`}
 						>
@@ -210,20 +190,26 @@ export default function ProductDetails({ product }) {
 						</button>
 					)}
 
-					{mainImage && (
+					{imageUrls.map((url, index) => (
 						<Image
-							src={mainImage}
+							key={`${url}-${index}`}
+							src={url}
 							alt={product.title}
 							fill
 							sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
-							className={styles.productMainImage}
+							className={`${styles.productMainImage} ${styles.slideImage} ${
+								index === currentIndex ? styles.slideVisible : styles.slideHidden
+							}`}
+							aria-hidden={index !== currentIndex}
+							priority={index === 0}
+							loading={index === 0 ? undefined : 'lazy'}
 						/>
-					)}
+					))}
 
-					{hasMultipleImages && (
+					{hasMultiple && (
 						<button
 							type="button"
-							onClick={showNextImage}
+							onClick={showNext}
 							aria-label="Следващо изображение"
 							className={`${styles.imageNavBtn} ${styles.imageNavBtnRight}`}
 						>
