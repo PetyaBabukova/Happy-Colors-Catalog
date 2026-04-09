@@ -28,23 +28,15 @@ const deliveryContent = `
 Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
 `;
 
-function EmptyStarIcon() {
-	return (
-		<svg
-			viewBox="0 0 24 24"
-			aria-hidden="true"
-			className={styles.starIcon}
-		>
-			<path
-				d="M12 3.2l2.68 5.44 6 .88-4.34 4.23 1.02 5.97L12 16.9l-5.36 2.82 1.02-5.97L3.32 9.52l6-.88Z"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="1.7"
-				strokeLinejoin="round"
-			/>
-		</svg>
-	);
-}
+// TODO: Ще се активира при имплементация на ревю система
+// function EmptyStarIcon() {
+// 	return (
+// 		<svg viewBox="0 0 24 24" aria-hidden="true" className={styles.starIcon}>
+// 			<path d="M12 3.2l2.68 5.44 6 .88-4.34 4.23 1.02 5.97L12 16.9l-5.36 2.82 1.02-5.97L3.32 9.52l6-.88Z"
+// 				fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+// 		</svg>
+// 	);
+// }
 
 export default function ProductDetails({ product }) {
 	const { user } = useAuth();
@@ -108,6 +100,7 @@ export default function ProductDetails({ product }) {
 			<div className={styles.productDescriptionContainer}>
 				<h1>{product.title}</h1>
 
+				{/* TODO: Рейтинг звездички — ще се активират при имплементация на ревю система
 				<div className={styles.reviewContainer}>
 					<div className={styles.starsEmpty}>
 						{[...Array(5)].map((_, i) => (
@@ -115,6 +108,7 @@ export default function ProductDetails({ product }) {
 						))}
 					</div>
 				</div>
+				*/}
 
 				<ul className={styles.productDetailsBodyTabsContainer}>
 					<li
