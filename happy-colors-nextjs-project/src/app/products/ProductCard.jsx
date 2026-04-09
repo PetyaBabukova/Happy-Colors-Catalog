@@ -12,7 +12,14 @@ import styles from './shop.module.css';
 export default function ProductCard({ product }) {
     const containerRef = useRef(null);
     const imageUrls = useMemo(() => normalizeImageUrls(product), [product]);
-    const { currentIndex, pause, resume } = useImageSlideshow(imageUrls, 4000, {
+    const loopedImageUrls = useMemo(() => {
+        if (imageUrls.length <= 1) {
+            return imageUrls;
+        }
+
+        return [imageUrls[imageUrls.length - 1], ...imageUrls, imageUrls[0]];
+    }, [imageUrls]);
+    const { currentIndex, trackIndex, transitionEnabled, handleTrackTransitionEnd, pause, resume } = useImageSlideshow(imageUrls, 4000, {
         observeRef: containerRef,
         resetKey: product._id,
     });
@@ -28,13 +35,27 @@ export default function ProductCard({ product }) {
                 {imageUrls.length > 0 ? (
                     <div
                         className={styles.productImageTrack}
-                        style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+                        style={{
+                            transform: `translateX(-${trackIndex * 100}%)`,
+                            transition: transitionEnabled ? undefined : 'none',
+                        }}
+                        onTransitionEnd={handleTrackTransitionEnd}
                     >
-                        {imageUrls.map((url, index) => (
+                        {loopedImageUrls.map((url, index) => {
+                            const isClone = imageUrls.length > 1 && (index === 0 || index === loopedImageUrls.length - 1);
+                            const logicalIndex = imageUrls.length > 1
+                                ? index === 0
+                                    ? imageUrls.length - 1
+                                    : index === loopedImageUrls.length - 1
+                                        ? 0
+                                        : index - 1
+                                : index;
+
+                            return (
                             <div
                                 key={`${url}-${index}`}
                                 className={styles.productImageSlide}
-                                aria-hidden={index !== currentIndex}
+                                aria-hidden={isClone || logicalIndex !== currentIndex}
                             >
                                 <Image
                                     src={url}
@@ -47,7 +68,8 @@ export default function ProductCard({ product }) {
                                     loading="lazy"
                                 />
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ) : null}
             </div>

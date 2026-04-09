@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { isOwner } from '@/utils/isOwner';
@@ -45,10 +45,33 @@ export default function ProductDetails({ product }) {
 	const { addToCart } = useCart();
 	const canEdit = isOwner(product, user);
 	const router = useRouter();
+	const gestureRef = useRef(null);
+	const pointerIdRef = useRef(null);
+	const dragStartXRef = useRef(0);
 
 	const imageUrls = useMemo(() => normalizeImageUrls(product), [product]);
+	const loopedImageUrls = useMemo(() => {
+		if (imageUrls.length <= 1) {
+			return imageUrls;
+		}
+
+		return [imageUrls[imageUrls.length - 1], ...imageUrls, imageUrls[0]];
+	}, [imageUrls]);
 	const [activeTab, setActiveTab] = useState('description');
-	const { currentIndex, currentUrl, hasMultiple, showPrev, showNext } = useImageSlideshow(
+	const [isDragging, setIsDragging] = useState(false);
+	const [dragOffset, setDragOffset] = useState(0);
+	const {
+		currentIndex,
+		currentUrl,
+		hasMultiple,
+		trackIndex,
+		transitionEnabled,
+		showPrev,
+		showNext,
+		pause,
+		resume,
+		handleTrackTransitionEnd,
+	} = useImageSlideshow(
 		imageUrls,
 		5000,
 		{ resetKey: product._id }
@@ -73,6 +96,49 @@ export default function ProductDetails({ product }) {
 
 	const handleInquiry = () => {
 		router.push(`/contacts?productId=${product._id}`);
+	};
+
+	const handlePointerDown = (event) => {
+		if (!hasMultiple || event.target.closest('button')) {
+			return;
+		}
+
+		pointerIdRef.current = event.pointerId;
+		dragStartXRef.current = event.clientX;
+		setDragOffset(0);
+		setIsDragging(true);
+		pause();
+		event.currentTarget.setPointerCapture?.(event.pointerId);
+	};
+
+	const handlePointerMove = (event) => {
+		if (!isDragging || pointerIdRef.current !== event.pointerId) {
+			return;
+		}
+
+		setDragOffset(event.clientX - dragStartXRef.current);
+	};
+
+	const finishDrag = (event) => {
+		if (!isDragging || pointerIdRef.current !== event.pointerId) {
+			return;
+		}
+
+		const containerWidth = gestureRef.current?.offsetWidth || 0;
+		const threshold = Math.max(50, containerWidth * 0.15);
+		const deltaX = event.clientX - dragStartXRef.current;
+
+		if (deltaX <= -threshold) {
+			showNext();
+		} else if (deltaX >= threshold) {
+			showPrev();
+		}
+
+		setIsDragging(false);
+		setDragOffset(0);
+		pointerIdRef.current = null;
+		event.currentTarget.releasePointerCapture?.(event.pointerId);
+		resume();
 	};
 
 	return (
@@ -178,7 +244,14 @@ export default function ProductDetails({ product }) {
 			</div>
 
 			<div className={styles.productDetailsImagesContainer}>
-				<div className={styles.productDetailsMainImage}>
+				<div
+					ref={gestureRef}
+					className={styles.productDetailsMainImage}
+					onPointerDown={handlePointerDown}
+					onPointerMove={handlePointerMove}
+					onPointerUp={finishDrag}
+					onPointerCancel={finishDrag}
+				>
 					{hasMultiple && (
 						<button
 							type="button"
@@ -193,26 +266,41 @@ export default function ProductDetails({ product }) {
 					{imageUrls.length > 0 ? (
 						<div
 							className={styles.productImageTrack}
-							style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+							style={{
+								transform: `translateX(calc(-${trackIndex * 100}% + ${dragOffset}px))`,
+								transition: isDragging || !transitionEnabled ? 'none' : undefined,
+							}}
+							onTransitionEnd={handleTrackTransitionEnd}
 						>
-							{imageUrls.map((url, index) => (
-								<div
-									key={`${url}-${index}`}
-									className={styles.productImageSlide}
-									aria-hidden={index !== currentIndex}
-								>
-									<Image
-										src={url}
-										alt={product.title}
-										width={1600}
-										height={1600}
-										sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
-										className={styles.productMainImage}
-										priority={index === 0}
-										loading={index === 0 ? undefined : 'lazy'}
-									/>
-								</div>
-							))}
+							{loopedImageUrls.map((url, index) => {
+								const isClone = imageUrls.length > 1 && (index === 0 || index === loopedImageUrls.length - 1);
+								const logicalIndex = imageUrls.length > 1
+									? index === 0
+										? imageUrls.length - 1
+										: index === loopedImageUrls.length - 1
+											? 0
+											: index - 1
+									: index;
+
+								return (
+									<div
+										key={`${url}-${index}`}
+										className={styles.productImageSlide}
+										aria-hidden={isClone || logicalIndex !== currentIndex}
+									>
+										<Image
+											src={url}
+											alt={product.title}
+											width={1600}
+											height={1600}
+											sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
+											className={styles.productMainImage}
+											priority={!isClone && logicalIndex === 0}
+											loading={!isClone && logicalIndex === 0 ? undefined : 'lazy'}
+										/>
+									</div>
+								);
+							})}
 						</div>
 					) : null}
 
