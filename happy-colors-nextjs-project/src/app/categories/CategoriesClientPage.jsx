@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import baseURL from '@/config';
 import { readResponseJsonSafely } from '@/utils/errorHandler';
+import styles from './categories.module.css';
 
 export default function CategoriesManagerPage() {
   const [categories, setCategories] = useState([]);
@@ -56,26 +57,23 @@ export default function CategoriesManagerPage() {
   }
 
   return (
-    <div className="flex justify-center mt-12">
-      <div className="w-full max-w-xl px-4">
-        <h2 className="text-center text-2xl font-bold mb-8">
+    <div className={styles.categoriesWrapper}>
+      <div className={styles.categoriesInner}>
+        <h2 className={styles.categoriesTitle}>
           Управление на категории
         </h2>
 
-        {error && <p className="text-center text-red-600 mb-4">{error}</p>}
+        {error && <p className={styles.errorMessage}>{error}</p>}
 
-        <ul className="space-y-8">
+        <ul className={styles.categoriesList}>
           {categories.map((cat) => (
-            <li
-              key={cat._id}
-              className="flex justify-between items-center px-3 py-2 rounded-md hover:bg-[rgba(75,208,174,0.15)] transition"
-            >
-              <span className="text-lg">{cat.name}</span>
+            <li key={cat._id} className={styles.categoryItem}>
+              <span className={styles.categoryName}>{cat.name}</span>
 
-              <div className="flex gap-4">
+              <div className={styles.categoryActions}>
                 <Link
                   href={`/categories/${cat._id}/edit`}
-                  className="text-green-700 hover:text-green-800 text-2xl cursor-pointer transition"
+                  className={styles.editLink}
                   title="Редактирай"
                 >
                   ✎
@@ -85,8 +83,7 @@ export default function CategoriesManagerPage() {
                   <a
                     onClick={() => handleDelete(cat._id, cat.name)}
                     title="Изтрий"
-                    className="text-2xl cursor-pointer hover:opacity-80 transition"
-                    style={{ color: '#FF6F61' }}
+                    className={styles.deleteLink}
                   >
                     ×
                   </a>
