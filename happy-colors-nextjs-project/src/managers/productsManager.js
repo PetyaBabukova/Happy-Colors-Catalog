@@ -3,6 +3,20 @@
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 
+async function invalidateProductCaches(productId) {
+  try {
+    await fetch('/api/revalidate/products', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ productId }),
+    });
+  } catch (error) {
+    console.error('Неуспешно обновяване на product cache-а:', error);
+  }
+}
+
 export async function onCreateProductSubmit(
   formValues,
   setSuccess,
@@ -54,6 +68,7 @@ export async function onCreateProductSubmit(
     setInvalidFields([]);
 
     triggerCategoriesReload();
+    await invalidateProductCaches(result._id);
 
     router.push(`/products/${result._id}`);
   } catch (err) {
@@ -112,6 +127,7 @@ export async function onEditProductSubmit(
     setSuccess(true);
     setError('');
     setInvalidFields([]);
+    await invalidateProductCaches(productId);
     router.push(`/products/${productId}`);
   } catch (err) {
     setSuccess(false);
@@ -133,7 +149,12 @@ export async function getProducts(categoryName) {
       url += `?category=${encodeURIComponent(categoryName)}`;
     }
 
-    const res = await fetch(url, { next: { revalidate: 60 } });
+    const res = await fetch(url, {
+      next: {
+        revalidate: 60,
+        tags: ['products'],
+      },
+    });
 
     if (!res.ok) {
       throw new Error('Неуспешно зареждане на продуктите');
