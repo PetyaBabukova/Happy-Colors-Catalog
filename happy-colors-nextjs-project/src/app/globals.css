@@ -52,7 +52,7 @@ header {
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   font-family: inherit;
-  font-weight: lighter;
+  font-weight: 100;
   margin-bottom: 0.5em;
   color: var(--dark-green);
   line-height: 1.2;
