@@ -96,13 +96,11 @@ export default function Header() {
         </nav>
       </header>
 
-      {user && (
-        <ul className={styles.userNav}>
-          <li><Link href="/products/create">Създай продукт</Link></li>
-          <li><Link href="/categories/create">Създай категория</Link></li>
-          <li><Link href="/categories">Категории</Link></li>
-        </ul>
-      )}
+      <ul className={`${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`}>
+        <li><Link href="/products/create">Създай продукт</Link></li>
+        <li><Link href="/categories/create">Създай категория</Link></li>
+        <li><Link href="/categories">Категории</Link></li>
+      </ul>
     </>
   );
 }
