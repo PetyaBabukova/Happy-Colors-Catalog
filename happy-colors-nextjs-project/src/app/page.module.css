@@ -24,11 +24,9 @@
 }
 
 .heroContent h1 {
-  white-space: nowrap;
   text-align: left;
   margin-bottom: 0.2em;
-  font-size: 4em;
-  
+  font-size: clamp(1.8rem, 4vw, 4em);
 }
 
 .homeSubtitle {
@@ -157,7 +155,6 @@ p.learnMorelink{
   }
 
   .heroContent h1 {
-    white-space: normal;
     font-size: 1.8rem;
   }
 
