@@ -1,5 +1,6 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import styles from './header.module.css';
 import { useAuth } from '@/context/AuthContext';
 import { useProducts } from '@/context/ProductContext';
@@ -9,25 +10,36 @@ import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
 
+function HeaderRouteWatcher({ onRouteChange }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsKey = searchParams.toString();
+
+  useEffect(() => {
+    onRouteChange();
+  }, [onRouteChange, pathname, searchParamsKey]);
+
+  return null;
+}
+
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useAuth();
   const { visibleCategories } = useProducts();
   const { getTotalItems } = useCart();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const searchParamsKey = searchParams.toString();
 
   const cartItemCount = getTotalItems();
   const userNavClassName = `${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`;
-
-  useEffect(() => {
+  const handleRouteChange = useCallback(() => {
     setMobileMenuOpen(false);
-  }, [pathname, searchParamsKey]);
+  }, []);
 
-  // Показваме loader или нищо само докато върви заявката за user
   return (
     <>
+      <Suspense fallback={null}>
+        <HeaderRouteWatcher onRouteChange={handleRouteChange} />
+      </Suspense>
+
       <header className="header">
         <nav className={styles.mainNav}>
           <Link href="/">
@@ -60,11 +72,9 @@ export default function Header() {
                   <li>
                     <Link href="/products">Всички</Link>
                   </li>
-                  {visibleCategories.map(cat => (
+                  {visibleCategories.map((cat) => (
                     <li key={cat._id}>
-                      <Link
-                        href={`/products?category=${encodeURIComponent(cat.name)}`}
-                      >
+                      <Link href={`/products?category=${encodeURIComponent(cat.name)}`}>
                         {cat.name}
                       </Link>
                     </li>
@@ -91,10 +101,6 @@ export default function Header() {
               Здравей, {user.username} | <Link href="/users/logout">Изход</Link>
             </p>
           ) : (
-            // Скрито за гости - само администратор може да регистрира потребители
-            // <p className={styles.userGreeting}>
-            //   <Link href="/users/register">Регистрация</Link> | <Link href="/users/login">Вход</Link>
-            // </p>
             null
           )}
 

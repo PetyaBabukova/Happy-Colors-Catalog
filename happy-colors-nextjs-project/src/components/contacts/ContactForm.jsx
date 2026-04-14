@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import useForm from '@/hooks/useForm';
 import MessageBox from '@/components/ui/MessageBox';
 import {
@@ -19,9 +19,8 @@ const initialValues = {
   message: '',
 };
 
-export default function ContactForm({ product }) {
-  const searchParams = useSearchParams();
-  const productId = product?._id || searchParams.get('productId');
+export default function ContactForm({ product, productId = null }) {
+  const resolvedProductId = product?._id || productId;
 
   const {
     formValues,
@@ -87,9 +86,9 @@ export default function ContactForm({ product }) {
 
     const payload = {
       ...sanitizedValues,
-      productId: productId || null,
+      productId: resolvedProductId || null,
       productTitle: product?.title || null,
-      productUrl: productId ? `${window.location.origin}/products/${productId}` : null,
+      productUrl: resolvedProductId ? `${window.location.origin}/products/${resolvedProductId}` : null,
     };
 
     try {
@@ -103,7 +102,7 @@ export default function ContactForm({ product }) {
       );
       setNotificationType('success');
       resetForm();
-    } catch (err) {
+    } catch {
       setNotificationMessage('Проблеми със свързването, моля опитайте по-късно.');
       setNotificationType('error');
     }
@@ -169,7 +168,6 @@ export default function ContactForm({ product }) {
           value={formValues.message}
           onChange={handleChange}
           className={invalidFields.includes('message') ? styles.invalidField : ''}
-          // ✅ ВРЪЩАМЕ ТВОЯ СТИЛ, за да има рамка както преди
           style={{
             padding: '0.5rem',
             border: '1px solid var(--dark-green)',
