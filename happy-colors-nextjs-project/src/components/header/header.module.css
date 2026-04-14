@@ -7,6 +7,17 @@
     background-color: var(--light-green-transparent);
 }
 
+.logoContainer {
+    width: clamp(7.5rem, 16vw, 13rem);
+    flex-shrink: 0;
+}
+
+.logoImage {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
 .mainNavList {
     display: flex;
     align-items: center;
@@ -40,6 +51,13 @@
     text-decoration: none;
     color: var(--dark-green);
     padding: 0.5rem;
+    display: inline-block;
+    margin: 0;
+    padding: 0;
+}
+
+.menuItemLabel {
+    color: var(--dark-green);
     display: inline-block;
     margin: 0;
     padding: 0;
@@ -159,18 +177,23 @@
 
 .userNav {
     font-size: 1.2em;
-    display: flex;
     gap: 2em;
     align-items: center;
     padding: 0 1.5em;
 }
 
 .userNavVisible {
+    display: flex;
     visibility: visible;
 }
 
-.userNavHidden {
+.userNavPending {
+    display: flex;
     visibility: hidden;
+}
+
+.userNavHidden {
+    display: none;
 }
 
 .hideHamburger {
@@ -194,12 +217,14 @@
         align-items: center;
     }
 
-    .logoContainer img {
-        flex: 0 1 70%;
+    .logoContainer {
+        width: clamp(7.5rem, 38vw, 8.75rem);
     }
 
     .hamburgerBtn {
-        max-width: 15%;
+        width: 2.25rem;
+        height: 2.25rem;
+        flex-shrink: 0;
         display: block;
         background: none;
         border: none;
@@ -209,7 +234,8 @@
     }
 
     .hamburgerBtn img {
-        height: 24px;
+        width: 100%;
+        height: 100%;
     }
 
 
@@ -249,6 +275,10 @@
         text-align: left;
     }
 
+    .mainNavList > li {
+        width: 100%;
+    }
+
     .showMenu {
         display: flex !important;
     }
@@ -263,10 +293,17 @@
 
     .subNavList li {
         font-size: 1rem;
+        width: 100%;
+    }
+
+    .subNavList li a {
+        display: inline-block;
+        touch-action: manipulation;
     }
 
 
-    .hasSubmenu .subNavList {
+    .hasSubmenu .subNavList,
+    .hasSubmenu:hover .subNavList {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
