@@ -1,5 +1,6 @@
 // happy-colors-nextjs-project/src/app/contacts/page.js
 
+import { Suspense } from 'react';
 import ContactForm from '../../components/contacts/ContactForm';
 import styles from '../../components/products/create.module.css';
 import { getProduct } from '@/lib/getProduct';
@@ -35,7 +36,9 @@ export default async function ContactPage({ searchParams }) {
 
       <p>happy.colors.bg@gmail.com</p>
 
-      <ContactForm product={product} />
+      <Suspense fallback={null}>
+        <ContactForm product={product} productId={params?.productId || null} />
+      </Suspense>
     </section>
   );
 }
