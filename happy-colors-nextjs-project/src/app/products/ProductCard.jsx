@@ -32,7 +32,7 @@ export default function ProductCard({ product }) {
                         alt={product.title}
                         width={1200}
                         height={1200}
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                        sizes="(max-width: 768px) 90vw, (max-width: 1200px) 45vw, 22vw"
                         className={styles.productImage}
                         priority={false}
                         loading="lazy"
