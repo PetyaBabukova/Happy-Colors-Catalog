@@ -5,11 +5,26 @@
   grid-template-rows: 1fr;
   grid-template-columns: 1fr;
   min-height: 85vh;
-  background-image: url('/homepage_background_cropped.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   margin-bottom: 3rem;
+}
+
+.heroMedia {
+  grid-row: 1 / -1;
+  grid-column: 1 / -1;
+  min-height: inherit;
+}
+
+.heroPicture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.heroImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .heroContent {
@@ -150,7 +165,6 @@ p.learnMorelink{
 
   .heroContent {
     padding: 1.5rem;
-    padding-top: 60vh;
     gap: 0.5rem;
   }
 

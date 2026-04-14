@@ -67,20 +67,6 @@
   overflow: hidden;
 }
 
-.productImageTrack {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.6s ease;
-  will-change: transform;
-}
-
-.productImageSlide {
-  flex: 0 0 100%;
-  width: 100%;
-  height: 100%;
-}
-
 .productImage {
   width: 100%;
   height: 100%;
@@ -97,9 +83,19 @@
 }
 
 @media screen and (max-width: 768px) {
+  .categories {
+    padding: 0.5em 0;
+  }
+
+  .productList {
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+
   .product {
     flex: 0 1 100%;
     max-width: 100%;
+    padding: 0.75rem;
   }
 
   .productImageContainer {

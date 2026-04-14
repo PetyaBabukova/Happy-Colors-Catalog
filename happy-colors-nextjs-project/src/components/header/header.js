@@ -1,20 +1,29 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './header.module.css';
 import { useAuth } from '@/context/AuthContext';
 import { useProducts } from '@/context/ProductContext';
 import { useCart } from '@/context/CartContext';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { visibleCategories } = useProducts();
   const { getTotalItems } = useCart();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsKey = searchParams.toString();
 
   const cartItemCount = getTotalItems();
+  const userNavClassName = `${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`;
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname, searchParamsKey]);
 
   // Показваме loader или нищо само докато върви заявката за user
   return (
@@ -23,13 +32,14 @@ export default function Header() {
         <nav className={styles.mainNav}>
           <Link href="/">
             <div className={styles.logoContainer}>
-              <Image src="/logo_64pxH.svg" alt="logo" width={256} height={256} />
+              <Image className={styles.logoImage} src="/logo_64pxH.svg" alt="logo" width={256} height={256} />
             </div>
           </Link>
 
           {!mobileMenuOpen && (
             <button
               className={styles.hamburgerBtn}
+              aria-label="Отвори менюто"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Image src="/hamburger.svg" alt="Меню" width={64} height={64} />
@@ -37,20 +47,23 @@ export default function Header() {
           )}
 
           <ul className={`${styles.mainNavList} ${mobileMenuOpen ? styles.showMenu : ''}`}>
-            <li><Link href="/" onClick={() => setMobileMenuOpen(false)}>Начало</Link></li>
+            <li><Link href="/">Начало</Link></li>
 
             <li className={styles.hasSubmenu}>
-              <Link className={styles.menuItem} href="/products" onClick={() => setMobileMenuOpen(false)}>Каталог</Link>
+              {mobileMenuOpen ? (
+                <span className={styles.menuItemLabel}>Каталог</span>
+              ) : (
+                <Link className={styles.menuItem} href="/products">Каталог</Link>
+              )}
               {visibleCategories && visibleCategories.length > 0 && (
                 <ul className={styles.subNavList}>
                   <li>
-                    <Link href="/products" onClick={() => setMobileMenuOpen(false)}>Всички</Link>
+                    <Link href="/products">Всички</Link>
                   </li>
                   {visibleCategories.map(cat => (
                     <li key={cat._id}>
                       <Link
                         href={`/products?category=${encodeURIComponent(cat.name)}`}
-                        onClick={() => setMobileMenuOpen(false)}
                       >
                         {cat.name}
                       </Link>
@@ -60,10 +73,10 @@ export default function Header() {
               )}
             </li>
 
-            <li><Link href="/aboutus" onClick={() => setMobileMenuOpen(false)}>За Happy Colors</Link></li>
-            {/* <li><Link href="/blog" onClick={() => setMobileMenuOpen(false)}>Блог</Link></li> */}
-            {/* <li><Link href="/partners" onClick={() => setMobileMenuOpen(false)}>За партньори</Link></li> */}
-            <li><Link href="/contacts" onClick={() => setMobileMenuOpen(false)}>Контакти</Link></li>
+            <li><Link href="/aboutus">За Happy Colors</Link></li>
+            {/* <li><Link href="/blog">Блог</Link></li> */}
+            {/* <li><Link href="/partners">За партньори</Link></li> */}
+            <li><Link href="/contacts">Контакти</Link></li>
           </ul>
 
           <form className={styles.searchForm} action="/search" method="get">
@@ -96,7 +109,7 @@ export default function Header() {
         </nav>
       </header>
 
-      <ul className={`${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`}>
+      <ul className={userNavClassName}>
         <li><Link href="/products/create">Създай продукт</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>

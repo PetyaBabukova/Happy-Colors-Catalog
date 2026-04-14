@@ -15,12 +15,18 @@ export default function AboutUs() {
   return (
     <>
       <section className={styles.aboutSection}>
-        <div
-          className={styles.aboutImage}
-          style={{
-            backgroundImage: "url('/aboutUs_Hero_banner.png')",
-          }}
-        ></div>
+        <div className={styles.aboutImage} aria-hidden="true">
+          <picture className={styles.aboutPicture}>
+            <source media="(max-width: 768px)" srcSet="/aboutUs_Hero_banner_mobile.webp" />
+            <source media="(min-width: 769px)" srcSet="/aboutUs_Hero_banner_laptop.webp" />
+            <img
+              className={styles.aboutHeroImage}
+              src="/aboutUs_Hero_banner_laptop.webp"
+              alt=""
+              fetchPriority="high"
+            />
+          </picture>
+        </div>
 
         <div className={styles.aboutText}>
           <h1>За Happy Colors и ръчно изработените плетени играчки</h1>
