@@ -179,6 +179,40 @@
 - в този scope **не** имплементираме hero carousel
 - имплементираме single-slide shell, готов за бъдещо разширяване
 
+Какво означава "future-carousel-ready shell" на практика:
+
+- `heroSection` остава root контейнерът
+- вътре има отделен `heroMedia` слой
+- вътре в `heroMedia` за момента има единствен `<picture>`
+- `heroContent` остава отделен overlay/content слой
+
+Примерна целева структура:
+
+```jsx
+<section className={styles.heroSection}>
+  <div className={styles.heroMedia}>
+    <picture>
+      <source media="(max-width: 768px)" srcSet="/homepage_background_mobile.webp" />
+      <source media="(min-width: 769px)" srcSet="/homepage_background_laptop.webp" />
+      <img src="/homepage_background_laptop.webp" alt="" fetchPriority="high" />
+    </picture>
+  </div>
+
+  <div className={styles.heroContent}>
+    ...
+  </div>
+</section>
+```
+
+Това е достатъчната "готовност" за бъдещ carousel. Когато carousel-ът дойде, `heroMedia` просто ще приеме множество slides вместо един.
+
+Какво изрично НЕ правим сега:
+
+- не вкарваме carousel state/hooks в home hero
+- не създаваме slide wrapper компоненти "за всеки случай"
+- не добавяме transition CSS, което сега не се ползва
+- не въвеждаме допълнителна abstraction layer без текуща нужда
+
 #### 1.2 About hero да мине към статичен responsive `<picture>` pattern
 
 Същата логика прилагаме и за about page:

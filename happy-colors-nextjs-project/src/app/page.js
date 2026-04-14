@@ -8,6 +8,19 @@ export default function Home() {
 		<>
 
 			<section className={styles.heroSection}>
+				<div className={styles.heroMedia} aria-hidden="true">
+					<picture className={styles.heroPicture}>
+						<source media="(max-width: 768px)" srcSet="/homepage_background_mobile.webp" />
+						<source media="(min-width: 769px)" srcSet="/homepage_background_laptop.webp" />
+						<img
+							className={styles.heroImage}
+							src="/homepage_background_laptop.webp"
+							alt=""
+							fetchPriority="high"
+						/>
+					</picture>
+				</div>
+
 				<div className={styles.heroContent}>
 					<h1>Плетени играчки, аксесоари и декорация за дома</h1>
 					<h4 className={styles.homeSubtitle}>Ръчно изработени изделия за подарък, уют и специални поводи.</h4>
