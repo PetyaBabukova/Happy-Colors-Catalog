@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import styles from './header.module.css';
 import { useAuth } from '@/context/AuthContext';
 import { useProducts } from '@/context/ProductContext';
@@ -30,11 +30,14 @@ export default function Header() {
 
   const cartItemCount = getTotalItems();
   const userNavClassName = `${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`;
+  const handleRouteChange = useCallback(() => {
+    setMobileMenuOpen(false);
+  }, []);
 
   return (
     <>
       <Suspense fallback={null}>
-        <HeaderRouteWatcher onRouteChange={() => setMobileMenuOpen(false)} />
+        <HeaderRouteWatcher onRouteChange={handleRouteChange} />
       </Suspense>
 
       <header className="header">
