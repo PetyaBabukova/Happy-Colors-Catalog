@@ -11,7 +11,7 @@ import { isCatalogMode } from '@/utils/catalogMode';
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { visibleCategories } = useProducts();
   const { getTotalItems } = useCart();
   const pathname = usePathname();
@@ -19,9 +19,7 @@ export default function Header() {
   const searchParamsKey = searchParams.toString();
 
   const cartItemCount = getTotalItems();
-  const userNavClassName = `${styles.userNav} ${
-    loading ? styles.userNavPending : user ? styles.userNavVisible : styles.userNavHidden
-  }`;
+  const userNavClassName = `${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`;
 
   useEffect(() => {
     setMobileMenuOpen(false);
