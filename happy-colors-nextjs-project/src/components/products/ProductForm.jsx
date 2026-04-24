@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import useForm from '@/hooks/useForm';
@@ -47,9 +47,58 @@ function formatMegabytes(bytes) {
   return `${Math.round(bytes / 1024 / 1024)} MB`;
 }
 
+function getVideoValidationError(file) {
+  if (!file) {
+    return 'Моля, изберете MP4 видео файл.';
+  }
+
+  if (!ALLOWED_VIDEO_MIME_TYPES.includes(file.type)) {
+    return 'Моля, качете видео във формат MP4.';
+  }
+
+  if (file.size > MAX_VIDEO_UPLOAD_SIZE_BYTES) {
+    return `Видеото е твърде голямо. Максимален размер: ${formatMegabytes(MAX_VIDEO_UPLOAD_SIZE_BYTES)}.`;
+  }
+
+  return '';
+}
+
+function getPosterValidationError(file) {
+  if (!file) {
+    return 'Моля, изберете poster image за видеото.';
+  }
+
+  if (!ALLOWED_IMAGE_UPLOAD_MIME_TYPES.includes(file.type)) {
+    return 'Poster image трябва да бъде JPG, PNG или WEBP файл.';
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
+    return `Poster image е твърде голям. Максимален размер: ${formatMegabytes(MAX_IMAGE_UPLOAD_SIZE_BYTES)}.`;
+  }
+
+  return '';
+}
+
+function buildReplacementPatch(kind, uploadResult) {
+  if (kind === 'video') {
+    return {
+      url: uploadResult.publicUrl,
+      videoObjectName: uploadResult.objectName,
+      videoDeleteToken: uploadResult.deleteToken,
+    };
+  }
+
+  return {
+    posterUrl: uploadResult.publicUrl,
+    posterObjectName: uploadResult.objectName,
+    posterDeleteToken: uploadResult.deleteToken,
+  };
+}
+
 export default function ProductForm({ initialValues, onSubmit, legendText, successMessage }) {
   const router = useRouter();
   const { categories } = useProducts();
+  const replaceInputRefs = useRef({});
 
   const {
     formValues,
@@ -81,32 +130,35 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
   const [selectedVideoFile, setSelectedVideoFile] = useState(null);
   const [selectedPosterFile, setSelectedPosterFile] = useState(null);
   const [videoInputKey, setVideoInputKey] = useState(0);
+  const [videoReplacing, setVideoReplacing] = useState(null);
 
   useEffect(() => {
-    if (initialValues) {
-      const normalizedImageUrls = Array.isArray(initialValues.imageUrls)
-        ? initialValues.imageUrls.filter(Boolean)
-        : initialValues.imageUrl
+    if (!initialValues) {
+      return;
+    }
+
+    const normalizedImageUrls = Array.isArray(initialValues.imageUrls)
+      ? initialValues.imageUrls.filter(Boolean)
+      : initialValues.imageUrl
         ? [initialValues.imageUrl]
         : [];
 
-      setFormValues({
-        title: '',
-        description: '',
-        category: '',
-        price: '',
-        imageUrl: '',
-        imageUrls: [],
-        videos: [],
-        availability: 'available',
-        ...initialValues,
-        imageUrls: normalizedImageUrls,
-        imageUrl: normalizedImageUrls[0] || initialValues.imageUrl || '',
-        category: initialValues.category?._id || initialValues.category || '',
-        videos: normalizeVideos(initialValues.videos),
-        availability: initialValues.availability || 'available',
-      });
-    }
+    setFormValues({
+      title: '',
+      description: '',
+      category: '',
+      price: '',
+      imageUrl: '',
+      imageUrls: [],
+      videos: [],
+      availability: 'available',
+      ...initialValues,
+      imageUrls: normalizedImageUrls,
+      imageUrl: normalizedImageUrls[0] || initialValues.imageUrl || '',
+      category: initialValues.category?._id || initialValues.category || '',
+      videos: normalizeVideos(initialValues.videos),
+      availability: initialValues.availability || 'available',
+    });
   }, [initialValues, setFormValues]);
 
   const savedVideoUrls = useMemo(
@@ -117,9 +169,27 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
   const hasImages = Array.isArray(formValues.imageUrls) && formValues.imageUrls.length > 0;
   const hasVideos = videos.length > 0;
 
+  const setReplaceInputRef = (videoUrl, kind, node) => {
+    const refKey = `${kind}:${videoUrl}`;
+
+    if (node) {
+      replaceInputRefs.current[refKey] = node;
+      return;
+    }
+
+    delete replaceInputRefs.current[refKey];
+  };
+
+  const openReplaceInput = (videoUrl, kind) => {
+    replaceInputRefs.current[`${kind}:${videoUrl}`]?.click();
+  };
+
   const handleFileChange = async (event) => {
     const selectedFiles = Array.from(event.target.files || []);
-    if (!selectedFiles.length) return;
+
+    if (!selectedFiles.length) {
+      return;
+    }
 
     setUploadError(null);
 
@@ -146,8 +216,8 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
         const currentImageUrls = Array.isArray(prev.imageUrls)
           ? prev.imageUrls.filter(Boolean)
           : prev.imageUrl
-          ? [prev.imageUrl]
-          : [];
+            ? [prev.imageUrl]
+            : [];
         const mergedImageUrls = [...new Set([...currentImageUrls, ...uploadedImageUrls])];
 
         return {
@@ -176,37 +246,15 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
       return;
     }
 
-    if (!selectedVideoFile) {
-      setVideoUploadError('Моля, изберете MP4 видео файл.');
+    const videoValidationError = getVideoValidationError(selectedVideoFile);
+    if (videoValidationError) {
+      setVideoUploadError(videoValidationError);
       return;
     }
 
-    if (!selectedPosterFile) {
-      setVideoUploadError('Моля, изберете poster image за видеото.');
-      return;
-    }
-
-    if (!ALLOWED_VIDEO_MIME_TYPES.includes(selectedVideoFile.type)) {
-      setVideoUploadError('Моля, качете видео във формат MP4.');
-      return;
-    }
-
-    if (selectedVideoFile.size > MAX_VIDEO_UPLOAD_SIZE_BYTES) {
-      setVideoUploadError(
-        `Видеото е твърде голямо. Максимален размер: ${formatMegabytes(MAX_VIDEO_UPLOAD_SIZE_BYTES)}.`
-      );
-      return;
-    }
-
-    if (!ALLOWED_IMAGE_UPLOAD_MIME_TYPES.includes(selectedPosterFile.type)) {
-      setVideoUploadError('Poster image трябва да бъде JPG, PNG или WEBP файл.');
-      return;
-    }
-
-    if (selectedPosterFile.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
-      setVideoUploadError(
-        `Poster image е твърде голям. Максимален размер: ${formatMegabytes(MAX_IMAGE_UPLOAD_SIZE_BYTES)}.`
-      );
+    const posterValidationError = getPosterValidationError(selectedPosterFile);
+    if (posterValidationError) {
+      setVideoUploadError(posterValidationError);
       return;
     }
 
@@ -229,27 +277,23 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
       const videoUpload = await uploadSignedFile({ kind: 'video', file: selectedVideoFile });
       uploadedUploads.push(videoUpload);
 
-      setFormValues((prev) => {
-        const currentVideos = normalizeVideos(prev.videos);
-
-        return {
-          ...prev,
-          videos: [
-            ...currentVideos,
-            {
-              url: videoUpload.publicUrl,
-              posterUrl: posterUpload.publicUrl,
-              mimeType: selectedVideoFile.type,
-              durationSeconds,
-              uploadDate: new Date().toISOString(),
-              videoObjectName: videoUpload.objectName,
-              posterObjectName: posterUpload.objectName,
-              videoDeleteToken: videoUpload.deleteToken,
-              posterDeleteToken: posterUpload.deleteToken,
-            },
-          ],
-        };
-      });
+      setFormValues((prev) => ({
+        ...prev,
+        videos: [
+          ...normalizeVideos(prev.videos),
+          {
+            url: videoUpload.publicUrl,
+            posterUrl: posterUpload.publicUrl,
+            mimeType: selectedVideoFile.type,
+            durationSeconds,
+            uploadDate: new Date().toISOString(),
+            videoObjectName: videoUpload.objectName,
+            posterObjectName: posterUpload.objectName,
+            videoDeleteToken: videoUpload.deleteToken,
+            posterDeleteToken: posterUpload.deleteToken,
+          },
+        ],
+      }));
       didAttachVideo = true;
 
       setSelectedVideoFile(null);
@@ -257,16 +301,84 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
       setVideoInputKey((key) => key + 1);
     } catch (err) {
       console.error(err);
+
       if (!didAttachVideo) {
         await Promise.allSettled(
-          uploadedUploads.map((upload) =>
-            deleteSignedUploadedFile(upload.objectName, upload.deleteToken)
-          )
+          uploadedUploads.map((upload) => deleteSignedUploadedFile(upload.objectName, upload.deleteToken))
         );
       }
+
       setVideoUploadError(err.message || 'Възникна грешка при качването на видеото.');
     } finally {
       setVideoUploading(false);
+    }
+  };
+
+  const handleReplaceVideoAsset = async (video, kind, file, event) => {
+    if (event?.target) {
+      event.target.value = '';
+    }
+
+    if (!file) {
+      return;
+    }
+
+    setVideoUploadError(null);
+    setVideoDeleteError(null);
+
+    const validationError = kind === 'video'
+      ? getVideoValidationError(file)
+      : getPosterValidationError(file);
+
+    if (validationError) {
+      setVideoUploadError(validationError);
+      return;
+    }
+
+    let uploadedUpload = null;
+    let didAttachReplacement = false;
+
+    try {
+      setVideoReplacing({ videoUrl: video.url, kind });
+
+      if (kind === 'video') {
+        const durationSeconds = await getVideoDurationSeconds(file);
+
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          throw new Error('Не успяхме да прочетем продължителността на видеото.');
+        }
+
+        if (durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
+          throw new Error(`Видеото трябва да бъде до ${MAX_VIDEO_DURATION_SECONDS} секунди.`);
+        }
+      }
+
+      uploadedUpload = await uploadSignedFile({ kind, file });
+
+      setFormValues((prev) => ({
+        ...prev,
+        videos: normalizeVideos(prev.videos).map((item) =>
+          item.url === video.url
+            ? {
+                ...item,
+                ...buildReplacementPatch(kind, uploadedUpload),
+              }
+            : item
+        ),
+      }));
+      didAttachReplacement = true;
+    } catch (err) {
+      console.error(err);
+
+      if (!didAttachReplacement && uploadedUpload) {
+        await Promise.allSettled([
+          deleteSignedUploadedFile(uploadedUpload.objectName, uploadedUpload.deleteToken),
+        ]);
+      }
+
+      setVideoUploadError(err.message || 'Възникна грешка при смяна на файла.');
+    } finally {
+      setVideoReplacing(null);
     }
   };
 
@@ -277,6 +389,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
 
       if (initialValues?._id && savedVideoUrls.has(video.url)) {
         const result = await deleteProductVideo(initialValues._id, video.url);
+
         setFormValues((prev) => {
           const serverVideos = normalizeVideos(result.videos);
           const localOnlyVideos = normalizeVideos(prev.videos).filter(
@@ -321,7 +434,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
       };
     }
 
-    if (videoUploading) {
+    if (videoUploading || videoReplacing) {
       return {
         fields: ['videos'],
         message: 'Моля, изчакайте качването на видеото да приключи.',
@@ -355,8 +468,8 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
             setSuccess,
             setError,
             setInvalidFields,
-            (values, setSuccess, setError, setInvalidFields) =>
-              onSubmit(values, setSuccess, setError, setInvalidFields, router),
+            (values, setSubmitSuccess, setSubmitError, setSubmitInvalidFields) =>
+              onSubmit(values, setSubmitSuccess, setSubmitError, setSubmitInvalidFields, router),
             [validateVideoSubmitState]
           )
         }
@@ -409,9 +522,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
           className={invalidFields.includes('availability') ? styles.invalidField : ''}
         >
           <option value="available">Продуктът е наличен и може да го поръчате</option>
-          <option value="unavailable">
-            Продуктът не е наличен, ако желаете пратете запитване
-          </option>
+          <option value="unavailable">Продуктът не е наличен, ако желаете пратете запитване</option>
         </select>
 
         <label>Изображения</label>
@@ -444,9 +555,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
 
         {hasImages && (
           <div className={styles.uploadedImagesPreview}>
-            <p className={styles.fieldHint}>
-              Текущи изображения: {formValues.imageUrls.length}
-            </p>
+            <p className={styles.fieldHint}>Текущи изображения: {formValues.imageUrls.length}</p>
 
             <ul>
               {formValues.imageUrls.map((url, index) => (
@@ -458,7 +567,9 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
                       type="button"
                       onClick={async () => {
                         try {
-                          if (!initialValues?._id) return;
+                          if (!initialValues?._id) {
+                            return;
+                          }
 
                           await deleteProductImage(initialValues._id, url);
 
@@ -532,37 +643,85 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
           {hasVideos && (
             <ul className={styles.videoPreviewList}>
               {videos.map((video, index) => {
-                const videoDeleting = videoDeletingUrl === video.url;
+                const isDeleting = videoDeletingUrl === video.url;
+                const isReplacingVideo = videoReplacing?.videoUrl === video.url && videoReplacing.kind === 'video';
+                const isReplacingPoster = videoReplacing?.videoUrl === video.url && videoReplacing.kind === 'poster';
+                const isRowBusy = isDeleting || isReplacingVideo || isReplacingPoster;
+
                 return (
-                <li key={video.url} className={styles.videoPreviewItem}>
-                  <Image
-                    src={video.posterUrl}
-                    alt={`Poster за видео ${index + 1}`}
-                    width={144}
-                    height={144}
-                    className={styles.videoPreviewPoster}
-                  />
-                  <div>
-                    <strong>Видео {index + 1}</strong>
-                    <p>
-                      {Math.round(video.durationSeconds)} сек. | {video.mimeType}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveVideo(video)}
-                    disabled={Boolean(videoDeletingUrl)}
-                  >
-                    {videoDeleting ? 'Премахване...' : 'Премахни'}
-                  </button>
-                </li>
+                  <li key={video.url} className={styles.videoPreviewItem}>
+                    <input
+                      ref={(node) => setReplaceInputRef(video.url, 'video', node)}
+                      type="file"
+                      accept="video/mp4"
+                      className={styles.hiddenFileInput}
+                      onChange={(event) =>
+                        handleReplaceVideoAsset(video, 'video', event.target.files?.[0] || null, event)
+                      }
+                    />
+                    <input
+                      ref={(node) => setReplaceInputRef(video.url, 'poster', node)}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className={styles.hiddenFileInput}
+                      onChange={(event) =>
+                        handleReplaceVideoAsset(video, 'poster', event.target.files?.[0] || null, event)
+                      }
+                    />
+
+                    <Image
+                      src={video.posterUrl}
+                      alt={`Poster за видео ${index + 1}`}
+                      width={144}
+                      height={144}
+                      className={styles.videoPreviewPoster}
+                    />
+
+                    <div className={styles.videoPreviewContent}>
+                      <strong>Видео {index + 1}</strong>
+                      <p>
+                        {Math.round(video.durationSeconds)} сек. | {video.mimeType}
+                      </p>
+                      {(isReplacingVideo || isReplacingPoster) && (
+                        <p className={styles.videoInlineStatus}>
+                          {isReplacingVideo ? 'Сменяне на видео файл...' : 'Сменяне на poster...'}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className={styles.videoPreviewActions}>
+                      <button
+                        type="button"
+                        onClick={() => openReplaceInput(video.url, 'video')}
+                        disabled={isRowBusy}
+                        className={styles.secondaryButton}
+                      >
+                        Смени видео файл
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openReplaceInput(video.url, 'poster')}
+                        disabled={isRowBusy}
+                        className={styles.secondaryButton}
+                      >
+                        Смени poster
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVideo(video)}
+                        disabled={isRowBusy}
+                      >
+                        {isDeleting ? 'Премахване...' : 'Премахни'}
+                      </button>
+                    </div>
+                  </li>
                 );
               })}
             </ul>
           )}
         </section>
 
-        <button type="submit" disabled={videoUploading || Boolean(videoDeletingUrl)}>
+        <button type="submit" disabled={videoUploading || Boolean(videoDeletingUrl) || Boolean(videoReplacing)}>
           Запази
         </button>
       </form>

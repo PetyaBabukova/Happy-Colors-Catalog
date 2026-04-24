@@ -173,6 +173,26 @@ align-items: center;
   font-size: 0.85rem;
 }
 
+.videoPreviewContent {
+  min-width: 0;
+}
+
+.videoInlineStatus {
+  color: var(--dark-green);
+  font-weight: 600;
+}
+
+.videoPreviewActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
 .videoPreviewItem button {
   width: fit-content;
   padding: 0.45rem 0.7rem;
