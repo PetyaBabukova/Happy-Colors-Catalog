@@ -61,6 +61,7 @@
   aspect-ratio: 1 / 1;
   max-height: 350px;
   border-radius: 0.5em;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,6 +76,20 @@
   object-fit: cover;
   border-radius: 0.5em;
   display: block;
+}
+
+.productVideoBadge {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 1;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  color: white;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .product:hover {

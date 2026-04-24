@@ -3,6 +3,11 @@
 import ProductDetails from './ProductDetails';
 import { notFound } from 'next/navigation';
 import { getProduct } from '@/lib/getProduct';
+import {
+  buildProductJsonLd,
+  buildProductMetadata,
+  stringifyJsonLd,
+} from '@/utils/productSeo';
 
 export async function generateMetadata({ params: paramsPromise }) {
   const { productId } = await paramsPromise;
@@ -20,18 +25,7 @@ export async function generateMetadata({ params: paramsPromise }) {
     };
   }
 
-  const categoryName = product.category?.name;
-  const titleParts = [product.title, categoryName].filter(Boolean);
-
-  return {
-    title: titleParts.join(' | '),
-    description: categoryName
-      ? `${product.title} – ${categoryName.toLowerCase()} от Happy Colors. Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`
-      : `${product.title} от Happy Colors. Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`,
-    alternates: {
-      canonical: `/products/${productId}`,
-    },
-  };
+  return buildProductMetadata(product, productId);
 }
 
 export default async function ProductDetailsPage({ params: paramsPromise }) {
@@ -43,5 +37,15 @@ export default async function ProductDetailsPage({ params: paramsPromise }) {
     notFound();
   }
 
-  return <ProductDetails product={product} />;
+  const productJsonLd = buildProductJsonLd(product);
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(productJsonLd) }}
+      />
+      <ProductDetails product={product} />
+    </>
+  );
 }

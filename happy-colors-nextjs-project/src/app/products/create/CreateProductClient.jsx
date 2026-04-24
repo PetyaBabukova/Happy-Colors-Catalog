@@ -18,6 +18,7 @@ export default function CreateProductClient() {
         price: '',
         imageUrl: '',
         imageUrls: [],
+        videos: [],
         availability: 'available',
       }}
       onSubmit={(values, setSuccess, setError, setInvalidFields, router) =>

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { isOwner } from '@/utils/isOwner';
@@ -12,6 +12,7 @@ import { isCatalogMode } from '@/utils/catalogMode';
 import Image from 'next/image';
 import useImageSlideshow from '@/hooks/useImageSlideshow';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
+import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -30,6 +31,61 @@ const deliveryContent = `
 Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
 `;
 
+function normalizeProductVideos(videos) {
+	return normalizeProductVideosForSeo(videos).map((video, index) => ({
+		...video,
+		type: 'video',
+		key: `video-${video.url}-${index}`,
+	}));
+}
+
+function buildMediaSlides(imageUrls, videos) {
+	const imageSlides = imageUrls.map((url, index) => ({
+		type: 'image',
+		key: `image-${url}-${index}`,
+		url,
+	}));
+
+	return [...imageSlides, ...videos];
+}
+
+/* function buildProductJsonLd(product, imageUrls, videos) {
+	return {
+		'@context': 'https://schema.org',
+		'@type': 'Product',
+		name: product.title,
+		description: product.description,
+		image: imageUrls,
+		...(product.price
+			? {
+				offers: {
+					'@type': 'Offer',
+					price: String(product.price),
+					priceCurrency: 'EUR',
+					availability:
+						product.availability === 'unavailable'
+							? 'https://schema.org/OutOfStock'
+							: 'https://schema.org/InStock',
+				},
+			}
+			: {}),
+		...(videos.length
+			? {
+				video: videos.map((video, index) => ({
+			'@type': 'VideoObject',
+			name: `${product.title} - видео ${index + 1}`,
+			description: product.description || product.title,
+			thumbnailUrl: video.posterUrl,
+			...(video.uploadDate ? { uploadDate: video.uploadDate } : {}),
+			contentUrl: video.url,
+			encodingFormat: video.mimeType || 'video/mp4',
+			duration: video.durationSeconds ? `PT${Math.round(video.durationSeconds)}S` : undefined,
+				})),
+			}
+			: {}),
+	};
+} */
+
 // TODO: Ще се активира при имплементация на ревю система
 // function EmptyStarIcon() {
 // 	return (
@@ -46,23 +102,27 @@ export default function ProductDetails({ product }) {
 	const canEdit = isOwner(product, user);
 	const router = useRouter();
 	const gestureRef = useRef(null);
+	const videoRefs = useRef(new Map());
+	const resumeAfterVideoRef = useRef(false);
 	const pointerIdRef = useRef(null);
 	const dragStartXRef = useRef(0);
 
 	const imageUrls = useMemo(() => normalizeImageUrls(product), [product]);
-	const loopedImageUrls = useMemo(() => {
-		if (imageUrls.length <= 1) {
-			return imageUrls;
+	const videos = useMemo(() => normalizeProductVideos(product?.videos), [product?.videos]);
+	const mediaSlides = useMemo(() => buildMediaSlides(imageUrls, videos), [imageUrls, videos]);
+	const loopedMediaSlides = useMemo(() => {
+		if (mediaSlides.length <= 1) {
+			return mediaSlides;
 		}
 
-		return [imageUrls[imageUrls.length - 1], ...imageUrls, imageUrls[0]];
-	}, [imageUrls]);
+		return [mediaSlides[mediaSlides.length - 1], ...mediaSlides, mediaSlides[0]];
+	}, [mediaSlides]);
 	const [activeTab, setActiveTab] = useState('description');
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragOffset, setDragOffset] = useState(0);
+	const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 	const {
 		currentIndex,
-		currentUrl,
 		hasMultiple,
 		trackIndex,
 		transitionEnabled,
@@ -72,10 +132,66 @@ export default function ProductDetails({ product }) {
 		resume,
 		handleTrackTransitionEnd,
 	} = useImageSlideshow(
-		imageUrls,
+		mediaSlides,
 		5000,
 		{ resetKey: product._id }
 	);
+	const activeSlide = mediaSlides[currentIndex];
+
+	useEffect(() => {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+		const handleChange = () => setPrefersReducedMotion(mediaQuery.matches);
+
+		handleChange();
+		mediaQuery.addEventListener?.('change', handleChange);
+
+		return () => {
+			mediaQuery.removeEventListener?.('change', handleChange);
+		};
+	}, []);
+
+	useEffect(() => {
+		if (activeSlide?.type === 'video') {
+			resumeAfterVideoRef.current = true;
+			pause();
+			return;
+		}
+
+		if (resumeAfterVideoRef.current) {
+			resumeAfterVideoRef.current = false;
+			resume();
+		}
+	}, [activeSlide?.type, pause, resume]);
+
+	useEffect(() => {
+		if (activeSlide?.type !== 'video') {
+			return;
+		}
+
+		const video = videoRefs.current.get(activeSlide.key);
+
+		if (!video) {
+			return;
+		}
+
+		video.currentTime = 0;
+
+		if (prefersReducedMotion) {
+			video.pause();
+			return;
+		}
+
+		tryAutoplayVideo(activeSlide.key);
+
+		return () => {
+			video.pause();
+			video.currentTime = 0;
+		};
+	}, [activeSlide?.key, activeSlide?.type, prefersReducedMotion]);
 
 	const isAvailable = product?.availability !== 'unavailable';
 
@@ -88,10 +204,47 @@ export default function ProductDetails({ product }) {
 			_id: product._id,
 			title: product.title,
 			price: product.price,
-			image: currentUrl || product.imageUrl || '',
+			image: activeSlide?.type === 'image'
+				? activeSlide.url
+				: imageUrls[0] || videos[0]?.posterUrl || product.imageUrl || '',
 		});
 
 		router.push('/cart');
+	};
+
+	const tryAutoplayVideo = (slideKey) => {
+		if (prefersReducedMotion) {
+			return;
+		}
+
+		const video = videoRefs.current.get(slideKey);
+
+		if (!video) {
+			return;
+		}
+
+		video.muted = true;
+
+		const playPromise = video.play();
+
+		if (playPromise?.catch) {
+			playPromise.catch(() => {
+				// Controls stay visible so the user can still start playback manually.
+			});
+		}
+	};
+
+	const setVideoRef = (key, node) => {
+		if (node) {
+			videoRefs.current.set(key, node);
+			return;
+		}
+
+		videoRefs.current.delete(key);
+	};
+
+	const handleVideoEnded = () => {
+		showNext();
 	};
 
 	const handleInquiry = () => {
@@ -99,7 +252,7 @@ export default function ProductDetails({ product }) {
 	};
 
 	const handlePointerDown = (event) => {
-		if (!hasMultiple || event.target.closest('button')) {
+		if (!hasMultiple || event.target.closest('button, video')) {
 			return;
 		}
 
@@ -138,7 +291,9 @@ export default function ProductDetails({ product }) {
 		setDragOffset(0);
 		pointerIdRef.current = null;
 		event.currentTarget.releasePointerCapture?.(event.pointerId);
-		resume();
+		if (activeSlide?.type !== 'video') {
+			resume();
+		}
 	};
 
 	return (
@@ -263,7 +418,7 @@ export default function ProductDetails({ product }) {
 						</button>
 					)}
 
-					{imageUrls.length > 0 ? (
+					{mediaSlides.length > 0 ? (
 						<div
 							className={styles.productImageTrack}
 							style={{
@@ -272,32 +427,68 @@ export default function ProductDetails({ product }) {
 							}}
 							onTransitionEnd={handleTrackTransitionEnd}
 						>
-							{loopedImageUrls.map((url, index) => {
-								const isClone = imageUrls.length > 1 && (index === 0 || index === loopedImageUrls.length - 1);
-								const logicalIndex = imageUrls.length > 1
+							{loopedMediaSlides.map((slide, index) => {
+								const isClone = mediaSlides.length > 1 && (index === 0 || index === loopedMediaSlides.length - 1);
+								const logicalIndex = mediaSlides.length > 1
 									? index === 0
-										? imageUrls.length - 1
-										: index === loopedImageUrls.length - 1
+										? mediaSlides.length - 1
+										: index === loopedMediaSlides.length - 1
 											? 0
 											: index - 1
 									: index;
+								const isActiveSlide = !isClone && logicalIndex === currentIndex;
+								const shouldMountVideo = slide.type === 'video' && isActiveSlide;
 
 								return (
 									<div
-										key={`${url}-${index}`}
+										key={`${slide.key}-${index}`}
 										className={styles.productImageSlide}
 										aria-hidden={isClone || logicalIndex !== currentIndex}
 									>
-										<Image
-											src={url}
-											alt={product.title}
-											width={1600}
-											height={1600}
-											sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
-											className={styles.productMainImage}
-											priority={!isClone && logicalIndex === 0}
-											loading={!isClone && logicalIndex === 0 ? undefined : 'lazy'}
-										/>
+										{slide.type === 'video' ? (
+											<>
+												{shouldMountVideo ? (
+													<video
+														ref={(node) => setVideoRef(slide.key, node)}
+														src={slide.url}
+														poster={slide.posterUrl}
+														muted
+														autoPlay
+														playsInline
+														preload="auto"
+														controls
+														className={`${styles.productMainVideo} ${styles.productVideoElement}`}
+														onLoadedData={() => tryAutoplayVideo(slide.key)}
+														onEnded={handleVideoEnded}
+														aria-label={`${product.title} видео`}
+													>
+														Вашият браузър не поддържа видео. Можете да разгледате снимките на продукта.
+													</video>
+												) : (
+													<Image
+														src={slide.posterUrl}
+														alt={`${product.title} видео`}
+														width={1600}
+														height={1600}
+														sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
+														className={styles.productMainImage}
+														loading="lazy"
+													/>
+												)}
+												<span className={styles.videoBadge}>Видео</span>
+											</>
+										) : (
+											<Image
+												src={slide.url}
+												alt={product.title}
+												width={1600}
+												height={1600}
+												sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
+												className={styles.productMainImage}
+												priority={!isClone && logicalIndex === 0}
+												loading={!isClone && logicalIndex === 0 ? undefined : 'lazy'}
+											/>
+										)}
 									</div>
 								);
 							})}

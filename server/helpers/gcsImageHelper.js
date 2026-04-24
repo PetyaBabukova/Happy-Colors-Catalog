@@ -1,32 +1,40 @@
-// server/helpers/gcsImageHelper.js
 import { Storage } from '@google-cloud/storage';
 
 const storage = new Storage();
 
-// helper, за да четем винаги актуалната стойност
-function getBucketName() {
-  return process.env.GCS_BUCKET_NAME;
+export function getBucketName() {
+  return process.env.GCS_BUCKET_NAME || '';
 }
 
-/**
- * Вади object name от GCS URL:
- * https://storage.googleapis.com/happycolors-store/products/xxx.jpg
- *  -> products/xxx.jpg
- */
-function extractObjectNameFromUrl(imageUrl) {
-  if (!imageUrl) return null;
+export function extractObjectNameFromGcsUrl(assetUrl) {
+  if (!assetUrl) {
+    return null;
+  }
 
   const bucketName = getBucketName();
-  if (!bucketName) return null;
+
+  if (!bucketName) {
+    return null;
+  }
 
   try {
-    const url = new URL(imageUrl);
-
-    // /happycolors-store/products/....
+    const url = new URL(assetUrl);
     const parts = url.pathname.split('/').filter(Boolean);
-    if (parts.length < 2) return null;
+
+    if (url.protocol !== 'https:' || url.hostname !== 'storage.googleapis.com') {
+      return null;
+    }
+
+    if (parts.includes('..') || parts.includes('.')) {
+      return null;
+    }
+
+    if (parts.length < 2) {
+      return null;
+    }
 
     const bucketFromUrl = parts[0];
+
     if (bucketFromUrl !== bucketName) {
       console.warn(
         `GCS helper: bucket in URL (${bucketFromUrl}) != env bucket (${bucketName}).`
@@ -34,18 +42,13 @@ function extractObjectNameFromUrl(imageUrl) {
       return null;
     }
 
-    // products/...
     return parts.slice(1).join('/');
-  } catch (err) {
-    console.error('GCS helper: invalid imageUrl:', imageUrl, err);
+  } catch (error) {
+    console.error('GCS helper: invalid asset URL:', assetUrl, error);
     return null;
   }
 }
 
-/**
- * Трие файл от кофата, ако imageUrl е валиден GCS линк.
- * Не хвърля грешка навън – само логва.
- */
 export async function deleteImageFromGCS(imageUrl) {
   const bucketName = getBucketName();
 
@@ -54,12 +57,10 @@ export async function deleteImageFromGCS(imageUrl) {
     return;
   }
 
-  const objectName = extractObjectNameFromUrl(imageUrl);
+  const objectName = extractObjectNameFromGcsUrl(imageUrl);
+
   if (!objectName) {
-    console.warn(
-      'GCS delete skipped – cannot extract object name from URL:',
-      imageUrl
-    );
+    console.warn('GCS delete skipped - cannot extract object name from URL:', imageUrl);
     return;
   }
 
@@ -67,11 +68,12 @@ export async function deleteImageFromGCS(imageUrl) {
     const file = storage.bucket(bucketName).file(objectName);
     await file.delete({ ignoreNotFound: true });
     console.log(`GCS: deleted image ${objectName}`);
-  } catch (err) {
-    if (err.code === 404) {
+  } catch (error) {
+    if (error.code === 404) {
       console.log(`GCS: image not found, ignore: ${objectName}`);
       return;
     }
-    console.error('Error deleting image from GCS:', err);
+
+    console.error('Error deleting image from GCS:', error);
   }
 }

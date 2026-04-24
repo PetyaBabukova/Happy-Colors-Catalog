@@ -77,6 +77,14 @@ align-items: center;
   margin-bottom: 0.8em;
 }
 
+.errorHint {
+  font-size: 0.85em;
+  color: var(--dark-orange);
+  margin-top: -0.4em;
+  margin-bottom: 0.8em;
+  font-weight: 600;
+}
+
 .imagePreviewItem {
   display: flex;
   justify-content: space-between;
@@ -101,6 +109,85 @@ align-items: center;
     align-items: center;
     gap: 0.5em;}
 
+.videoUploadSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--dark-green);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.videoUploadGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.secondaryButton {
+  width: fit-content;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--dark-green);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--dark-green);
+  cursor: pointer;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.videoPreviewList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  list-style: none;
+}
+
+.videoPreviewItem {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.videoPreviewPoster {
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 0.35rem;
+}
+
+.videoPreviewItem p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+}
+
+.videoPreviewItem button {
+  width: fit-content;
+  padding: 0.45rem 0.7rem;
+  border: none;
+  border-radius: 0.35rem;
+  background: var(--lighter-orange);
+  color: var(--dark-orange);
+  cursor: pointer;
+}
+
+.videoPreviewItem button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 
 
   @media (max-width: 768px) {
@@ -120,6 +207,11 @@ align-items: center;
 
     .registerForm button {
         font-size: 1em;
+    }
+
+    .videoUploadGrid,
+    .videoPreviewItem {
+        grid-template-columns: 1fr;
     }
     
   }

@@ -62,11 +62,9 @@ export default function Header() {
             <li><Link href="/">Начало</Link></li>
 
             <li className={styles.hasSubmenu}>
-              {mobileMenuOpen ? (
-                <span className={styles.menuItemLabel}>Каталог</span>
-              ) : (
-                <Link className={styles.menuItem} href="/products">Каталог</Link>
-              )}
+              <Link className={`${styles.menuItem} ${styles.menuItemLabel}`} href="/products">
+                Каталог
+              </Link>
               {visibleCategories && visibleCategories.length > 0 && (
                 <ul className={styles.subNavList}>
                   <li>
