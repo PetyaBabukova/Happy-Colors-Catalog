@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import useForm from '@/hooks/useForm';
@@ -98,6 +98,7 @@ function buildReplacementPatch(kind, uploadResult) {
 export default function ProductForm({ initialValues, onSubmit, legendText, successMessage }) {
   const router = useRouter();
   const { categories } = useProducts();
+  const autoUploadAttemptRef = useRef('');
   const replaceInputRefs = useRef({});
 
   const {
@@ -129,6 +130,8 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
   const [videoDeleteError, setVideoDeleteError] = useState(null);
   const [selectedVideoFile, setSelectedVideoFile] = useState(null);
   const [selectedPosterFile, setSelectedPosterFile] = useState(null);
+  const [selectedVideoVersion, setSelectedVideoVersion] = useState(0);
+  const [selectedPosterVersion, setSelectedPosterVersion] = useState(0);
   const [videoInputKey, setVideoInputKey] = useState(0);
   const [videoReplacing, setVideoReplacing] = useState(null);
 
@@ -168,6 +171,18 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
   const videos = normalizeVideos(formValues.videos);
   const hasImages = Array.isArray(formValues.imageUrls) && formValues.imageUrls.length > 0;
   const hasVideos = videos.length > 0;
+  const autoUploadSelectionKey =
+    selectedVideoFile && selectedPosterFile
+      ? `${selectedVideoVersion}:${selectedPosterVersion}`
+      : '';
+  const hasPendingAutoUploadSelection = Boolean(selectedVideoFile || selectedPosterFile);
+  const canRetryAutoUpload = Boolean(
+    selectedVideoFile &&
+      selectedPosterFile &&
+      !videoUploading &&
+      autoUploadSelectionKey &&
+      autoUploadAttemptRef.current === autoUploadSelectionKey
+  );
 
   const setReplaceInputRef = (videoUrl, kind, node) => {
     const refKey = `${kind}:${videoUrl}`;
@@ -182,6 +197,16 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
 
   const openReplaceInput = (videoUrl, kind) => {
     replaceInputRefs.current[`${kind}:${videoUrl}`]?.click();
+  };
+
+  const handleSelectedVideoChange = (event) => {
+    setSelectedVideoFile(event.target.files?.[0] || null);
+    setSelectedVideoVersion((current) => current + 1);
+  };
+
+  const handleSelectedPosterChange = (event) => {
+    setSelectedPosterFile(event.target.files?.[0] || null);
+    setSelectedPosterVersion((current) => current + 1);
   };
 
   const handleFileChange = async (event) => {
@@ -236,7 +261,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
     }
   };
 
-  const handleVideoUpload = async () => {
+  const handleVideoUpload = useCallback(async () => {
     setVideoUploadError(null);
     const uploadedUploads = [];
     let didAttachVideo = false;
@@ -312,6 +337,30 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
     } finally {
       setVideoUploading(false);
     }
+  }, [selectedPosterFile, selectedVideoFile, setFormValues, videos.length]);
+
+  useEffect(() => {
+    if (!selectedVideoFile || !selectedPosterFile || videoUploading) {
+      return;
+    }
+
+    if (autoUploadAttemptRef.current === autoUploadSelectionKey) {
+      return;
+    }
+
+    autoUploadAttemptRef.current = autoUploadSelectionKey;
+    void handleVideoUpload();
+  }, [
+    autoUploadSelectionKey,
+    handleVideoUpload,
+    selectedPosterFile,
+    selectedVideoFile,
+    videoUploading,
+  ]);
+
+  const handleVideoUploadRetry = () => {
+    autoUploadAttemptRef.current = '';
+    void handleVideoUpload();
   };
 
   const handleReplaceVideoAsset = async (video, kind, file, event) => {
@@ -444,7 +493,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
     if (selectedVideoFile || selectedPosterFile) {
       return {
         fields: ['videos'],
-        message: 'Имате избрано видео или poster image. Натиснете "Качи видео" преди да запазите продукта.',
+        message: 'Имате избрано видео или poster image. Изчакайте качването да приключи или изберете файловете отново преди да запазите продукта.',
       };
     }
 
@@ -611,7 +660,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
                 id="product-video-file"
                 type="file"
                 accept="video/mp4"
-                onChange={(event) => setSelectedVideoFile(event.target.files?.[0] || null)}
+                onChange={handleSelectedVideoChange}
                 disabled={videos.length >= MAX_VIDEOS_PER_PRODUCT || videoUploading || Boolean(videoDeletingUrl)}
               />
             </div>
@@ -622,20 +671,31 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
                 id="product-video-poster"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => setSelectedPosterFile(event.target.files?.[0] || null)}
+                onChange={handleSelectedPosterChange}
                 disabled={videos.length >= MAX_VIDEOS_PER_PRODUCT || videoUploading || Boolean(videoDeletingUrl)}
               />
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleVideoUpload}
-            disabled={videoUploading || Boolean(videoDeletingUrl) || videos.length >= MAX_VIDEOS_PER_PRODUCT}
-            className={styles.secondaryButton}
-          >
-            {videoUploading ? 'Качване на видео...' : 'Качи видео'}
-          </button>
+          {(selectedVideoFile && selectedPosterFile) && (
+            <p className={styles.fieldHint}>
+              {videoUploading ? 'Качване на видео...' : 'Готов за качване'}
+            </p>
+          )}
+
+          {hasPendingAutoUploadSelection && !(selectedVideoFile && selectedPosterFile) && (
+            <p className={styles.fieldHint}>Изберете и видео файл, и poster image, за да стартира качването.</p>
+          )}
+
+          {canRetryAutoUpload && (
+            <button
+              type="button"
+              onClick={handleVideoUploadRetry}
+              className={styles.secondaryButton}
+            >
+              Опитай пак
+            </button>
+          )}
 
           {videoUploadError && <p className={styles.errorHint}>{videoUploadError}</p>}
           {videoDeleteError && <p className={styles.errorHint}>{videoDeleteError}</p>}
