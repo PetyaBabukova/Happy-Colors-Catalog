@@ -57,43 +57,6 @@ function buildMediaSlides(imageUrls, videos) {
 	return [...imageSlides, ...videos];
 }
 
-/* function buildProductJsonLd(product, imageUrls, videos) {
-	return {
-		'@context': 'https://schema.org',
-		'@type': 'Product',
-		name: product.title,
-		description: product.description,
-		image: imageUrls,
-		...(product.price
-			? {
-				offers: {
-					'@type': 'Offer',
-					price: String(product.price),
-					priceCurrency: 'EUR',
-					availability:
-						product.availability === 'unavailable'
-							? 'https://schema.org/OutOfStock'
-							: 'https://schema.org/InStock',
-				},
-			}
-			: {}),
-		...(videos.length
-			? {
-				video: videos.map((video, index) => ({
-			'@type': 'VideoObject',
-			name: `${product.title} - видео ${index + 1}`,
-			description: product.description || product.title,
-			thumbnailUrl: video.posterUrl,
-			...(video.uploadDate ? { uploadDate: video.uploadDate } : {}),
-			contentUrl: video.url,
-			encodingFormat: video.mimeType || 'video/mp4',
-			duration: video.durationSeconds ? `PT${Math.round(video.durationSeconds)}S` : undefined,
-				})),
-			}
-			: {}),
-	};
-} */
-
 // TODO: Ще се активира при имплементация на ревю система
 // function EmptyStarIcon() {
 // 	return (
