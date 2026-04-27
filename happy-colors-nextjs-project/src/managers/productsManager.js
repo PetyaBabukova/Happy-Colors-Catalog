@@ -133,6 +133,7 @@ export async function onEditProductSubmit(
     setInvalidFields([]);
     await invalidateProductCaches(productId);
     router.push(`/products/${productId}`);
+    router.refresh();
   } catch (err) {
     setSuccess(false);
     setError(err.message || 'Възникна грешка при редакция на продукта.');
