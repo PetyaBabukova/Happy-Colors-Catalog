@@ -1,6 +1,34 @@
-// server/models/Product.js
-
 import mongoose from 'mongoose';
+
+const productVideoSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    posterUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    mimeType: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    durationSeconds: {
+      type: Number,
+      required: true,
+    },
+    uploadDate: {
+      type: Date,
+      default: Date.now,
+      required: true,
+    },
+  },
+  { _id: false }
+);
 
 const productSchema = new mongoose.Schema({
   title: {
@@ -15,32 +43,29 @@ const productSchema = new mongoose.Schema({
     type: Number,
     required: [true, "Price is required!"],
   },
-
-  // ✅ Старото поле го пазим, за да не счупим старите продукти
   imageUrl: {
     type: String,
     default: '',
   },
-
-  // ✅ Ново поле за много снимки
   imageUrls: {
     type: [String],
     default: [],
   },
-
+  videos: {
+    type: [productVideoSchema],
+    default: [],
+  },
   category: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: [true, "Category is required!"],
   },
-
   availability: {
     type: String,
     enum: ['available', 'unavailable'],
     default: 'available',
     required: true,
   },
-
   feedback: [
     {
       name: String,
@@ -48,14 +73,12 @@ const productSchema = new mongoose.Schema({
       rating: Number,
     }
   ],
-
   accessories: [
     {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Accessory'
     }
   ],
-
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -63,4 +86,4 @@ const productSchema = new mongoose.Schema({
   },
 });
 
-export default mongoose.model('Product', productSchema);
+export default mongoose.models.Product || mongoose.model('Product', productSchema);

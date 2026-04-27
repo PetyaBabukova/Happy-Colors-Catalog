@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useReducer, useEffect, useCallback, useRef, useMemo, useState } from 'react';
 
 function createInitialState(length) {
   return {
@@ -49,8 +49,14 @@ function slideReducer(state, action) {
 }
 
 export default function useImageSlideshow(imageUrls, interval = 4000, options = {}) {
-  const { observeRef, resetKey, respectReducedMotion = false } = options;
+  const {
+    observeRef,
+    resetKey,
+    respectReducedMotion = false,
+    exposeInViewState = false,
+  } = options;
   const [state, dispatch] = useReducer(slideReducer, imageUrls.length, createInitialState);
+  const [isInView, setIsInView] = useState(!observeRef);
   const timerRef = useRef(null);
   const pausedRef = useRef(false);
   const inViewportRef = useRef(!observeRef);
@@ -133,6 +139,10 @@ export default function useImageSlideshow(imageUrls, interval = 4000, options = 
 
     inViewportRef.current = visibleArea / elementArea >= 0.3;
 
+    if (exposeInViewState) {
+      setIsInView(inViewportRef.current);
+    }
+
     if (inViewportRef.current && !pausedRef.current) {
       startTimer();
     }
@@ -140,6 +150,10 @@ export default function useImageSlideshow(imageUrls, interval = 4000, options = 
     const observer = new IntersectionObserver(
       ([entry]) => {
         inViewportRef.current = entry.isIntersecting;
+
+        if (exposeInViewState) {
+          setIsInView(entry.isIntersecting);
+        }
 
         if (entry.isIntersecting && !pausedRef.current) {
           startTimer();
@@ -156,7 +170,7 @@ export default function useImageSlideshow(imageUrls, interval = 4000, options = 
     return () => {
       observer.disconnect();
     };
-  }, [clearTimer, observeRef, startTimer]);
+  }, [clearTimer, exposeInViewState, observeRef, startTimer]);
 
   const showPrev = useCallback(() => {
     if (!hasMultiple) {
@@ -189,7 +203,8 @@ export default function useImageSlideshow(imageUrls, interval = 4000, options = 
     }
   }, [startTimer]);
 
-  const currentUrl = imageUrls[state.currentIndex] || imageUrls[0] || '';
+  const currentItem = imageUrls[state.currentIndex] ?? imageUrls[0] ?? null;
+  const currentUrl = typeof currentItem === 'string' ? currentItem : '';
 
   const handleTrackTransitionEnd = useCallback(() => {
     if (!hasMultiple) {
@@ -222,7 +237,9 @@ export default function useImageSlideshow(imageUrls, interval = 4000, options = 
 
   return {
     currentIndex: state.currentIndex,
+    currentItem,
     currentUrl,
+    isInView,
     hasMultiple,
     trackIndex: state.trackIndex,
     transitionEnabled: state.transitionEnabled,

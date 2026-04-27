@@ -7,6 +7,7 @@ import {
   editProduct,
 } from '../services/productsServices.js';
 import { deleteProductImage } from '../services/productImagesService.js';
+import { deleteProductVideo } from '../services/productVideosService.js';
 import { requireAuth } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -16,7 +17,7 @@ router.get('/', async (req, res) => {
     const category = req.query.category;
     const products = await getAllProducts(category);
     res.json(products);
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({ message: 'Грешка при зареждане на продуктите' });
   }
 });
@@ -30,26 +31,21 @@ router.get('/:productId', async (req, res) => {
     }
 
     res.status(200).json(product);
-  } catch (err) {
+  } catch (error) {
     res.status(400).json({ message: 'Невалиден ID или грешка при заявката' });
   }
 });
 
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const productData = {
-      ...req.body,
-      owner: req.user._id,
-    };
-
-    const product = await createProduct(productData);
+    const product = await createProduct(req.body, req.user._id);
     res.status(201).json(product);
-  } catch (err) {
-    let message = err.message;
-    let statusCode = err.statusCode || 400;
+  } catch (error) {
+    let message = error.message;
+    let statusCode = error.statusCode || 400;
 
-    if (err.name === 'ValidationError') {
-      const firstError = Object.values(err.errors)[0];
+    if (error.name === 'ValidationError') {
+      const firstError = Object.values(error.errors)[0];
       message = firstError?.message || 'Invalid input';
     }
 
@@ -61,9 +57,9 @@ router.delete('/:productId', requireAuth, async (req, res) => {
   try {
     await deleteProduct(req.params.productId, req.user._id);
     res.status(204).end();
-  } catch (err) {
-    const statusCode = err.statusCode || 403;
-    res.status(statusCode).json({ message: err.message });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 });
 
@@ -76,9 +72,9 @@ router.put('/:productId', requireAuth, async (req, res) => {
     );
 
     res.status(200).json(updatedProduct);
-  } catch (err) {
-    const statusCode = err.statusCode || 403;
-    res.status(statusCode).json({ message: err.message });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 });
 
@@ -93,9 +89,26 @@ router.delete('/:productId/image', requireAuth, async (req, res) => {
     );
 
     res.status(200).json(result);
-  } catch (err) {
-    const statusCode = err.statusCode || 403;
-    res.status(statusCode).json({ message: err.message });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
+  }
+});
+
+router.delete('/:productId/video', requireAuth, async (req, res) => {
+  try {
+    const { videoUrl } = req.body;
+
+    const result = await deleteProductVideo(
+      req.params.productId,
+      videoUrl,
+      req.user._id
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 });
 

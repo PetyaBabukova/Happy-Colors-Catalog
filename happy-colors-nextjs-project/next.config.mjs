@@ -6,6 +6,7 @@ const backendBaseUrl = String(
 ).replace(/\/+$/, '');
 
 const nextConfig = {
+  serverExternalPackages: ['mongoose', 'mongodb'],
   async rewrites() {
     return [
       {

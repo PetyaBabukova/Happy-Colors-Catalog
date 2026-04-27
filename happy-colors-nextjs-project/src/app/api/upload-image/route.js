@@ -1,35 +1,36 @@
 import { NextResponse } from 'next/server';
-import { Storage } from '@google-cloud/storage';
-import { randomUUID } from 'crypto';
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
-import fsPromises from 'fs/promises';
+
+import { requireApiAuth } from '@/app/api/_lib/auth';
+import {
+  buildStorageObjectName,
+  createPublicUrl,
+  getBucketName,
+  getStorage,
+} from '@/app/api/_lib/gcs';
+import { validateImageUploadFile } from '@/app/api/_lib/uploadValidation';
 
 export const runtime = 'nodejs';
 
-const bucketName = process.env.GCS_BUCKET_NAME;
-
-function resolveGoogleCredentialsPath() {
-  const candidates = [
-    process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    '/etc/secrets/gcp-service-account.json',
-    path.join(process.cwd(), 'gcp-service-account.json'),
-  ].filter(Boolean);
-
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
-}
-
-const keyFilename = resolveGoogleCredentialsPath();
-
-const storage = keyFilename
-  ? new Storage({ keyFilename })
-  : new Storage();
-
 export async function POST(request) {
-  let tempFilePath = null;
-
   try {
+    const authResult = requireApiAuth(request);
+
+    if (!authResult.ok) {
+      return NextResponse.json(
+        { message: authResult.message },
+        { status: authResult.status }
+      );
+    }
+
+    const bucketName = getBucketName();
+
+    if (!bucketName) {
+      return NextResponse.json(
+        { message: 'Липсва конфигурация на кофата (GCS_BUCKET_NAME).' },
+        { status: 500 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
 
@@ -40,56 +41,41 @@ export async function POST(request) {
       );
     }
 
-    if (!bucketName) {
-      return NextResponse.json(
-        { message: 'Липсва конфигурация на кофата (GCS_BUCKET_NAME).' },
-        { status: 500 }
-      );
-    }
-
-    if (!keyFilename) {
-      return NextResponse.json(
-        { message: 'Липсват Google credentials за качване на изображения.' },
-        { status: 500 }
-      );
-    }
-
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const validationResult = validateImageUploadFile(file, buffer);
 
-    const originalName = file.name || 'upload';
-    const ext = originalName.includes('.') ? originalName.split('.').pop() : '';
-    const safeExt = ext ? `.${ext}` : '';
-    const fileName = `products/${randomUUID()}${safeExt}`;
+    if (!validationResult.ok) {
+      return NextResponse.json(
+        { message: validationResult.message },
+        { status: validationResult.status }
+      );
+    }
 
-    const tmpDir = os.tmpdir();
-    tempFilePath = path.join(tmpDir, `hc-upload-${randomUUID()}${safeExt}`);
+    const objectName = buildStorageObjectName(
+      'products',
+      file.name,
+      validationResult.mimeType
+    );
+    const bucket = getStorage().bucket(bucketName);
 
-    await fsPromises.writeFile(tempFilePath, buffer);
-
-    const bucket = storage.bucket(bucketName);
-
-    await bucket.upload(tempFilePath, {
-      destination: fileName,
+    await bucket.file(objectName).save(buffer, {
       resumable: false,
       metadata: {
-        contentType: file.type || 'application/octet-stream',
+        contentType: validationResult.mimeType,
       },
     });
 
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
-
-    return NextResponse.json({ imageUrl: publicUrl }, { status: 200 });
-  } catch (err) {
-    console.error('Error in /api/upload-image:', err);
+    return NextResponse.json(
+      { imageUrl: createPublicUrl(bucketName, objectName) },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('Error in /api/upload-image:', error);
 
     return NextResponse.json(
       { message: 'Грешка при качване на изображението.' },
       { status: 500 }
     );
-  } finally {
-    if (tempFilePath) {
-      await fsPromises.unlink(tempFilePath).catch(() => {});
-    }
   }
 }

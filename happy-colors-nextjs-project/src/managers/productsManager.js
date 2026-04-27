@@ -36,8 +36,10 @@ export async function onCreateProductSubmit(
     const payload = {
       ...formValues,
       owner: user._id,
+      category: formValues.category?._id || formValues.category || '',
       imageUrls: normalizedImageUrls,
       imageUrl: normalizedImageUrls[0] || '',
+      videos: Array.isArray(formValues.videos) ? formValues.videos : [],
       availability: formValues.availability || 'available',
     };
 
@@ -101,8 +103,10 @@ export async function onEditProductSubmit(
 
     const payload = {
       ...formValues,
+      category: formValues.category?._id || formValues.category || '',
       imageUrls: normalizedImageUrls,
       imageUrl: normalizedImageUrls[0] || '',
+      videos: Array.isArray(formValues.videos) ? formValues.videos : [],
       availability: formValues.availability || 'available',
     };
 
@@ -187,6 +191,25 @@ export async function deleteProductImage(productId, imageUrl) {
 
   if (!res.ok) {
     throw new Error(result?.message || 'Грешка при изтриване на изображение');
+  }
+
+  return result;
+}
+
+export async function deleteProductVideo(productId, videoUrl) {
+  const res = await fetch(`${baseURL}/products/${productId}/video`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ videoUrl }),
+  });
+
+  const result = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw new Error(result?.message || 'Грешка при изтриване на видео');
   }
 
   return result;
