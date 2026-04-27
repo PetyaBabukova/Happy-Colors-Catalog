@@ -31,6 +31,14 @@ const deliveryContent = `
 Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
 `;
 
+function warnAutoplay(message, details = {}) {
+	if (process.env.NODE_ENV !== 'development') {
+		return;
+	}
+
+	console.warn(message, details);
+}
+
 function normalizeProductVideos(videos) {
 	return normalizeProductVideosForSeo(videos).map((video, index) => ({
 		...video,
@@ -104,6 +112,7 @@ export default function ProductDetails({ product }) {
 	const gestureRef = useRef(null);
 	const videoRefs = useRef(new Map());
 	const resumeAfterVideoRef = useRef(false);
+	const activeSlideKeyRef = useRef('');
 	const pointerIdRef = useRef(null);
 	const dragStartXRef = useRef(0);
 
@@ -139,6 +148,10 @@ export default function ProductDetails({ product }) {
 	const activeSlide = mediaSlides[currentIndex];
 
 	useEffect(() => {
+		activeSlideKeyRef.current = activeSlide?.key || '';
+	}, [activeSlide?.key]);
+
+	useEffect(() => {
 		if (typeof window === 'undefined') {
 			return;
 		}
@@ -161,11 +174,16 @@ export default function ProductDetails({ product }) {
 			return;
 		}
 
+		videoRefs.current.forEach((video) => {
+			video.pause();
+			video.currentTime = 0;
+		});
+
 		if (resumeAfterVideoRef.current) {
 			resumeAfterVideoRef.current = false;
 			resume();
 		}
-	}, [activeSlide?.type, pause, resume]);
+	}, [activeSlide?.key, activeSlide?.type, pause, resume]);
 
 	useEffect(() => {
 		if (activeSlide?.type !== 'video') {
@@ -175,21 +193,39 @@ export default function ProductDetails({ product }) {
 		const video = videoRefs.current.get(activeSlide.key);
 
 		if (!video) {
+			warnAutoplay('PDP autoplay: active slide video is not mounted yet.', {
+				slideKey: activeSlide.key,
+			});
 			return;
 		}
-
-		video.currentTime = 0;
 
 		if (prefersReducedMotion) {
 			video.pause();
 			return;
 		}
 
-		tryAutoplayVideo(activeSlide.key);
+		if (video.readyState >= 2) {
+			tryAutoplayVideo(activeSlide.key);
+			return;
+		}
+
+		const handleLoadedData = () => {
+			if (activeSlideKeyRef.current !== activeSlide.key) {
+				return;
+			}
+
+			tryAutoplayVideo(activeSlide.key);
+		};
+
+		video.addEventListener('loadeddata', handleLoadedData);
+
+		if (video.readyState >= 2) {
+			handleLoadedData();
+		}
 
 		return () => {
 			video.pause();
-			video.currentTime = 0;
+			video.removeEventListener('loadeddata', handleLoadedData);
 		};
 	}, [activeSlide?.key, activeSlide?.type, prefersReducedMotion]);
 
@@ -217,9 +253,26 @@ export default function ProductDetails({ product }) {
 			return;
 		}
 
+		if (activeSlideKeyRef.current !== slideKey) {
+			warnAutoplay('PDP autoplay: stale slide key skipped.', {
+				requestedSlideKey: slideKey,
+				activeSlideKey: activeSlideKeyRef.current,
+			});
+			return;
+		}
+
 		const video = videoRefs.current.get(slideKey);
 
 		if (!video) {
+			warnAutoplay('PDP autoplay: missing video element for slide.', { slideKey });
+			return;
+		}
+
+		if (video.readyState < 2) {
+			warnAutoplay('PDP autoplay: waiting for video data before play.', {
+				slideKey,
+				readyState: video.readyState,
+			});
 			return;
 		}
 
@@ -228,8 +281,11 @@ export default function ProductDetails({ product }) {
 		const playPromise = video.play();
 
 		if (playPromise?.catch) {
-			playPromise.catch(() => {
-				// Controls stay visible so the user can still start playback manually.
+			playPromise.catch((error) => {
+				warnAutoplay('PDP autoplay was blocked or interrupted.', {
+					slideKey,
+					error,
+				});
 			});
 		}
 	};
@@ -237,6 +293,15 @@ export default function ProductDetails({ product }) {
 	const setVideoRef = (key, node) => {
 		if (node) {
 			videoRefs.current.set(key, node);
+
+			// This helps when the active slide's video mounts lazily after enough data is already buffered.
+			if (
+				key === activeSlideKeyRef.current &&
+				node.readyState >= 2 &&
+				!prefersReducedMotion
+			) {
+				tryAutoplayVideo(key);
+			}
 			return;
 		}
 
