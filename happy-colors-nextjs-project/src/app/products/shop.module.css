@@ -78,6 +78,38 @@
   display: block;
 }
 
+.availabilityBadge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(0, 104, 71, 0.24);
+  border-radius: 0.35rem;
+  background: rgba(244, 255, 251, 0.92);
+  color: var(--dark-green);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 0.2rem 0.6rem rgba(0, 70, 48, 0.12);
+}
+
+.availabilityBadge::before {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--dark-green);
+}
+
 .product:hover {
   background-color: var(--lighter-green);
   color: var(--dark-green);

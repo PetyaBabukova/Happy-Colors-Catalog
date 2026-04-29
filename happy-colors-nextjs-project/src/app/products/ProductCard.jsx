@@ -63,6 +63,7 @@ export default function ProductCard({ product }) {
   }, [currentSlide?.key, currentSlide?.type, isInView]);
 
   const shouldRenderVideo = currentSlide?.type === 'video' && isInView;
+  const isAvailable = product?.availability !== 'unavailable';
 
   return (
     <Link href={`/products/${product._id}`} className={styles.product}>
@@ -72,6 +73,10 @@ export default function ProductCard({ product }) {
         onMouseEnter={pause}
         onMouseLeave={resume}
       >
+        {isAvailable && (
+          <span className={styles.availabilityBadge}>Налично</span>
+        )}
+
         {shouldRenderVideo ? (
           <video
             ref={videoRef}
