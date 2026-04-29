@@ -5,6 +5,10 @@
 import styles from './shop.module.css';
 import ProductCard from './ProductCard';
 
+function getAvailabilityRank(product) {
+  return product?.availability === 'unavailable' ? 1 : 0;
+}
+
 export default function Shop({ products }) {
   const grouped = {};
 
@@ -16,6 +20,10 @@ export default function Shop({ products }) {
     }
     grouped[categoryName].push(product);
 
+  });
+
+  Object.values(grouped).forEach((categoryProducts) => {
+    categoryProducts.sort((a, b) => getAvailabilityRank(a) - getAvailabilityRank(b));
   });
 
   const categories = Object.keys(grouped)

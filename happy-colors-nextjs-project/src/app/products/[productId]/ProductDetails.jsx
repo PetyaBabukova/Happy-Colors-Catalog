@@ -392,7 +392,7 @@ export default function ProductDetails({ product }) {
 						</p>
 
 						{isCatalogMode ? (
-							<p>Цена: {product.price} €. За наличност и уточнения, моля изпратете запитване.</p>
+							<p>Цена {product.price} €. За наличност и уточнения, моля изпратете запитване.</p>
 						) : (
 							<p>Цена {product.price} €</p>
 						)}

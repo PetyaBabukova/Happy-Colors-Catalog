@@ -10,7 +10,6 @@ export async function POST(request) {
     revalidatePath('/products');
 
     if (productId) {
-      revalidateTag(`product-${productId}`);
       revalidatePath(`/products/${productId}`);
     }
 
