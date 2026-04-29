@@ -11,6 +11,7 @@
     "test": "npm run test:server && npm run test:frontend",
     "test:server": "cd server && npm test",
     "test:server:unit": "cd server && npm run test:unit",
+    "test:server:integration": "cd server && npm run test:integration",
     "test:server:ci": "cd server && npm run test:ci",
     "test:frontend": "cd happy-colors-nextjs-project && npm test",
     "test:frontend:unit": "cd happy-colors-nextjs-project && npm run test:unit",
