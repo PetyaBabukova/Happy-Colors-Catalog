@@ -4,7 +4,12 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon dev-server.js"
+    "dev": "nodemon dev-server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "cross-env CI_COVERAGE=true vitest run --coverage",
+    "test:unit": "vitest run --project unit"
   },
   "author": "",
   "license": "ISC",
@@ -23,6 +28,9 @@
     "validator": "^13.15.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "@vitest/coverage-v8": "^2.1.9",
+    "cross-env": "^10.1.0",
+    "nodemon": "^3.1.10",
+    "vitest": "^2.1.9"
   }
 }

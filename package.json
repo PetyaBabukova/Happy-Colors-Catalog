@@ -7,7 +7,16 @@
     "install:all": "npm install",
     "build": "cd happy-colors-nextjs-project && npm run build",
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "npm run test:server && npm run test:frontend",
+    "test:server": "cd server && npm test",
+    "test:server:unit": "cd server && npm run test:unit",
+    "test:server:ci": "cd server && npm run test:ci",
+    "test:frontend": "cd happy-colors-nextjs-project && npm test",
+    "test:frontend:unit": "cd happy-colors-nextjs-project && npm run test:unit",
+    "test:frontend:unit-jsdom": "cd happy-colors-nextjs-project && npm run test:unit-jsdom",
+    "test:frontend:ci": "cd happy-colors-nextjs-project && npm run test:ci",
+    "test:ci": "npm run test:server:ci && npm run test:frontend:ci"
   },
   "dependencies": {
     "dotenv": "^16.5.0",
