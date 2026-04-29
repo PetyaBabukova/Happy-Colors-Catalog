@@ -18,6 +18,9 @@ export default defineConfig({
     },
   },
   test: {
+    unstubGlobals: true,
+    unstubEnvs: true,
+    restoreMocks: true,
     coverage: {
       provider: 'v8',
       all: true,

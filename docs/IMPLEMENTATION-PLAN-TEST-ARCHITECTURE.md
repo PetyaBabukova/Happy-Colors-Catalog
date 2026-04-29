@@ -217,6 +217,14 @@ Frontend unit-jsdom coverage:
 - `src/utils/videoMetadata.js`
 - `src/hooks/useForm.js`
 
+Phase 1B трябва да разшири `videoMetadata` тестовете отвъд walking skeleton-а:
+
+- `loadedmetadata` event resolve-ва с duration
+- timeout path reject-ва с timeout error
+- video error event reject-ва с error
+- cleanup маха listeners/src и revoke-ва object URL
+- settled guard не позволява double resolve/reject
+
 ### Middleware testing helper
 
 Създава се shared helper:

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   isAllowedPosterStorageUrl,
   isAllowedVideoStorageUrl,
@@ -8,6 +8,10 @@ import {
 describe('productVideoHelper', () => {
   beforeEach(() => {
     process.env.GCS_BUCKET_NAME = 'happy-bucket';
+  });
+
+  afterEach(() => {
+    delete process.env.GCS_BUCKET_NAME;
   });
 
   it('normalizes valid stored videos and removes incomplete entries', () => {
