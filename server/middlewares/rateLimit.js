@@ -1,5 +1,9 @@
 const stores = new Map();
 
+export function resetRateLimiterState() {
+  stores.clear();
+}
+
 function getClientIp(req) {
   const forwardedFor = req.headers['x-forwarded-for'];
 

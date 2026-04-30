@@ -45,22 +45,28 @@ describe('products integration', () => {
     await request(app).post('/products').send(buildProduct({ category })).expect(401);
   });
 
-  it('allows owners to edit and delete their products', async () => {
+  it('allows owners to edit their products', async () => {
     const app = createExpressApp();
     const owner = await createUser();
     const category = await createCategory();
     const product = await createProduct({ owner, category, title: 'Original title' });
-    const cookie = authCookie(owner);
 
     const editRes = await request(app)
       .put(`/products/${product._id}`)
-      .set('Cookie', cookie)
+      .set('Cookie', authCookie(owner))
       .send({ title: 'Updated title' })
       .expect(200);
 
     expect(editRes.body.title).toBe('Updated title');
+  });
 
-    await request(app).delete(`/products/${product._id}`).set('Cookie', cookie).expect(204);
+  it('allows owners to delete their products', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const product = await createProduct({ owner, category });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
     await expect(Product.findById(product._id)).resolves.toBeNull();
   });

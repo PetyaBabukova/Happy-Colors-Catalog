@@ -1,19 +1,19 @@
 # Phase 4 Coverage Gap List
 
-Date: 2026-04-29
+Date: 2026-04-30
 Status: Backend integration tests added; route tests pass, hard 80% server coverage gate remains deferred.
 
 ## Diagnostic Results
 
 `cd server && npm run test:integration`
 
-- Test result: 6 files passed, 16 tests passed.
+- Test result: 6 files passed, 19 tests passed.
 
 `cd server && npm run test:ci`
 
-- Test result: 13 files passed, 38 tests passed.
+- Test result: 13 files passed, 41 tests passed.
 - Coverage result: fails only on global thresholds.
-- Current global coverage: 51.67% lines, 57.67% branches, 54.9% functions, 51.67% statements.
+- Current global coverage: 52.03% lines, 60.27% branches, 55.33% functions, 52.03% statements.
 
 ## Coverage Improvement
 
@@ -26,8 +26,8 @@ Phase 1B server coverage was:
 
 After Phase 4 backend integration tests:
 
-- Lines increased to 51.67%.
-- Functions increased to 54.9%.
+- Lines increased to 52.03%.
+- Functions increased to 55.33%.
 - Controllers, models, product/category/user/search/order paths now receive real Express + Mongo coverage.
 
 ## Remaining Server Gaps

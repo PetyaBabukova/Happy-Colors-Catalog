@@ -6,6 +6,10 @@ import User from '../../models/User.js';
 
 let sequence = 0;
 
+export function resetSequence() {
+  sequence = 0;
+}
+
 function nextId(prefix) {
   sequence += 1;
   return `${prefix}-${sequence}`;
@@ -61,6 +65,9 @@ export async function createProduct(overrides = {}) {
   return Product.create(buildProduct({ ...overrides, owner, category }));
 }
 
+/**
+ * Builds the flat request body shape consumed by POST /orders.
+ */
 export function buildOrder({ product, ...overrides } = {}) {
   return {
     name: 'Petya Babukova',
@@ -81,6 +88,9 @@ export function buildOrder({ product, ...overrides } = {}) {
   };
 }
 
+/**
+ * Creates an Order document directly with the nested Mongo schema shape.
+ */
 export async function createOrder(overrides = {}) {
   const product = overrides.product || (await createProduct());
 

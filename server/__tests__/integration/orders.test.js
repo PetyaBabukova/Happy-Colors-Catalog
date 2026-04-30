@@ -30,6 +30,36 @@ describe('orders integration', () => {
     ]);
   });
 
+  it('creates an order with multiple products and speedy shipping', async () => {
+    const app = createExpressApp();
+    const candle = await createProduct({ title: 'Order Candle', price: 15 });
+    const card = await createProduct({ title: 'Color Card', price: 4 });
+
+    const res = await request(app)
+      .post('/orders')
+      .send(
+        buildOrder({
+          product: candle,
+          shippingMethod: 'speedy',
+          econtOffice: '',
+          speedyOffice: 'Speedy office 1',
+          cartItems: [
+            { productId: String(candle._id), quantity: 2 },
+            { productId: String(card._id), quantity: 3 },
+          ],
+        })
+      )
+      .expect(201);
+    const order = await Order.findById(res.body.orderId).lean();
+
+    expect(order.totalPrice).toBe(42);
+    expect(order.shipping).toMatchObject({
+      shippingMethod: 'speedy',
+      speedyOffice: 'Speedy office 1',
+    });
+    expect(order.items).toHaveLength(2);
+  });
+
   it('rejects card payments and missing products in the direct order route', async () => {
     const app = createExpressApp();
     const product = await createProduct();
@@ -46,5 +76,26 @@ describe('orders integration', () => {
       .set('x-forwarded-for', '203.0.113.22')
       .send(buildOrder({ product: '507f1f77bcf86cd799439011' }))
       .expect(404);
+  });
+
+  it('rejects invalid shipping, quantity, and HTML payloads', async () => {
+    const app = createExpressApp();
+    const product = await createProduct();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app)
+      .post('/orders')
+      .send(buildOrder({ product, econtOffice: '' }))
+      .expect(400);
+
+    await request(app)
+      .post('/orders')
+      .send(buildOrder({ product, cartItems: [{ productId: String(product._id), quantity: 1.5 }] }))
+      .expect(400);
+
+    await request(app)
+      .post('/orders')
+      .send(buildOrder({ product, name: '<script>alert(1)</script>' }))
+      .expect(400);
   });
 });

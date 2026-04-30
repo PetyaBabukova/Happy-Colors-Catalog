@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, vi } from 'vitest';
+import { resetRateLimiterState } from '../../middlewares/rateLimit.js';
+import { resetSequence } from './factories.js';
 
 let mongoServer;
 
@@ -8,11 +10,15 @@ vi.mock('../../helpers/sendEmail.js', () => ({
   sendEmail: vi.fn().mockResolvedValue({ messageId: 'test-message-id' }),
 }));
 
-vi.mock('../../helpers/gcsImageHelper.js', () => ({
-  deleteImageFromGCS: vi.fn().mockResolvedValue(undefined),
-  getBucketName: vi.fn(() => 'test-bucket'),
-  extractObjectNameFromGcsUrl: vi.fn((url) => String(url || '').split('/').pop() || ''),
-}));
+vi.mock('../../helpers/gcsImageHelper.js', async (importOriginal) => {
+  const actual = await importOriginal();
+
+  return {
+    ...actual,
+    deleteImageFromGCS: vi.fn().mockResolvedValue(undefined),
+    getBucketName: vi.fn(() => 'test-bucket'),
+  };
+});
 
 beforeAll(async () => {
   process.env.NODE_ENV = 'test';
@@ -29,6 +35,8 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  resetRateLimiterState();
+  resetSequence();
 
   const collections = await mongoose.connection.db.collections();
 
