@@ -70,4 +70,23 @@ describe('products integration', () => {
 
     await expect(Product.findById(product._id)).resolves.toBeNull();
   });
+
+  it('rejects edit and delete requests from non-owners', async () => {
+    const app = createExpressApp();
+    const owner = await createUser({ email: 'owner@example.com' });
+    const otherUser = await createUser({ email: 'other@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({ owner, category });
+    const nonOwnerCookie = authCookie(otherUser);
+
+    await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', nonOwnerCookie)
+      .send({ title: 'Not allowed' })
+      .expect(403);
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', nonOwnerCookie).expect(403);
+
+    await expect(Product.findById(product._id)).resolves.toBeTruthy();
+  });
 });

@@ -37,6 +37,7 @@ describe('orders integration', () => {
 
     const res = await request(app)
       .post('/orders')
+      .set('x-forwarded-for', '203.0.113.23')
       .send(
         buildOrder({
           product: candle,
@@ -52,6 +53,7 @@ describe('orders integration', () => {
       .expect(201);
     const order = await Order.findById(res.body.orderId).lean();
 
+    // Direct COD orders currently do not add a shipping surcharge.
     expect(order.totalPrice).toBe(42);
     expect(order.shipping).toMatchObject({
       shippingMethod: 'speedy',
@@ -85,16 +87,19 @@ describe('orders integration', () => {
 
     await request(app)
       .post('/orders')
+      .set('x-forwarded-for', '203.0.113.24')
       .send(buildOrder({ product, econtOffice: '' }))
       .expect(400);
 
     await request(app)
       .post('/orders')
+      .set('x-forwarded-for', '203.0.113.25')
       .send(buildOrder({ product, cartItems: [{ productId: String(product._id), quantity: 1.5 }] }))
       .expect(400);
 
     await request(app)
       .post('/orders')
+      .set('x-forwarded-for', '203.0.113.26')
       .send(buildOrder({ product, name: '<script>alert(1)</script>' }))
       .expect(400);
   });

@@ -10,13 +10,34 @@ vi.mock('../../helpers/sendEmail.js', () => ({
   sendEmail: vi.fn().mockResolvedValue({ messageId: 'test-message-id' }),
 }));
 
-vi.mock('../../helpers/gcsImageHelper.js', async (importOriginal) => {
-  const actual = await importOriginal();
+vi.mock('../../helpers/gcsImageHelper.js', () => {
+  const getBucketName = vi.fn(() => 'test-bucket');
 
   return {
-    ...actual,
     deleteImageFromGCS: vi.fn().mockResolvedValue(undefined),
-    getBucketName: vi.fn(() => 'test-bucket'),
+    getBucketName,
+    extractObjectNameFromGcsUrl: vi.fn((assetUrl) => {
+      if (!assetUrl) {
+        return null;
+      }
+
+      try {
+        const url = new URL(assetUrl);
+        const parts = url.pathname.split('/').filter(Boolean);
+
+        if (url.protocol !== 'https:' || url.hostname !== 'storage.googleapis.com') {
+          return null;
+        }
+
+        if (parts.includes('..') || parts.includes('.') || parts[0] !== getBucketName()) {
+          return null;
+        }
+
+        return parts.slice(1).join('/') || null;
+      } catch {
+        return null;
+      }
+    }),
   };
 });
 

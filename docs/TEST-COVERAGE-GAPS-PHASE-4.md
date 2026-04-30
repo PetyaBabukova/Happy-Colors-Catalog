@@ -7,13 +7,13 @@ Status: Backend integration tests added; route tests pass, hard 80% server cover
 
 `cd server && npm run test:integration`
 
-- Test result: 6 files passed, 19 tests passed.
+- Test result: 6 files passed, 21 tests passed.
 
 `cd server && npm run test:ci`
 
-- Test result: 13 files passed, 41 tests passed.
+- Test result: 13 files passed, 43 tests passed.
 - Coverage result: fails only on global thresholds.
-- Current global coverage: 52.03% lines, 60.27% branches, 55.33% functions, 52.03% statements.
+- Current global coverage: 52.49% lines, 63.73% branches, 56.31% functions, 52.49% statements.
 
 ## Coverage Improvement
 
@@ -26,8 +26,8 @@ Phase 1B server coverage was:
 
 After Phase 4 backend integration tests:
 
-- Lines increased to 52.03%.
-- Functions increased to 55.33%.
+- Lines increased to 52.49%.
+- Functions increased to 56.31%.
 - Controllers, models, product/category/user/search/order paths now receive real Express + Mongo coverage.
 
 ## Remaining Server Gaps

@@ -38,4 +38,25 @@ describe('contacts integration', () => {
 
     expect(sendEmail).not.toHaveBeenCalled();
   });
+
+  it('rate limits repeated contact submissions from the same IP', async () => {
+    const app = createExpressApp();
+    const payload = {
+      name: 'Petya',
+      email: 'petya@example.com',
+      message: 'I have a question.',
+    };
+
+    for (let index = 0; index < 5; index += 1) {
+      await request(app).post('/contacts').set('x-forwarded-for', '203.0.113.12').send(payload).expect(200);
+    }
+
+    const res = await request(app)
+      .post('/contacts')
+      .set('x-forwarded-for', '203.0.113.12')
+      .send(payload)
+      .expect(429);
+
+    expect(res.headers['retry-after']).toBeTruthy();
+  });
 });
