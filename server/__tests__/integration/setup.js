@@ -21,6 +21,12 @@ vi.mock('../../helpers/gcsImageHelper.js', () => {
         return null;
       }
 
+      const bucketName = getBucketName();
+
+      if (!bucketName) {
+        return null;
+      }
+
       try {
         const url = new URL(assetUrl);
         const parts = url.pathname.split('/').filter(Boolean);
@@ -29,11 +35,19 @@ vi.mock('../../helpers/gcsImageHelper.js', () => {
           return null;
         }
 
-        if (parts.includes('..') || parts.includes('.') || parts[0] !== getBucketName()) {
+        if (parts.includes('..') || parts.includes('.')) {
           return null;
         }
 
-        return parts.slice(1).join('/') || null;
+        if (parts.length < 2) {
+          return null;
+        }
+
+        if (parts[0] !== bucketName) {
+          return null;
+        }
+
+        return parts.slice(1).join('/');
       } catch {
         return null;
       }

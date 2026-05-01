@@ -15,9 +15,7 @@ describe('users integration', () => {
       email: user.email,
     });
     expect(res.body.password).toBeUndefined();
-    expect(res.headers['set-cookie'] || []).not.toEqual(
-      expect.arrayContaining([expect.stringContaining('token=')])
-    );
+    expect(res.headers['set-cookie'] || []).toHaveLength(0);
   });
 
   it('logs in and exposes the session through /users/me', async () => {
