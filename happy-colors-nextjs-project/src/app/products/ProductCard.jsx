@@ -69,6 +69,7 @@ export default function ProductCard({ product }) {
     <Link href={`/products/${product._id}`} className={styles.product}>
       <div
         ref={containerRef}
+        data-testid="product-card-media"
         className={styles.productImageContainer}
         onMouseEnter={pause}
         onMouseLeave={resume}

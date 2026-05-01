@@ -28,6 +28,7 @@ export default function CartItem({ item }) {
         <p>Количество: </p>
           <button
             className={styles.qtyBtn}
+            aria-label="Намали количество"
             onClick={() => decreaseQuantity(item._id)}
           >
             –
@@ -37,6 +38,7 @@ export default function CartItem({ item }) {
 
           <button
             className={styles.qtyBtn}
+            aria-label="Увеличи количество"
             onClick={() => increaseQuantity(item._id)}
           >
             +

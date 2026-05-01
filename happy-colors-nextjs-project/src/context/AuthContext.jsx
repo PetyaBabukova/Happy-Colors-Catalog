@@ -11,7 +11,7 @@ import {
 import baseUrl from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(undefined);
