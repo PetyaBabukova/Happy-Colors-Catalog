@@ -10,6 +10,7 @@ async function invalidateProductCaches(productId) {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ productId }),
     });
   } catch (error) {

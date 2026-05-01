@@ -17,4 +17,13 @@ export default defineWorkspace([
       include: ['__tests__/unit-jsdom/**/*.test.{js,jsx}'],
     },
   },
+  {
+    extends: './vitest.config.js',
+    test: {
+      name: 'api',
+      environment: 'node',
+      include: ['__tests__/api/**/*.test.js'],
+      setupFiles: ['__tests__/api/setup.js'],
+    },
+  },
 ]);
