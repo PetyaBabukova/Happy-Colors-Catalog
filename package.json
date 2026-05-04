@@ -9,6 +9,10 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "npm run test:server && npm run test:frontend",
+    "test:e2e": "npx playwright test --config=e2e/playwright.config.js",
+    "test:e2e:smoke": "npx playwright test --config=e2e/playwright.config.js --grep \"@smoke\"",
+    "test:e2e:ui": "npx playwright test --config=e2e/playwright.config.js --ui",
+    "test:all": "npm test && npm run test:e2e:smoke",
     "test:server": "cd server && npm test",
     "test:server:unit": "cd server && npm run test:unit",
     "test:server:integration": "cd server && npm run test:integration",
@@ -22,11 +26,14 @@
     "test:ci": "npm run test:server:ci && npm run test:frontend:ci"
   },
   "dependencies": {
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "mongoose": "^8.14.1",
     "next": "^15.5.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
   }
 }
