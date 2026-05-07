@@ -6,7 +6,6 @@ test.describe('owner session', () => {
   test('reuses seeded owner auth state @critical @auth', async ({ request }) => {
     const response = await request.get('/api/users/me');
 
-    expect(response.status()).toBe(200);
     await expect(response).toBeOK();
 
     const user = await response.json();

@@ -18,13 +18,18 @@ const ownerEmail = 'owner.e2e@example.com';
 const ownerPassword = process.env.E2E_OWNER_PASSWORD || 'E2ePass123!';
 const categorySlug = 'e2e-smoke';
 const productTitle = 'E2E Smoke Product';
+const allowNonTestDbValue = 'yes-i-know-this-can-delete-data';
+const ownerId = new mongoose.Types.ObjectId('660000000000000000000001');
+const categoryId = new mongoose.Types.ObjectId('660000000000000000000002');
+const productId = new mongoose.Types.ObjectId('660000000000000000000003');
 
 function assertTestDatabase(mongoUri) {
   if (!mongoUri) {
     throw new Error('MONGO_URI is required for Playwright tests. Create .env.test from .env.test.example.');
   }
 
-  if (process.env.E2E_ALLOW_NON_TEST_DB === 'true') {
+  if (process.env.E2E_ALLOW_NON_TEST_DB === allowNonTestDbValue) {
+    console.warn('E2E test database name guard is disabled. Seed cleanup can delete existing data.');
     return;
   }
 
@@ -36,6 +41,7 @@ function assertTestDatabase(mongoUri) {
 }
 
 function signJwt(payload, secret) {
+  // Keep this in sync with the app's HS256 cookie auth contract.
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const unsignedToken = `${header}.${body}`;
@@ -86,22 +92,25 @@ export default async function globalSetup(config) {
   ]);
 
   try {
-    await Product.deleteMany({ title: productTitle });
-    await Category.deleteMany({ slug: categorySlug });
-    await User.deleteMany({ email: ownerEmail });
+    await Product.deleteMany({ $or: [{ _id: productId }, { title: productTitle }] });
+    await Category.deleteMany({ $or: [{ _id: categoryId }, { slug: categorySlug }] });
+    await User.deleteMany({ $or: [{ _id: ownerId }, { email: ownerEmail }] });
 
     const owner = await User.create({
+      _id: ownerId,
       username: 'e2e-owner',
       email: ownerEmail,
       password: ownerPassword,
     });
 
     const category = await Category.create({
+      _id: categoryId,
       name: 'E2E Smoke',
       slug: categorySlug,
     });
 
-    const product = await Product.create({
+    await Product.create({
+      _id: productId,
       title: productTitle,
       description: 'Seeded product for Playwright smoke tests.',
       price: 12.5,
@@ -113,7 +122,7 @@ export default async function globalSetup(config) {
     });
 
     const issuedAt = Math.floor(Date.now() / 1000);
-    const expires = issuedAt + 60 * 60;
+    const expires = issuedAt + 4 * 60 * 60;
     const token = signJwt(
       {
         _id: owner._id.toString(),
@@ -130,8 +139,6 @@ export default async function globalSetup(config) {
       authStatePath,
       JSON.stringify(buildStorageState({ baseURL, token, expires }), null, 2)
     );
-
-    process.env.E2E_PRODUCT_ID = product._id.toString();
   } finally {
     await mongoose.disconnect();
   }
