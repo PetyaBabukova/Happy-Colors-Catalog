@@ -240,12 +240,16 @@ export function render(
     "test:frontend:unit-jsdom": "cd happy-colors-nextjs-project && npm run test:unit-jsdom",
     "test:frontend:api": "cd happy-colors-nextjs-project && npm run test:api",
     "test:frontend:components": "cd happy-colors-nextjs-project && npm run test:components",
-    "test:e2e": "npx playwright test",
-    "test:e2e:smoke": "npx playwright test --grep \"@smoke\"",
+    "test:e2e": "npx playwright test --config=e2e/playwright.config.js",
+    "test:e2e:smoke": "npx playwright test --config=e2e/playwright.config.js --grep \"@smoke\"",
+    "test:e2e:ui": "npx playwright test --config=e2e/playwright.config.js --ui",
     "test:ci": "npm run test:server:ci && npm run test:frontend:ci",
     "test:server:ci": "cd server && npm run test:ci",
     "test:frontend:ci": "cd happy-colors-nextjs-project && npm run test:ci",
-    "test:all": "npm run test:ci && npm run test:e2e"
+    "test:server:coverage": "cd server && npm run test:coverage",
+    "test:frontend:coverage": "cd happy-colors-nextjs-project && npm run test:coverage",
+    "test:coverage": "npm run test:server:coverage && npm run test:frontend:coverage",
+    "test:all": "npm run test:ci && npm run test:e2e:smoke"
   }
 }
 ```

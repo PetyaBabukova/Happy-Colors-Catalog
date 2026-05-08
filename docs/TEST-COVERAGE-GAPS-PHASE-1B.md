@@ -1,20 +1,20 @@
 # Phase 1B Coverage Gap List
 
 Date: 2026-04-29
-Status: Phase 1B diagnostic gate run; tests pass, hard coverage gate remains deferred until Phase 4.
+Status: Historical Phase 1B diagnostic snapshot. The hard local coverage gate was later enabled after targeted server/frontend backfill.
 
-## Diagnostic Results
+## Historical Diagnostic Results
 
 `npm run test:server:ci`
 
 - Test result: 7 files passed, 22 tests passed.
-- Coverage result: fails only on global thresholds.
+- Historical coverage result at this phase: failed only on global thresholds.
 - Current global coverage: 7.06% lines, 54.46% branches, 34.09% functions, 7.06% statements.
 
 `npm run test:frontend:ci`
 
 - Test result: 11 files passed, 36 tests passed.
-- Coverage result: fails only on global thresholds.
+- Historical coverage result at this phase: failed only on global thresholds.
 - Current global coverage: 12.88% lines, 49.01% branches, 44.23% functions, 12.88% statements.
 
 ## Server Gaps
@@ -59,4 +59,4 @@ Unit coverage added in Phase 1B covers high-value pure/security logic:
 
 ## Follow-Up
 
-Keep `CI_COVERAGE=true` as a diagnostic gate for now. Enable hard CI coverage enforcement after Phase 4, when backend integration and frontend API/component tests can realistically cover controllers, services, routes, and UI surfaces.
+Superseded by later backend integration, frontend API/component, and targeted coverage backfill commits. `CI_COVERAGE=true` is now the hard local coverage gate through `npm run test:ci`; GitHub Actions CI wiring remains deferred by project decision.

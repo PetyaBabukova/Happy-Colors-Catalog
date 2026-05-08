@@ -1,9 +1,9 @@
 # Phase 4 Coverage Gap List
 
 Date: 2026-04-30
-Status: Backend integration tests added; route tests pass, hard 80% server coverage gate remains deferred.
+Status: Historical Phase 4 backend integration snapshot. The hard local coverage gate was later enabled after targeted server/frontend backfill.
 
-## Diagnostic Results
+## Historical Diagnostic Results
 
 `cd server && npm run test:integration`
 
@@ -12,7 +12,7 @@ Status: Backend integration tests added; route tests pass, hard 80% server cover
 `cd server && npm run test:ci`
 
 - Test result: 13 files passed, 43 tests passed.
-- Coverage result: fails only on global thresholds.
+- Historical coverage result at this phase: failed only on global thresholds.
 - Current global coverage: 52.49% lines, 63.73% branches, 56.31% functions, 52.49% statements.
 
 ## Coverage Improvement
@@ -42,4 +42,4 @@ The largest remaining uncovered zones are intentionally not forced into this pha
 
 ## Follow-Up
 
-Do not enable hard `CI_COVERAGE=true` enforcement yet. Keep it as a diagnostic gate until the deferred Stripe, delivery, email/storage boundary tests, and frontend component/API phases are in place.
+Superseded by later server payment/storage, frontend component/API, and targeted coverage backfill commits. `CI_COVERAGE=true` is now the hard local coverage gate through `npm run test:ci`; GitHub Actions CI wiring remains deferred by project decision.

@@ -1,7 +1,7 @@
 # Happy Colors - Test Architecture Implementation Plan
 
-**Дата:** 2026-05-07
-**Статус:** Updated after Phase 5 - CI deferred, coverage/regression expansion next
+**Дата:** 2026-05-08
+**Статус:** Updated after coverage backfill - hard local coverage gate passing, CI workflow deferred
 **Свързан дизайн документ:** `docs/DESIGN-DOC-TEST-ARCHITECTURE.md`
 **Цел:** Да въведем тестовата архитектура по малки, проверими фази, без да блокираме ежедневната разработка и без да включваме външни услуги в automated tests.
 
@@ -40,9 +40,9 @@ Explicitly deferred for now:
 
 Next active work:
 
-1. coverage audit and backfill toward 80/75/80/80
-2. full Playwright regression expansion
-3. business-critical deferred test areas where feasible without real external service calls
+1. full Playwright regression expansion
+2. business-critical deferred test areas where feasible without real external service calls
+3. CI workflow only after project decision re-enables it
 
 ---
 
@@ -136,16 +136,21 @@ Frontend Vitest projects:
 
 Root:
 
+Phase 1 adds the Vitest-focused root scripts. E2E scripts are added later in Phase 5.
+
 ```json
 {
   "test": "npm run test:server && npm run test:frontend",
   "test:server": "cd server && npm test",
   "test:server:unit": "cd server && npm run test:unit",
+  "test:server:coverage": "cd server && npm run test:coverage",
   "test:server:ci": "cd server && npm run test:ci",
   "test:frontend": "cd happy-colors-nextjs-project && npm test",
   "test:frontend:unit": "cd happy-colors-nextjs-project && npm run test:unit",
   "test:frontend:unit-jsdom": "cd happy-colors-nextjs-project && npm run test:unit-jsdom",
+  "test:frontend:coverage": "cd happy-colors-nextjs-project && npm run test:coverage",
   "test:frontend:ci": "cd happy-colors-nextjs-project && npm run test:ci",
+  "test:coverage": "npm run test:server:coverage && npm run test:frontend:coverage",
   "test:ci": "npm run test:server:ci && npm run test:frontend:ci"
 }
 ```
@@ -198,7 +203,9 @@ npm run test:unit-jsdom
 npm run test:coverage
 ```
 
-`npm run test:ci` все още може да fail-ва заради coverage thresholds, защото 80/75/80/80 още не е достигнато. Coverage backfill е следващата активна стъпка преди hard gate.
+Current state after later coverage backfill: `npm run test:ci` is expected to pass with the 80/75/80/80 thresholds enabled for both server and frontend.
+
+Use `npm run test:coverage` when the goal is to inspect the HTML/text coverage report during local work. Use `npm run test:ci` when the goal is to enforce the configured thresholds and get the same hard local gate that Phase 6 will eventually wire into CI.
 
 ### Commit
 
@@ -210,11 +217,13 @@ Add Vitest unit test foundation
 
 ## Phase 1B - Coverage threshold ramp до 80%
 
-Status: completed as coverage ramp plus gap documentation. `test:ci` is still not the enforced daily gate because the full 80/75/80/80 target has not been reached yet; `npm test` and `npm run test:all` are the current local regression commands.
+Status: completed as coverage ramp plus gap documentation. Later coverage backfill raised both server and frontend above the 80/75/80/80 threshold, so `test:ci` is now the hard local coverage gate.
+
+Traceability: the final local gate was reached by the frontend coverage boundary work in `92b699e` and the server coverage/GCS hardening work in `6cd0760`, after the earlier component and server payment coverage commits.
 
 ### Цел
 
-Да вдигнем Vitest coverage максимално рано, без да твърдим, че само unit тестовете ще стигнат глобалния 80% threshold. Понеже използваме `coverage.all: true`, всички untouched source файлове влизат в denominator-а. Реалният hard gate се включва когато coverage backfill достигне 80/75/80/80; integration тестовете от Phase 4 допринесоха, но denominator-ът остава твърде голям за честно hard gating.
+Да вдигнем Vitest coverage максимално рано, без да твърдим, че само unit тестовете ще стигнат глобалния 80% threshold. Понеже използваме `coverage.all: true`, всички untouched source файлове влизат в denominator-а. Реалният hard gate вече е включен локално след последващия coverage backfill.
 
 ### Задачи
 
@@ -269,7 +278,7 @@ npm run test:server:ci
 npm run test:frontend:ci
 ```
 
-Тези команди се пускат като diagnostic gate. Phase 1B завърши с explicit coverage gap list; hard coverage gating остава future step, докато реалният coverage backfill достигне target-а. Крайната цел остава:
+Тези команди вече са hard local gate след последващия coverage backfill. Phase 1B завърши с explicit coverage gap list, а по-късните server/frontend backfill commits вдигнаха числата до target-а:
 
 - 80% lines
 - 75% branches
@@ -288,7 +297,7 @@ Increase unit coverage and document coverage gaps
 
 ## Phase 1C - Coverage backfill checkpoint
 
-Status: completed as part of Phase 1B. The explicit coverage gap documents (`docs/TEST-COVERAGE-GAPS-PHASE-1B.md` and later `docs/TEST-COVERAGE-GAPS-PHASE-4.md`) are the checkpoint output.
+Status: completed. The explicit coverage gap documents (`docs/TEST-COVERAGE-GAPS-PHASE-1B.md` and later `docs/TEST-COVERAGE-GAPS-PHASE-4.md`) were the checkpoint output; later targeted backfill raised both server and frontend above the configured threshold.
 
 ### Цел
 
@@ -298,13 +307,13 @@ Status: completed as part of Phase 1B. The explicit coverage gap documents (`doc
 
 - Coverage reports were run in `server/` and the frontend app.
 - Най-големите uncovered zones бяха документирани в coverage gap docs.
-- Част от uncovered зоните бяха покрити от Phase 4 integration tests; останалият backfill остава следваща активна работа.
+- Част от uncovered зоните бяха покрити от Phase 4 integration tests; последващите targeted backfill commits довършиха локалния coverage gate.
 
 ### Acceptance
 
-- Има ясен списък кои файлове още дърпат coverage под threshold.
-- Няма включен hard CI gate, докато coverage не достигне 80/75/80/80.
-- Следващата coverage работа е targeted backfill, не включване на gate преди числата да са реални.
+- Има исторически списък кои файлове дърпаха coverage под threshold преди targeted backfill-а.
+- `npm run test:ci` минава локално с включени coverage thresholds; verified on 2026-05-08 after `6cd0760`.
+- CI workflow остава deferred като отделно project decision, не заради coverage deficit.
 
 ### Commit
 
@@ -575,11 +584,11 @@ Root:
   "test:e2e": "npx playwright test --config=e2e/playwright.config.js",
   "test:e2e:smoke": "npx playwright test --config=e2e/playwright.config.js --grep \"@smoke\"",
   "test:e2e:ui": "npx playwright test --config=e2e/playwright.config.js --ui",
-  "test:all": "npm test && npm run test:e2e:smoke"
+  "test:all": "npm run test:ci && npm run test:e2e:smoke"
 }
 ```
 
-`test:all` intentionally uses `npm test` instead of `npm run test:ci` while the 80/75/80/80 coverage gate is still being backfilled. `test:ci` remains the future hard gate once coverage is high enough to enforce honestly.
+`test:all` uses the hard local Vitest coverage gate before the Playwright smoke run. Developers can still use `npm test` for a faster non-coverage loop during local iteration.
 
 ### Server strategy
 
@@ -707,8 +716,8 @@ Workflow trigger-и:
 
 ### Acceptance
 
-- When Phase 6 eventually launches, Tiers 1-3 can run without coverage gating until the 80/75/80/80 backfill is complete.
-- Coverage failure behavior applies only after `test:ci` is promoted to the hard 80/75/80/80 gate after coverage backfill.
+- When Phase 6 is implemented, Tier 1 must run `npm run test:ci` with the existing 80/75/80/80 thresholds.
+- Coverage failure behavior is already active locally through `test:ci`; Phase 6 only wires that existing gate into GitHub Actions.
 - CI fail-ва при failing unit/component/API/integration tests.
 - E2E smoke artifacts се пазят при failure.
 - Tier 4 cron job е enabled в GitHub Actions UI след първи successful nightly run.
@@ -803,7 +812,7 @@ Expand Playwright regression coverage
 - нови auth state файлове като `e2e/.auth/` са gitignored
 - git status е чист след локален commit
 
-Future coverage gate checklist, once 80/75/80/80 is reached:
+Coverage gate checklist:
 
 - `npm run test:ci` минава с включен coverage threshold
 - coverage drop под threshold fail-ва hard gate-а
