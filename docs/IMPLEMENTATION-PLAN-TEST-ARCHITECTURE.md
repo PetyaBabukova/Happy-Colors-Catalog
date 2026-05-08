@@ -732,6 +732,8 @@ Add CI test workflow
 
 ## Phase 7 - Full regression expansion
 
+Status: in progress. Initial critical regression slice completed for auth, cart, and owner product controls.
+
 ### Цел
 
 Да разширим Playwright suite-а от smoke към критични regression сценарии.
@@ -741,21 +743,23 @@ Add CI test workflow
 Auth:
 
 - register validation
-- login success
-- logout
+- login success - completed
+- invalid login rejection - completed
+- logout clears browser/API session - completed
 - protected page redirects
 
 Cart:
 
 - add to cart is covered by smoke; expand with edge cases
-- increase/decrease quantity
-- remove product
-- cart persists after reload
+- increase/decrease quantity - completed
+- remove product - completed
+- cart persists after reload - completed
 
 Products:
 
 - product listing filters/search
 - product details media rendering
+- owner edit/delete controls visible for owned seeded product - completed
 - owner create/edit/delete flow
 
 Checkout:

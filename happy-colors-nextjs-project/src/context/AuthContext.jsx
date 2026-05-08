@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 import baseUrl from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
@@ -16,15 +17,25 @@ export const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(undefined);
   const [loading, setLoading] = useState(true);
+  const authVersionRef = useRef(0);
+
+  const updateUser = useCallback((nextUser) => {
+    authVersionRef.current += 1;
+    setUser(nextUser);
+  }, []);
 
   const refreshUser = useCallback(async () => {
+    const refreshVersion = authVersionRef.current;
+
     try {
       const res = await fetch(`${baseUrl}/users/me`, {
         credentials: 'include',
       });
 
       if (res.status === 401) {
-        setUser(null);
+        if (authVersionRef.current === refreshVersion) {
+          setUser(null);
+        }
         return;
       }
 
@@ -42,10 +53,14 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Invalid authenticated user response');
       }
 
-      setUser(userData);
+      if (authVersionRef.current === refreshVersion) {
+        setUser(userData);
+      }
     } catch (err) {
       console.error('Auth refresh error:', err);
-      setUser(null);
+      if (authVersionRef.current === refreshVersion) {
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,11 +73,11 @@ export const AuthProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       user,
-      setUser,
+      setUser: updateUser,
       loading,
       refreshUser,
     }),
-    [user, loading, refreshUser]
+    [user, loading, refreshUser, updateUser]
   );
 
   return (

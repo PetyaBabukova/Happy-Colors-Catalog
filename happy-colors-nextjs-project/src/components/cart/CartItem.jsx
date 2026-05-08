@@ -10,7 +10,7 @@ export default function CartItem({ item }) {
   const { removeFromCart, increaseQuantity, decreaseQuantity } = useCart();
 
   return (
-    <div className={styles.cartItem}>
+    <div className={styles.cartItem} data-testid="cart-item">
       <Image
         src={item.image}
         alt={item.title}
@@ -29,16 +29,18 @@ export default function CartItem({ item }) {
           <button
             className={styles.qtyBtn}
             aria-label="Намали количество"
+            data-testid="cart-decrease"
             onClick={() => decreaseQuantity(item._id)}
           >
             –
           </button>
 
-          <span className={styles.qtyNumber}>{item.quantity}</span>
+          <span className={styles.qtyNumber} data-testid="cart-quantity">{item.quantity}</span>
 
           <button
             className={styles.qtyBtn}
             aria-label="Увеличи количество"
+            data-testid="cart-increase"
             onClick={() => increaseQuantity(item._id)}
           >
             +
@@ -51,6 +53,7 @@ export default function CartItem({ item }) {
       <button
         onClick={() => removeFromCart(item._id)}
         className={styles.removeBtn}
+        data-testid="cart-remove"
       >
         Премахни
       </button>
