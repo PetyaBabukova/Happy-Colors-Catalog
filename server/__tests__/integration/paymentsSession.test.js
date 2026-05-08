@@ -177,6 +177,70 @@ describe('card payment session integration', () => {
     expect(await Payment.countDocuments()).toBe(0);
   });
 
+  it.each([
+    ['missing customer name', { name: '' }, 400],
+    ['invalid customer email', { email: 'bad-email' }, 400],
+    ['missing shipping method', { shippingMethod: '' }, 400],
+    ['missing speedy office', { shippingMethod: 'speedy', address: 'Locker address 1', speedyOffice: '' }, 400],
+    ['missing boxnow address', { shippingMethod: 'boxnow', address: '' }, 400],
+    ['boxnow with cash on delivery', { shippingMethod: 'boxnow', paymentMethod: 'cod' }, 400],
+    ['missing cart product id', { cartItems: [{ quantity: 1 }] }, 400],
+  ])('rejects %s before calling Stripe', async (_label, overrides, statusCode) => {
+    const product = await createProduct();
+
+    await expect(createCardPaymentSession(buildCardOrder(product, overrides))).rejects.toMatchObject({
+      statusCode,
+      message: expect.any(String),
+    });
+
+    expect(checkoutCreate).not.toHaveBeenCalled();
+    expect(await CheckoutDraft.countDocuments()).toBe(0);
+    expect(await Payment.countDocuments()).toBe(0);
+  });
+
+  it('requires Stripe and client URL environment before creating drafts', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+    const product = await createProduct();
+
+    await expect(createCardPaymentSession(buildCardOrder(product))).rejects.toMatchObject({
+      statusCode: 500,
+      message: expect.any(String),
+    });
+
+    process.env.STRIPE_SECRET_KEY = 'sk_test_integration';
+    delete process.env.CLIENT_URL;
+
+    await expect(createCardPaymentSession(buildCardOrder(product))).rejects.toMatchObject({
+      statusCode: 500,
+      message: expect.any(String),
+    });
+
+    expect(checkoutCreate).not.toHaveBeenCalled();
+    expect(await CheckoutDraft.countDocuments()).toBe(0);
+    expect(await Payment.countDocuments()).toBe(0);
+  });
+
+  it.each([
+    ['missing database product', '507f1f77bcf86cd799439011', 404],
+    ['blank product title', async () => createProduct({ title: '   ' }), 400],
+    ['invalid product price', async () => createProduct({ price: 0 }), 400],
+    ['price that rounds to zero cents', async () => createProduct({ price: 0.001 }), 400],
+  ])('rejects %s during cart item mapping', async (_label, productSource, statusCode) => {
+    const product = typeof productSource === 'function' ? await productSource() : productSource;
+
+    await expect(
+      createCardPaymentSession(
+        buildCardOrder(product, {
+          cartItems: [{ productId: String(product._id || product), quantity: 1 }],
+        })
+      )
+    ).rejects.toMatchObject({ statusCode, message: expect.any(String) });
+
+    expect(checkoutCreate).not.toHaveBeenCalled();
+    expect(await CheckoutDraft.countDocuments()).toBe(0);
+    expect(await Payment.countDocuments()).toBe(0);
+  });
+
   it('rejects invalid Stripe session creation responses and cleans up state', async () => {
     checkoutCreate.mockResolvedValueOnce({ id: '', url: 'https://stripe.test/missing-id' });
     const product = await createProduct();
@@ -225,6 +289,16 @@ describe('card payment session integration', () => {
 
   it('rejects blank confirm session ids before calling Stripe', async () => {
     await expect(confirmCardPaymentSession('   ')).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(checkoutRetrieve).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirm requests when Stripe is not configured', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+
+    await expect(confirmCardPaymentSession('cs_missing_config')).rejects.toMatchObject({
+      statusCode: 500,
+    });
 
     expect(checkoutRetrieve).not.toHaveBeenCalled();
   });

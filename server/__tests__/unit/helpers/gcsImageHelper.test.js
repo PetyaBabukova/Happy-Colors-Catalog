@@ -34,6 +34,26 @@ describe('gcsImageHelper', () => {
     expect(extractObjectNameFromGcsUrl('https://example.com/happy-bucket/demo.webp')).toBeNull();
   });
 
+  it('rejects empty, malformed, traversal, and incomplete GCS URLs', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(extractObjectNameFromGcsUrl('')).toBeNull();
+    expect(extractObjectNameFromGcsUrl('not-a-url')).toBeNull();
+    expect(extractObjectNameFromGcsUrl('https://storage.googleapis.com/happy-bucket')).toBeNull();
+    expect(
+      extractObjectNameFromGcsUrl('https://storage.googleapis.com/happy-bucket/products/../secret.webp')
+    ).toBeNull();
+    expect(
+      extractObjectNameFromGcsUrl('https://storage.googleapis.com/happy-bucket/products/./secret.webp')
+    ).toBeNull();
+    expect(
+      extractObjectNameFromGcsUrl('https://storage.googleapis.com/happy-bucket/products/%2e%2e/secret.webp')
+    ).toBeNull();
+    expect(
+      extractObjectNameFromGcsUrl('https://storage.googleapis.com/happy-bucket/products/%2E/secret.webp')
+    ).toBeNull();
+  });
+
   it('returns null when no bucket is configured', () => {
     delete process.env.GCS_BUCKET_NAME;
 

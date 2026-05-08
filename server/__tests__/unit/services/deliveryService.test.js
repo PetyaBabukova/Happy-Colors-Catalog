@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getEcontOfficesByCityName, getSpeedyOfficesByCityName } from '../../../services/deliveryService.js';
 
 function jsonResponse({ ok = true, status = 200, body = {} } = {}) {
@@ -16,6 +16,14 @@ describe('deliveryService', () => {
     process.env.ECONT_PASSWORD = 'econt-pass';
     process.env.SPEEDY_USERNAME = 'speedy-user';
     process.env.SPEEDY_PASSWORD = 'speedy-pass';
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ECONT_USERNAME;
+    delete process.env.ECONT_PASSWORD;
+    delete process.env.SPEEDY_USERNAME;
+    delete process.env.SPEEDY_PASSWORD;
   });
 
   it('maps Econt offices for exact city matches and sanitizes labels', async () => {
@@ -83,6 +91,76 @@ describe('deliveryService', () => {
     fetch.mockResolvedValueOnce(jsonResponse({ body: { cities: [{ id: 1, name: 'Пловдив' }] } }));
 
     await expect(getEcontOfficesByCityName('София')).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('rejects blank Econt city names before calling the carrier', async () => {
+    await expect(getEcontOfficesByCityName('   ')).rejects.toMatchObject({ statusCode: 400 });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('uses Econt carrier error payloads and fallback response messages', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: { error: { message: 'Econt validation failed' } },
+      })
+    );
+
+    await expect(getEcontOfficesByCityName('Sofia')).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Econt validation failed',
+    });
+
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        ok: false,
+        status: 502,
+        body: { message: 'Gateway unavailable' },
+      })
+    );
+
+    await expect(getEcontOfficesByCityName('Sofia')).rejects.toMatchObject({
+      statusCode: 502,
+      message: 'Gateway unavailable',
+    });
+  });
+
+  it('maps Econt offices using contains city matches and address fallbacks', async () => {
+    fetch
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            cities: [{ id: 68134, name: 'Sofia City', nameEn: 'Sofia City' }],
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            offices: [
+              {
+                code: 'EC1',
+                nameEn: 'Office West',
+                address: {
+                  city: { nameEn: 'Sofia' },
+                  street: 'Main',
+                  num: '12',
+                  other: 'floor 1',
+                },
+              },
+            ],
+          },
+        })
+      );
+
+    await expect(getEcontOfficesByCityName('Sofia')).resolves.toEqual([
+      expect.objectContaining({
+        id: 'EC1',
+        code: 'EC1',
+        name: 'Office West',
+        city: 'Sofia',
+        address: 'Main, 12, floor 1',
+      }),
+    ]);
   });
 
   it('deduplicates Speedy offices across matched sites', async () => {
@@ -158,6 +236,79 @@ describe('deliveryService', () => {
     await expect(getSpeedyOfficesByCityName('София')).rejects.toMatchObject({
       statusCode: 503,
       message: 'Speedy unavailable',
+    });
+  });
+
+  it('rejects Speedy lookups when credentials or city names are missing', async () => {
+    delete process.env.SPEEDY_PASSWORD;
+
+    await expect(getSpeedyOfficesByCityName('Sofia')).rejects.toMatchObject({ statusCode: 500 });
+    expect(fetch).not.toHaveBeenCalled();
+
+    process.env.SPEEDY_PASSWORD = 'speedy-pass';
+
+    await expect(getSpeedyOfficesByCityName('   ')).rejects.toMatchObject({ statusCode: 400 });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects Speedy lookups when no matched site has a usable id', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: { sites: [{ name: 'Sofia', nameEn: 'Sofia', id: 'not-a-number' }] },
+      })
+    );
+
+    await expect(getSpeedyOfficesByCityName('Sofia')).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('uses Speedy fallback site matches and office address fallbacks', async () => {
+    fetch
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            sites: [{ id: 10, name: 'Sofia Region', nameEn: 'Sofia Region' }],
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            offices: [
+              {
+                id: 21,
+                nameEn: 'Office East',
+                address: {
+                  siteAddress: { siteNameEn: 'Sofia' },
+                  fullAddress: 'East boulevard 5',
+                },
+              },
+              { id: 22, name: '', address: {} },
+            ],
+          },
+        })
+      );
+
+    await expect(getSpeedyOfficesByCityName('Sofia')).resolves.toEqual([
+      expect.objectContaining({
+        id: '21',
+        code: '',
+        name: 'Office East',
+        city: 'Sofia',
+        address: 'East boulevard 5',
+      }),
+    ]);
+  });
+
+  it('uses Speedy carrier error payloads from successful HTTP responses', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: { error: { message: 'Invalid Speedy city' } },
+      })
+    );
+
+    await expect(getSpeedyOfficesByCityName('Sofia')).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Invalid Speedy city',
     });
   });
 });

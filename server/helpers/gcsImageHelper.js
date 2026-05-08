@@ -18,14 +18,29 @@ export function extractObjectNameFromGcsUrl(assetUrl) {
   }
 
   try {
+    const rawAssetUrl = String(assetUrl);
+    const decodedAssetUrl = decodeURIComponent(rawAssetUrl);
+
+    if (
+      /(^|\/)(\.{1,2})(\/|$)/.test(rawAssetUrl) ||
+      /(^|\/)(\.{1,2})(\/|$)/.test(decodedAssetUrl)
+    ) {
+      return null;
+    }
+
     const url = new URL(assetUrl);
     const parts = url.pathname.split('/').filter(Boolean);
+    const decodedParts = parts.map((part) => decodeURIComponent(part));
 
     if (url.protocol !== 'https:' || url.hostname !== 'storage.googleapis.com') {
       return null;
     }
 
-    if (parts.includes('..') || parts.includes('.')) {
+    if (
+      decodedParts.some(
+        (part) => part === '..' || part === '.' || part.includes('/') || part.includes('\\')
+      )
+    ) {
       return null;
     }
 

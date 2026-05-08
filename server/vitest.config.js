@@ -4,6 +4,7 @@ const enforceCoverage = process.env.CI_COVERAGE === 'true';
 
 export default defineConfig({
   test: {
+    restoreMocks: true,
     coverage: {
       provider: 'v8',
       all: true,

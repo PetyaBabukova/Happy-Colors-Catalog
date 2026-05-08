@@ -103,4 +103,45 @@ describe('orders integration', () => {
       .send(buildOrder({ product, name: '<script>alert(1)</script>' }))
       .expect(400);
   });
+
+  it.each([
+    ['missing required name', { name: '' }, 400],
+    ['invalid email', { email: 'bad-email' }, 400],
+    ['unsupported payment method', { paymentMethod: 'cash' }, 400],
+    ['missing shipping method', { shippingMethod: '' }, 400],
+    ['missing speedy office', { shippingMethod: 'speedy', econtOffice: '', speedyOffice: '' }, 400],
+    ['missing boxnow address', { shippingMethod: 'boxnow', econtOffice: '', address: '' }, 400],
+    ['too-short customer name', { name: 'Pe' }, 400],
+    ['too-long phone number', { phone: '1'.repeat(21) }, 400],
+    ['too-short city', { city: 'S' }, 400],
+    ['too-short boxnow address', { shippingMethod: 'boxnow', econtOffice: '', address: 'Abc' }, 400],
+    ['too-long note', { note: 'x'.repeat(501) }, 400],
+    ['missing cart product id', { cartItems: [{ quantity: 1 }] }, 400],
+  ])('rejects %s', async (_label, overrides, expectedStatus) => {
+    const app = createExpressApp();
+    const product = await createProduct();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await request(app)
+      .post('/orders')
+      .set('x-forwarded-for', '203.0.113.30')
+      .send(buildOrder({ product, ...overrides }))
+      .expect(expectedStatus);
+
+    expect(res.body.message).toEqual(expect.any(String));
+  });
+
+  it('rejects products with invalid database prices', async () => {
+    const app = createExpressApp();
+    const product = await createProduct({ price: 0 });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await request(app)
+      .post('/orders')
+      .set('x-forwarded-for', '203.0.113.80')
+      .send(buildOrder({ product, cartItems: [{ productId: String(product._id), quantity: 1 }] }))
+      .expect(400);
+
+    expect(res.body.message).toEqual(expect.any(String));
+  });
 });
