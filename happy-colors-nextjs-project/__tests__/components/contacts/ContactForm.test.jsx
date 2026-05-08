@@ -61,7 +61,10 @@ describe('ContactForm', () => {
     fireEvent.change(container.querySelector('#message'), { target: { value: '<b>Hello</b>' } });
     fireEvent.submit(container.querySelector('form'));
 
-    expect(sendContactForm).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(container.textContent).toMatch(/забранени/i);
+      expect(sendContactForm).not.toHaveBeenCalled();
+    });
   });
 
   it('clears success notifications and redirects after the success timer', async () => {
@@ -98,6 +101,6 @@ describe('ContactForm', () => {
     await waitFor(() => expect(sendContactForm).toHaveBeenCalled());
 
     expect(mockRouterPush).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('Проблеми');
+    await waitFor(() => expect(container.textContent).toContain('Проблеми'));
   });
 });
