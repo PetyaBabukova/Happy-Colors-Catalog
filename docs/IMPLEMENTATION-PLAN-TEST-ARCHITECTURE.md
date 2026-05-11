@@ -33,6 +33,7 @@ Completed locally:
 - Phase 3 - Next.js API route tests
 - Phase 4 - backend integration tests
 - Phase 5 - Playwright smoke regression, including Opus-reviewed hardening
+- Phase 7 - initial Playwright regression expansion for auth, cart, checkout, and owner product controls
 
 Explicitly deferred for now:
 
@@ -40,7 +41,7 @@ Explicitly deferred for now:
 
 Next active work:
 
-1. full Playwright regression expansion
+1. continue Playwright regression expansion for remaining product edge cases and Stripe checkout strategy
 2. business-critical deferred test areas where feasible without real external service calls
 3. CI workflow only after project decision re-enables it
 
@@ -608,6 +609,7 @@ npm run dev
 - `JWT_SECRET` test secret
 - dummy или test-mode Stripe values
 - dummy GCS values или routes, които не trigger-ват GCS в smoke
+- `DISABLE_EMAIL_DELIVERY=true` for Playwright e2e server runs, so checkout/order tests never send real email
 - `CATALOG_MODE` ясно зададен
 - `NEXT_PUBLIC_CATALOG_MODE` ясно зададен за frontend catalog-mode логиката
 
@@ -732,7 +734,7 @@ Add CI test workflow
 
 ## Phase 7 - Full regression expansion
 
-Status: in progress. Initial critical regression slice completed for auth, cart, and owner product controls.
+Status: in progress. Initial critical regression slice completed for auth, cart, checkout, and owner product controls.
 
 ### Цел
 
@@ -764,9 +766,13 @@ Products:
 
 Checkout:
 
-- shipping validation
-- delivery office lookup with mocked carrier behavior
-- order submit happy path, когато test-mode strategy е готова
+- empty checkout state - completed
+- shipping validation - completed for required fields and invalid phone/email before confirmation
+- delivery office lookup with mocked Econt behavior - completed
+- delivery office lookup with mocked Speedy behavior (selection only; submit deferred) - completed
+- Box Now address validation and card-only payment behavior - completed
+- COD order submit happy path - completed
+- Stripe card checkout test-mode strategy remains deferred
 
 Admin/owner:
 

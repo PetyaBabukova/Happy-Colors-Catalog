@@ -12,6 +12,10 @@ export function getJwtSecret() {
   return secret;
 }
 
+export function signAuthToken(payload, options) {
+  return jwt.sign(payload, getJwtSecret(), options);
+}
+
 export function requireAuth(req, res, next) {
   const token = req.cookies?.[AUTH_COOKIE_NAME];
 

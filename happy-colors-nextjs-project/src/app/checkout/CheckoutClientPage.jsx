@@ -129,7 +129,7 @@ export default function CheckoutClientPage() {
 
   if (cartItems.length === 0) {
     return (
-      <section className={styles.emptyCheckout}>
+      <section className={styles.emptyCheckout} data-testid="empty-checkout">
         <h1>Количката е празна</h1>
         <p>Няма артикули за поръчка.</p>
         <Link href="/products" className={styles.backToShop}>
@@ -185,17 +185,17 @@ export default function CheckoutClientPage() {
       <h1 className={styles.heading}>Завършване на поръчката</h1>
 
       <div className={styles.columns}>
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <form className={styles.form} onSubmit={handleSubmit} data-testid="checkout-form">
           <h2 className={styles.subheading}>Данни за доставка</h2>
 
           {submitError && (
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px' }} data-testid="checkout-error">
               <MessageBox type="error" message={submitError} />
             </div>
           )}
 
           {submitSuccess && (
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px' }} data-testid="checkout-success">
               <MessageBox type="success" message={submitSuccess} />
             </div>
           )}
@@ -211,7 +211,7 @@ export default function CheckoutClientPage() {
               value={formData.name}
               onChange={handleChange}
             />
-            {errors.name && <p className={styles.error}>{errors.name}</p>}
+            {errors.name && <p className={styles.error} data-testid="checkout-error-name">{errors.name}</p>}
           </div>
 
           <div className={styles.field}>
@@ -225,7 +225,7 @@ export default function CheckoutClientPage() {
               value={formData.phone}
               onChange={handleChange}
             />
-            {errors.phone && <p className={styles.error}>{errors.phone}</p>}
+            {errors.phone && <p className={styles.error} data-testid="checkout-error-phone">{errors.phone}</p>}
           </div>
 
           <div className={styles.field}>
@@ -239,7 +239,7 @@ export default function CheckoutClientPage() {
               value={formData.email}
               onChange={handleChange}
             />
-            {errors.email && <p className={styles.error}>{errors.email}</p>}
+            {errors.email && <p className={styles.error} data-testid="checkout-error-email">{errors.email}</p>}
           </div>
 
           <div className={styles.field}>
@@ -253,7 +253,7 @@ export default function CheckoutClientPage() {
               value={formData.city}
               onChange={handleChange}
             />
-            {errors.city && <p className={styles.error}>{errors.city}</p>}
+            {errors.city && <p className={styles.error} data-testid="checkout-error-city">{errors.city}</p>}
           </div>
 
           <div className={styles.field}>
@@ -267,6 +267,7 @@ export default function CheckoutClientPage() {
                   type="radio"
                   name="shippingMethod"
                   checked={shipping.shippingMethod === 'econt'}
+                  data-testid="shipping-econt"
                   onChange={() => setShippingMethod('econt')}
                 />
                 <span>Доставка до офис или автомат на Еконт</span>
@@ -277,6 +278,7 @@ export default function CheckoutClientPage() {
                   type="radio"
                   name="shippingMethod"
                   checked={shipping.shippingMethod === 'speedy'}
+                  data-testid="shipping-speedy"
                   onChange={() => setShippingMethod('speedy')}
                 />
                 <span>Доставка до офис или автомат на Спиди</span>
@@ -287,6 +289,7 @@ export default function CheckoutClientPage() {
                   type="radio"
                   name="shippingMethod"
                   checked={shipping.shippingMethod === 'boxnow'}
+                  data-testid="shipping-boxnow"
                   onChange={() => setShippingMethod('boxnow')}
                 />
                 <span>Доставка до автомат на Box Now</span>
@@ -294,7 +297,7 @@ export default function CheckoutClientPage() {
             </div>
 
             {errors.shippingMethod && (
-              <p className={styles.error}>{errors.shippingMethod}</p>
+              <p className={styles.error} data-testid="checkout-error-shippingMethod">{errors.shippingMethod}</p>
             )}
           </div>
 
@@ -310,6 +313,7 @@ export default function CheckoutClientPage() {
                   <select
                     id="econtOffice"
                     value={shipping.econtOffice}
+                    data-testid="econt-office"
                     onChange={(e) => setEcontOffice(e.target.value)}
                   >
                     <option value="">Изберете офис или автомат на Еконт</option>
@@ -337,7 +341,7 @@ export default function CheckoutClientPage() {
               )}
 
               {errors.econtOffice && (
-                <p className={styles.error}>{errors.econtOffice}</p>
+                <p className={styles.error} data-testid="checkout-error-econtOffice">{errors.econtOffice}</p>
               )}
 
               {officesLoading && (
@@ -360,6 +364,7 @@ export default function CheckoutClientPage() {
                   <select
                     id="speedyOffice"
                     value={shipping.speedyOffice}
+                    data-testid="speedy-office"
                     onChange={(e) => setSpeedyOffice(e.target.value)}
                   >
                     <option value="">Изберете офис или автомат на Спиди</option>
@@ -387,7 +392,7 @@ export default function CheckoutClientPage() {
               )}
 
               {errors.speedyOffice && (
-                <p className={styles.error}>{errors.speedyOffice}</p>
+                <p className={styles.error} data-testid="checkout-error-speedyOffice">{errors.speedyOffice}</p>
               )}
 
               {officesLoading && (
@@ -410,7 +415,7 @@ export default function CheckoutClientPage() {
                 value={formData.address}
                 onChange={handleChange}
               />
-              {errors.address && <p className={styles.error}>{errors.address}</p>}
+              {errors.address && <p className={styles.error} data-testid="checkout-error-address">{errors.address}</p>}
             </div>
           )}
 
@@ -424,6 +429,7 @@ export default function CheckoutClientPage() {
                 <input
                   type="checkbox"
                   checked={formData.paymentMethods.includes('card')}
+                  data-testid="payment-card"
                   onChange={() => handlePaymentChange('card')}
                 />
                 <span>С банкова карта</span>
@@ -434,6 +440,7 @@ export default function CheckoutClientPage() {
                   <input
                     type="checkbox"
                     checked={formData.paymentMethods.includes('cod')}
+                    data-testid="payment-cod"
                     onChange={() => handlePaymentChange('cod')}
                   />
                   <span>Наложен платеж</span>
@@ -448,7 +455,7 @@ export default function CheckoutClientPage() {
             )}
 
             {errors.paymentMethods && (
-              <p className={styles.error}>{errors.paymentMethods}</p>
+              <p className={styles.error} data-testid="checkout-error-paymentMethods">{errors.paymentMethods}</p>
             )}
           </div>
 
@@ -467,6 +474,7 @@ export default function CheckoutClientPage() {
             type="submit"
             className={styles.submitBtn}
             disabled={isSubmitting}
+            data-testid="checkout-submit"
           >
             {isSubmitting ? 'Изпращане...' : 'Продължи'}
           </button>
@@ -514,6 +522,7 @@ export default function CheckoutClientPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="checkout-confirm-title"
+          data-testid="checkout-confirm-dialog"
         >
           <div className={styles.modal}>
             <h2 id="checkout-confirm-title" className={styles.modalTitle}>
@@ -581,6 +590,7 @@ export default function CheckoutClientPage() {
                 className={styles.modalBtnPrimary}
                 onClick={confirmOrder}
                 disabled={isSubmitting}
+                data-testid="confirm-order"
               >
                 {isSubmitting ? 'Обработваме...' : 'Потвърждавам поръчката'}
               </button>

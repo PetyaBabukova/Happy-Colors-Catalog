@@ -83,12 +83,25 @@ async function sendWithRetry(mailOptions) {
   throw lastError;
 }
 
+function isEmailDeliveryDisabled() {
+  return process.env.DISABLE_EMAIL_DELIVERY === 'true';
+}
+
 /**
  * sendEmail({ to?, subject, text })
  * - Ако "to" липсва -> праща към CONTACT_EMAIL (admin)
  * - Ако "to" е подаден -> праща към него
  */
 export async function sendEmail({ to, subject, text }) {
+  if (isEmailDeliveryDisabled()) {
+    return {
+      messageId: 'email-delivery-disabled',
+      skipped: true,
+      to: to || 'admin',
+      subject,
+    };
+  }
+
   const { fromEmail } = getTransporter();
   const mailOptions = {
     from: fromEmail,

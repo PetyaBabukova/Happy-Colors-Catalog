@@ -1,6 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AUTH_COOKIE_NAME, getJwtSecret, requireAuth } from '../../../middlewares/auth.js';
+import {
+  AUTH_COOKIE_NAME,
+  getJwtSecret,
+  requireAuth,
+  signAuthToken,
+} from '../../../middlewares/auth.js';
 import { buildNext, buildReq, buildRes } from '../_helpers/httpMocks.js';
 
 describe('auth middleware', () => {
@@ -25,7 +30,7 @@ describe('auth middleware', () => {
 
   it('verifies a valid token and attaches the decoded user', () => {
     process.env.JWT_SECRET = 'unit-secret';
-    const token = jwt.sign({ _id: 'user-1', role: 'owner' }, process.env.JWT_SECRET);
+    const token = signAuthToken({ _id: 'user-1', role: 'owner' });
     const req = buildReq({ cookies: { [AUTH_COOKIE_NAME]: token } });
     const res = buildRes();
     const next = buildNext();
@@ -34,6 +39,16 @@ describe('auth middleware', () => {
 
     expect(req.user).toMatchObject({ _id: 'user-1', role: 'owner' });
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('signs tokens that the auth middleware can verify', () => {
+    process.env.JWT_SECRET = 'unit-secret';
+    const token = signAuthToken({ _id: 'user-2', email: 'owner@example.com' }, { expiresIn: '1h' });
+
+    expect(jwt.verify(token, process.env.JWT_SECRET)).toMatchObject({
+      _id: 'user-2',
+      email: 'owner@example.com',
+    });
   });
 
   it('rejects invalid tokens', () => {

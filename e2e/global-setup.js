@@ -1,9 +1,9 @@
-import crypto from 'crypto';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { AUTH_COOKIE_NAME, getJwtSecret, signAuthToken } from '../server/middlewares/auth.js';
 import mongoose from '../server/mongoose.js';
 
 mongoose.set('bufferCommands', false);
@@ -18,6 +18,7 @@ const ownerEmail = 'owner.e2e@example.com';
 const ownerPassword = process.env.E2E_OWNER_PASSWORD || 'E2ePass123!';
 const categorySlug = 'e2e-smoke';
 const productTitle = 'E2E Smoke Product';
+const checkoutCustomerEmail = 'checkout.e2e@example.com';
 const allowNonTestDbValue = 'yes-i-know-this-can-delete-data';
 const ownerId = new mongoose.Types.ObjectId('660000000000000000000001');
 const categoryId = new mongoose.Types.ObjectId('660000000000000000000002');
@@ -40,23 +41,13 @@ function assertTestDatabase(mongoUri) {
   }
 }
 
-function signJwt(payload, secret) {
-  // Keep this in sync with the app's HS256 cookie auth contract.
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const unsignedToken = `${header}.${body}`;
-  const signature = crypto.createHmac('sha256', secret).update(unsignedToken).digest('base64url');
-
-  return `${unsignedToken}.${signature}`;
-}
-
 function buildStorageState({ baseURL, token, expires }) {
   const { hostname } = new URL(baseURL);
 
   return {
     cookies: [
       {
-        name: 'token',
+        name: AUTH_COOKIE_NAME,
         value: token,
         domain: hostname,
         path: '/',
@@ -74,24 +65,24 @@ export default async function globalSetup(config) {
   dotenv.config({ path: path.resolve(repoRoot, '.env.test') });
 
   const mongoUri = process.env.MONGO_URI;
-  const jwtSecret = process.env.JWT_SECRET;
   const baseURL = config.projects[0].use.baseURL;
 
   assertTestDatabase(mongoUri);
-
-  if (!jwtSecret) {
-    throw new Error('JWT_SECRET is required for Playwright tests.');
-  }
+  getJwtSecret();
 
   await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10_000 });
 
-  const [{ default: Category }, { default: Product }, { default: User }] = await Promise.all([
+  const [{ default: Category }, { default: Order }, { default: Product }, { default: User }] = await Promise.all([
     import('../server/models/Category.js'),
+    import('../server/models/Order.js'),
     import('../server/models/Product.js'),
     import('../server/models/User.js'),
   ]);
 
   try {
+    await Order.deleteMany({
+      'customer.email': checkoutCustomerEmail,
+    });
     await Product.deleteMany({ $or: [{ _id: productId }, { title: productTitle }] });
     await Category.deleteMany({ $or: [{ _id: categoryId }, { slug: categorySlug }] });
     await User.deleteMany({ $or: [{ _id: ownerId }, { email: ownerEmail }] });
@@ -123,15 +114,14 @@ export default async function globalSetup(config) {
 
     const issuedAt = Math.floor(Date.now() / 1000);
     const expires = issuedAt + 4 * 60 * 60;
-    const token = signJwt(
+    const token = signAuthToken(
       {
         _id: owner._id.toString(),
         username: owner.username,
         email: owner.email,
         iat: issuedAt,
         exp: expires,
-      },
-      jwtSecret
+      }
     );
 
     await fs.mkdir(authDir, { recursive: true });

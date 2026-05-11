@@ -52,6 +52,7 @@ export default defineConfig({
       RENDER_EXTERNAL_URL: baseURL,
       CLIENT_URL: baseURL,
       ALLOWED_ORIGINS: baseURL,
+      DISABLE_EMAIL_DELIVERY: 'true',
     },
   },
 });

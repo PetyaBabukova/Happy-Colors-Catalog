@@ -36,6 +36,25 @@ describe('sendEmail', () => {
     vi.restoreAllMocks();
     delete process.env.CONTACT_EMAIL;
     delete process.env.CONTACT_EMAIL_PASS;
+    delete process.env.DISABLE_EMAIL_DELIVERY;
+  });
+
+  it('skips transporter setup when email delivery is disabled', async () => {
+    process.env.DISABLE_EMAIL_DELIVERY = 'true';
+    delete process.env.CONTACT_EMAIL;
+    delete process.env.CONTACT_EMAIL_PASS;
+    const { sendEmail } = await importSendEmail();
+
+    await expect(sendEmail({ to: 'customer@example.com', subject: 'E2E order', text: 'Body' }))
+      .resolves.toEqual({
+        messageId: 'email-delivery-disabled',
+        skipped: true,
+        to: 'customer@example.com',
+        subject: 'E2E order',
+      });
+
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(sendMail).not.toHaveBeenCalled();
   });
 
   it('requires email credentials before creating a transporter', async () => {
