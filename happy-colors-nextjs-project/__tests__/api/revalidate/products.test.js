@@ -32,7 +32,9 @@ describe('/api/revalidate/products', () => {
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/');
     expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
   });
 
@@ -54,7 +56,9 @@ describe('/api/revalidate/products', () => {
 
     expect(response.status).toBe(200);
     expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/');
     expect(revalidatePath).not.toHaveBeenCalledWith('/products/undefined');
   });
 

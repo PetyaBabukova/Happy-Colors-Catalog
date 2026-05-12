@@ -4,24 +4,17 @@ import Link from 'next/link';
 import HomeHeroCarousel from '@/components/home-banners/HomeHeroCarousel';
 import ProductCard from './products/ProductCard';
 import { getHomeBanners } from '@/managers/homeBannersManager';
-import { getProducts } from '@/managers/productsManager';
+import { getHomepageFeaturedProducts } from '@/managers/productsManager';
 import styles from './page.module.css';
 import shopStyles from './products/shop.module.css';
 
 const INTRO_TEXT = 'В Happy Colors ще откриете ръчно изработени плетени играчки, аксесоари и декорация за дома, създадени с внимание към всеки детайл. Колекцията включва красиви и оригинални изделия, подходящи за подарък, детска стая, празник или уютен акцент у дома. Ако нещо ви хареса, можете да се свържете с мен за наличност, въпроси и поръчка. Разгледайте галерията и открийте изделие с характер, изработено с грижа и стил.';
 
-function getFavoriteProducts(products = []) {
-  return products
-    .filter((product) => product?.availability !== 'unavailable')
-    .slice(0, 4);
-}
-
 export default async function Home() {
-  const [banners, products] = await Promise.all([
+  const [banners, favoriteProducts] = await Promise.all([
     getHomeBanners(),
-    getProducts(),
+    getHomepageFeaturedProducts(),
   ]);
-  const favoriteProducts = getFavoriteProducts(products);
 
   return (
     <>

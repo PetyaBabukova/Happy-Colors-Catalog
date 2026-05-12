@@ -53,6 +53,114 @@ describe('products integration', () => {
     await request(app).post('/products').send(buildProduct({ category })).expect(401);
   });
 
+  it('returns homepage featured products before the productId route catches the path', async () => {
+    const app = createExpressApp();
+
+    const res = await request(app).get('/products/homepage-featured').expect(200);
+
+    expect(res.body).toEqual([]);
+  });
+
+  it('lists selected available homepage featured products in saved order', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    await createProduct({
+      owner,
+      category,
+      title: 'Hidden unavailable',
+      availability: 'unavailable',
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 0,
+    });
+    const second = await createProduct({
+      owner,
+      category,
+      title: 'Second visible',
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 2,
+    });
+    const first = await createProduct({
+      owner,
+      category,
+      title: 'First visible',
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 1,
+    });
+
+    const res = await request(app).get('/products/homepage-featured').expect(200);
+
+    expect(res.body.map((product) => product._id)).toEqual([String(first._id), String(second._id)]);
+  });
+
+  it('allows authenticated users to update homepage featured products', async () => {
+    const app = createExpressApp();
+    const owner = await createUser({ email: 'owner@example.com' });
+    const category = await createCategory();
+    const first = await createProduct({ owner, category, title: 'First pick' });
+    const second = await createProduct({ owner, category, title: 'Second pick' });
+
+    await request(app)
+      .put('/products/homepage-featured')
+      .send({ productIds: [String(first._id)] })
+      .expect(401);
+
+    const res = await request(app)
+      .put('/products/homepage-featured')
+      .set('Cookie', authCookie(owner))
+      .send({ productIds: [String(second._id), String(first._id)] })
+      .expect(200);
+
+    expect(res.body.map((product) => product._id)).toEqual([String(second._id), String(first._id)]);
+
+    const updatedFirst = await Product.findById(first._id).lean();
+    const updatedSecond = await Product.findById(second._id).lean();
+
+    expect(updatedFirst).toMatchObject({ isHomepageFeatured: true, homepageFeaturedOrder: 1 });
+    expect(updatedSecond).toMatchObject({ isHomepageFeatured: true, homepageFeaturedOrder: 0 });
+  });
+
+  it('allows an authenticated user to clear homepage featured products intentionally', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 0,
+    });
+
+    const res = await request(app)
+      .put('/products/homepage-featured')
+      .set('Cookie', authCookie(owner))
+      .send({ productIds: [] })
+      .expect(200);
+
+    expect(res.body).toEqual([]);
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      isHomepageFeatured: false,
+      homepageFeaturedOrder: 0,
+    });
+  });
+
+  it('rejects unavailable products in homepage featured updates', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      availability: 'unavailable',
+    });
+
+    await request(app)
+      .put('/products/homepage-featured')
+      .set('Cookie', authCookie(owner))
+      .send({ productIds: [String(product._id)] })
+      .expect(400);
+  });
+
   it('allows owners to edit their products', async () => {
     const app = createExpressApp();
     const owner = await createUser();
@@ -77,6 +185,32 @@ describe('products integration', () => {
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
     await expect(Product.findById(product._id)).resolves.toBeNull();
+  });
+
+  it('removes deleted featured products from the homepage featured list', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const deletedProduct = await createProduct({
+      owner,
+      category,
+      title: 'Deleted featured',
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 0,
+    });
+    const keptProduct = await createProduct({
+      owner,
+      category,
+      title: 'Kept featured',
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 1,
+    });
+
+    await request(app).delete(`/products/${deletedProduct._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    const res = await request(app).get('/products/homepage-featured').expect(200);
+
+    expect(res.body.map((product) => product._id)).toEqual([String(keptProduct._id)]);
   });
 
   it('does not delete product storage assets that are still used by a home banner', async () => {

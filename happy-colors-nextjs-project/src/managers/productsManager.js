@@ -179,6 +179,56 @@ export async function getProducts(categoryName) {
   }
 }
 
+export async function getHomepageFeaturedProducts() {
+  try {
+    const res = await fetch(`${baseURL}/products/homepage-featured`, {
+      next: {
+        revalidate: 60,
+        tags: ['products', 'homepage-featured-products'],
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error('Неуспешно зареждане на продуктите за началната страница');
+    }
+
+    const data = await readResponseJsonSafely(res);
+
+    if (!Array.isArray(data)) {
+      throw new Error('Неочакван отговор при зареждане на продуктите за началната страница');
+    }
+
+    return data;
+  } catch (err) {
+    console.error(err.message);
+    return [];
+  }
+}
+
+export async function updateHomepageFeaturedProducts(productIds) {
+  const res = await fetch(`${baseURL}/products/homepage-featured`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ productIds }),
+  });
+
+  const result = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw createResponseError(
+      result?.message || 'Възникна грешка при обновяване на любимите продукти.',
+      result
+    );
+  }
+
+  await invalidateProductCaches();
+
+  return Array.isArray(result) ? result : [];
+}
+
 export async function deleteProductImage(productId, imageUrl) {
   const res = await fetch(`${baseURL}/products/${productId}/image`, {
     method: 'DELETE',

@@ -15,7 +15,9 @@ export async function POST(request) {
     const productId = typeof body?.productId === 'string' ? body.productId.trim() : '';
 
     revalidateTag('products');
+    revalidateTag('homepage-featured-products');
     revalidatePath('/products');
+    revalidatePath('/');
 
     if (productId) {
       revalidatePath(`/products/${productId}`);

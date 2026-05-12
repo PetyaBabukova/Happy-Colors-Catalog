@@ -54,6 +54,10 @@ describe('Header', () => {
       'href',
       '/home-banners/create'
     );
+    expect(screen.getByRole('link', { name: 'Избери любими продукти' })).toHaveAttribute(
+      'href',
+      '/homepage-featured'
+    );
   });
 
   it('hides owner navigation and greeting for anonymous users', () => {

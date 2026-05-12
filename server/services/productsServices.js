@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import HomeBanner from '../models/HomeBanner.js';
+import mongoose from 'mongoose';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
 import {
   isAllowedPosterStorageUrl,
@@ -11,6 +12,7 @@ import {
   MAX_VIDEO_DURATION_SECONDS,
   MAX_VIDEOS_PER_PRODUCT,
 } from '../config/productLimits.js';
+import { HOMEPAGE_FEATURED_PRODUCTS_LIMIT } from '../config/homepageFeaturedProducts.js';
 
 const ALLOWED_PRODUCT_FIELDS = new Set([
   'title',
@@ -39,6 +41,10 @@ function createForbiddenError(message) {
   const error = new Error(message);
   error.statusCode = 403;
   return error;
+}
+
+function normalizeProductId(value) {
+  return String(value || '').trim();
 }
 
 function normalizeProductImages(product) {
@@ -348,6 +354,99 @@ export async function getAllProducts(categoryName) {
   }
 
   return normalizedProducts;
+}
+
+export async function getHomepageFeaturedProducts() {
+  const products = await Product.find({
+    isHomepageFeatured: true,
+    availability: { $ne: 'unavailable' },
+  })
+    .sort({ homepageFeaturedOrder: 1, _id: 1 })
+    .limit(HOMEPAGE_FEATURED_PRODUCTS_LIMIT)
+    .populate('category', 'name')
+    .lean();
+
+  return products.map(normalizeProductMedia);
+}
+
+function validateHomepageFeaturedProductIds(productIds) {
+  if (!Array.isArray(productIds)) {
+    throw createValidationError('Списъкът с продукти трябва да бъде масив.');
+  }
+
+  if (productIds.length > HOMEPAGE_FEATURED_PRODUCTS_LIMIT) {
+    throw createValidationError(
+      `Можете да изберете най-много ${HOMEPAGE_FEATURED_PRODUCTS_LIMIT} продукта за началната страница.`
+    );
+  }
+
+  const normalizedProductIds = productIds.map(normalizeProductId);
+
+  if (normalizedProductIds.some((productId) => !mongoose.Types.ObjectId.isValid(productId))) {
+    throw createValidationError('Списъкът съдържа невалиден продукт.');
+  }
+
+  if (new Set(normalizedProductIds).size !== normalizedProductIds.length) {
+    throw createValidationError('Един продукт е избран повече от веднъж.');
+  }
+
+  return normalizedProductIds;
+}
+
+export async function updateHomepageFeaturedProducts(productIds) {
+  const normalizedProductIds = validateHomepageFeaturedProductIds(productIds);
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      if (normalizedProductIds.length > 0) {
+        const selectedProducts = await Product.find({
+          _id: { $in: normalizedProductIds },
+        })
+          .session(session)
+          .lean();
+
+        if (selectedProducts.length !== normalizedProductIds.length) {
+          throw createNotFoundError('Един или повече от избраните продукти не съществуват.');
+        }
+
+        const unavailableProduct = selectedProducts.find(
+          (product) => product.availability === 'unavailable'
+        );
+
+        if (unavailableProduct) {
+          throw createValidationError('Неналичен продукт не може да бъде избран за началната страница.');
+        }
+      }
+
+      await Product.updateMany(
+        { isHomepageFeatured: true, _id: { $nin: normalizedProductIds } },
+        { $set: { isHomepageFeatured: false, homepageFeaturedOrder: 0 } },
+        { session }
+      );
+
+      await Promise.all(
+        normalizedProductIds.map((productId, index) =>
+          Product.updateOne(
+            { _id: productId },
+            { $set: { isHomepageFeatured: true, homepageFeaturedOrder: index } },
+            { session }
+          )
+        )
+      );
+    });
+  } catch (error) {
+    if (!error.statusCode) {
+      error.statusCode = 500;
+      error.message = error.message || 'Неуспешно обновяване на продуктите за началната страница.';
+    }
+
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+
+  return getHomepageFeaturedProducts();
 }
 
 export async function createProduct(data, ownerId) {

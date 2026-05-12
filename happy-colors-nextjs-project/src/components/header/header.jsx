@@ -116,6 +116,7 @@ export default function Header() {
       <ul className={userNavClassName}>
         <li><Link href="/products/create">Създай продукт</Link></li>
         <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
+        <li><Link href="/homepage-featured">Избери любими продукти</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
       </ul>

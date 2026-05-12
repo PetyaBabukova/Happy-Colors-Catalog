@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteProductImage,
   deleteProductVideo,
+  getHomepageFeaturedProducts,
   getProducts,
   onCreateProductSubmit,
   onEditProductSubmit,
+  updateHomepageFeaturedProducts,
 } from '../../../src/managers/productsManager.js';
 
 function jsonResponse({ ok = true, body = {} } = {}) {
@@ -53,6 +55,55 @@ describe('productsManager', () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getProducts()).resolves.toEqual([]);
+  });
+
+  it('loads homepage featured products with the homepage cache tag', async () => {
+    const products = [{ _id: 'product-1', title: 'Featured' }];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getHomepageFeaturedProducts()).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/products/homepage-featured',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'homepage-featured-products'],
+        },
+      })
+    );
+  });
+
+  it('returns an empty list instead of leaking homepage featured product load failures', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
+
+    await expect(getHomepageFeaturedProducts()).resolves.toEqual([]);
+  });
+
+  it('updates homepage featured products and invalidates product caches', async () => {
+    const products = [{ _id: 'product-2', title: 'Second' }];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products })).mockResolvedValueOnce(jsonResponse());
+
+    await expect(updateHomepageFeaturedProducts(['product-2', 'product-1'])).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/products/homepage-featured',
+      expect.objectContaining({
+        method: 'PUT',
+        credentials: 'include',
+        body: JSON.stringify({ productIds: ['product-2', 'product-1'] }),
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/revalidate/products',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({}),
+      })
+    );
   });
 
   it('creates products with normalized owner, category, media, availability, and cache invalidation', async () => {

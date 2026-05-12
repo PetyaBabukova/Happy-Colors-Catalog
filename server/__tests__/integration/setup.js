@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, vi } from 'vitest';
 import { resetRateLimiterState } from '../../middlewares/rateLimit.js';
 import { resetSequence } from './factories.js';
@@ -62,7 +62,9 @@ beforeAll(async () => {
   process.env.CLIENT_URL = 'http://localhost:3000';
   process.env.GCS_BUCKET_NAME = 'test-bucket';
 
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({
+    replSet: { count: 1 },
+  });
   await mongoose.connect(mongoServer.getUri(), {
     dbName: 'happy-colors-integration',
   });

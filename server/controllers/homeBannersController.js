@@ -57,7 +57,7 @@ router.get('/:bannerId', requireAuth, async (req, res) => {
   }
 });
 
-// V1 treats every authenticated user as a trusted site operator for homepage content.
+// V1 treats every authenticated user as a trusted admin for homepage content.
 // If public registration is enabled later, replace this with an explicit admin role check.
 router.post('/', homeBannersMutationLimiter, requireAuth, async (req, res) => {
   try {

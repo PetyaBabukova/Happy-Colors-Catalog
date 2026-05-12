@@ -66,6 +66,15 @@ const productSchema = new mongoose.Schema({
     default: 'available',
     required: true,
   },
+  isHomepageFeatured: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  homepageFeaturedOrder: {
+    type: Number,
+    default: 0,
+  },
   feedback: [
     {
       name: String,
@@ -85,5 +94,7 @@ const productSchema = new mongoose.Schema({
     required: [true, "Owner is required!"],
   },
 });
+
+productSchema.index({ isHomepageFeatured: 1, homepageFeaturedOrder: 1, _id: 1 });
 
 export default mongoose.models.Product || mongoose.model('Product', productSchema);
