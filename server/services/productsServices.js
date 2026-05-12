@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import HomeBanner from '../models/HomeBanner.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
 import {
   isAllowedPosterStorageUrl,
@@ -280,9 +281,56 @@ function collectVideoAssetsForCleanup(currentVideos, nextVideos) {
   return [...assetsToDelete].filter(Boolean);
 }
 
-async function deleteAssetsFromStorage(assetUrls) {
+async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = {}) {
   try {
-    await Promise.all(assetUrls.map((assetUrl) => deleteImageFromGCS(assetUrl)));
+    const uniqueAssetUrls = [...new Set(assetUrls.filter(Boolean))];
+
+    if (uniqueAssetUrls.length === 0) {
+      return;
+    }
+
+    const [homeBannerRefs, productRefs] = await Promise.all([
+      HomeBanner.find({ imageUrl: { $in: uniqueAssetUrls } }, { imageUrl: 1 }).lean(),
+      Product.find(
+        {
+          ...(excludeProductId ? { _id: { $ne: excludeProductId } } : {}),
+          $or: [
+            { imageUrl: { $in: uniqueAssetUrls } },
+            { imageUrls: { $in: uniqueAssetUrls } },
+            { 'videos.url': { $in: uniqueAssetUrls } },
+            { 'videos.posterUrl': { $in: uniqueAssetUrls } },
+          ],
+        },
+        { imageUrl: 1, imageUrls: 1, videos: 1 }
+      ).lean(),
+    ]);
+    const referencedAssetUrls = new Set(homeBannerRefs.map((banner) => banner.imageUrl));
+
+    for (const product of productRefs) {
+      if (uniqueAssetUrls.includes(product.imageUrl)) {
+        referencedAssetUrls.add(product.imageUrl);
+      }
+
+      for (const imageUrl of product.imageUrls || []) {
+        if (uniqueAssetUrls.includes(imageUrl)) {
+          referencedAssetUrls.add(imageUrl);
+        }
+      }
+
+      for (const video of normalizeStoredVideos(product.videos)) {
+        if (uniqueAssetUrls.includes(video.url)) {
+          referencedAssetUrls.add(video.url);
+        }
+
+        if (uniqueAssetUrls.includes(video.posterUrl)) {
+          referencedAssetUrls.add(video.posterUrl);
+        }
+      }
+    }
+
+    const deletionCandidates = uniqueAssetUrls.filter((assetUrl) => !referencedAssetUrls.has(assetUrl));
+
+    await Promise.all(deletionCandidates.map((assetUrl) => deleteImageFromGCS(assetUrl)));
   } catch (error) {
     console.error('Error while deleting product assets from storage:', error);
   }
@@ -375,7 +423,7 @@ export async function editProduct(productId, productData, userId) {
   }
 
   await product.save();
-  await deleteAssetsFromStorage(videoAssetsToDelete);
+  await deleteAssetsFromStorage(videoAssetsToDelete, { excludeProductId: product._id });
 
   return normalizeProductMedia(product.toObject());
 }
@@ -401,7 +449,7 @@ export async function deleteProduct(productId, userId) {
   const videoAssetUrls = videosToDelete.flatMap((video) => [video.url, video.posterUrl]);
 
   await Product.findByIdAndDelete(productId);
-  await deleteAssetsFromStorage([...imageUrlsToDelete, ...videoAssetUrls]);
+  await deleteAssetsFromStorage([...imageUrlsToDelete, ...videoAssetUrls], { excludeProductId: product._id });
 
   return { message: 'Продуктът беше изтрит успешно.' };
 }

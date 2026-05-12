@@ -35,4 +35,19 @@ describe('config baseURL', () => {
 
     expect(baseURL).toBe('http://localhost:3000/api');
   });
+
+  it('allows next image previews from the configured GCS bucket', async () => {
+    vi.stubEnv('GCS_BUCKET_NAME', 'happycolors-dev-bucket');
+
+    const { default: nextConfig } = await import('../../next.config.mjs');
+
+    expect(nextConfig.images.remotePatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          hostname: 'storage.googleapis.com',
+          pathname: '/happycolors-dev-bucket/**',
+        }),
+      ])
+    );
+  });
 });

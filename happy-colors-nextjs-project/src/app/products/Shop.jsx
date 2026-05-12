@@ -41,7 +41,7 @@ if (grouped['Други']) {
     <section className={styles.shopPage}>
       <h1 className={styles.shopPageTitle}>Плетени играчки, аксесоари и декорация за дома</h1>
 
-      <section className={styles.categories}>
+      <section className={`${styles.categories} pageInline`}>
         {categories.map((category) => (
           <article key={category} className={styles.shoppingCategory}>
             <h3>{category}</h3>

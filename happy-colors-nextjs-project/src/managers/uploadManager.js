@@ -67,39 +67,6 @@ export async function uploadImagesToBucket(files = []) {
   return uploadedImageUrls;
 }
 
-async function requestSignedUpload({ kind, file }) {
-  const res = await fetch('/api/uploads/sign', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      kind,
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-    }),
-  });
-
-  let data = null;
-
-  try {
-    data = await res.json();
-  } catch {
-    // Ignore JSON parse errors and use the generic message below.
-  }
-
-  if (!res.ok) {
-    throw new Error(data?.message || 'Възникна грешка при подготовка на качването.');
-  }
-
-  if (!data?.uploadUrl || !data?.formFields || !data?.publicUrl || !data?.objectName || !data?.deleteToken) {
-    throw new Error('Неочакван отговор при подготовка на качването.');
-  }
-
-  return data;
-}
-
 async function uploadFileViaProxy({ kind, file }) {
   const formData = new FormData();
   formData.append('kind', kind);
@@ -134,42 +101,13 @@ async function uploadFileViaProxy({ kind, file }) {
 }
 
 export async function uploadSignedFile({ kind, file }) {
-  // Video and poster uploads go through the proxy route by default.
+  // Home banner images, video, and poster uploads go through the proxy route by default.
   // This avoids browser-to-GCS CORS failures during create/edit flows.
-  if (kind === 'video' || kind === 'poster') {
+  if (kind === 'home-banner-image' || kind === 'video' || kind === 'poster') {
     return uploadFileViaProxy({ kind, file });
   }
 
-  const signedUpload = await requestSignedUpload({ kind, file });
-  const formData = new FormData();
-
-  for (const [key, value] of Object.entries(signedUpload.formFields)) {
-    formData.append(key, value);
-  }
-
-  formData.append('file', file);
-
-  let uploadRes;
-
-  try {
-    uploadRes = await fetch(signedUpload.uploadUrl, {
-      method: 'POST',
-      body: formData,
-    });
-  } catch (err) {
-    console.error('Network error when uploading directly to GCS:', err);
-    return uploadFileViaProxy({ kind, file });
-  }
-
-  if (!uploadRes.ok) {
-    return uploadFileViaProxy({ kind, file });
-  }
-
-  return {
-    publicUrl: signedUpload.publicUrl,
-    objectName: signedUpload.objectName,
-    deleteToken: signedUpload.deleteToken,
-  };
+  throw new Error('Неподдържан тип upload.');
 }
 
 export async function deleteSignedUploadedFile(objectName, deleteToken) {

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import Category from '../../models/Category.js';
+import HomeBanner from '../../models/HomeBanner.js';
 import Order from '../../models/Order.js';
 import Product from '../../models/Product.js';
 import User from '../../models/User.js';
@@ -63,6 +64,28 @@ export async function createProduct(overrides = {}) {
   const category = overrides.category || (await createCategory());
 
   return Product.create(buildProduct({ ...overrides, owner, category }));
+}
+
+export function buildHomeBanner({ owner, ...overrides } = {}) {
+  const id = nextId('home-banner');
+
+  return {
+    title: `Home Banner ${id}`,
+    description: 'Homepage banner description',
+    ctaLabel: 'View collection',
+    ctaHref: '/search?q=животинки',
+    imageUrl: `https://storage.googleapis.com/test-bucket/home-banners/${id}.webp`,
+    sortOrder: 0,
+    isActive: true,
+    owner: owner?._id || owner,
+    ...overrides,
+  };
+}
+
+export async function createHomeBanner(overrides = {}) {
+  const owner = overrides.owner || (await createUser());
+
+  return HomeBanner.create(buildHomeBanner({ ...overrides, owner }));
 }
 
 /**

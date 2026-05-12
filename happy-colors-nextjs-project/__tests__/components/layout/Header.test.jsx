@@ -50,6 +50,10 @@ describe('Header', () => {
       'href',
       '/products/create'
     );
+    expect(screen.getByRole('link', { name: 'Създай хоум банер' })).toHaveAttribute(
+      'href',
+      '/home-banners/create'
+    );
   });
 
   it('hides owner navigation and greeting for anonymous users', () => {

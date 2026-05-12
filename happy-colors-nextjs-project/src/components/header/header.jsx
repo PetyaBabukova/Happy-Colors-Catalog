@@ -41,7 +41,7 @@ export default function Header() {
       </Suspense>
 
       <header className="header">
-        <nav className={styles.mainNav}>
+        <nav className={`${styles.mainNav} pageInline`}>
           <Link href="/">
             <div className={styles.logoContainer}>
               <Image className={styles.logoImage} src="/logo_64pxH.svg" alt="logo" width={256} height={256} />
@@ -115,6 +115,7 @@ export default function Header() {
 
       <ul className={userNavClassName}>
         <li><Link href="/products/create">Създай продукт</Link></li>
+        <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
       </ul>

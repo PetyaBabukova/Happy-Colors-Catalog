@@ -1,4 +1,6 @@
 :root {
+  --page-inline-padding: 2em;
+
   --yellow: #FCD34C;
   --light-yellow: #fbf1d9;
   --light-yellow-transparent: rgba(251, 241, 217, 0.7);
@@ -163,6 +165,10 @@ img, picture, video, canvas, svg {
   font-weight: 600;
 }
 
+.pageInline {
+  padding-inline: var(--page-inline-padding);
+}
+
 footer p {
   margin-bottom: 0;
 }
@@ -188,6 +194,10 @@ button:hover {
 
 
 @media (max-width: 768px) {
+  :root {
+    --page-inline-padding: 1rem;
+  }
+
   header {
     padding: 0;
     display: flex;

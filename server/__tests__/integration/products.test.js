@@ -1,8 +1,16 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
+import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import Product from '../../models/Product.js';
 import { createExpressApp } from '../../server.js';
-import { authCookie, buildProduct, createCategory, createProduct, createUser } from './factories.js';
+import {
+  authCookie,
+  buildProduct,
+  createCategory,
+  createHomeBanner,
+  createProduct,
+  createUser,
+} from './factories.js';
 
 describe('products integration', () => {
   it('lists products and filters by category name', async () => {
@@ -69,6 +77,50 @@ describe('products integration', () => {
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
     await expect(Product.findById(product._id)).resolves.toBeNull();
+  });
+
+  it('does not delete product storage assets that are still used by a home banner', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/products/images/shared.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl: sharedImageUrl,
+      imageUrls: [sharedImageUrl],
+    });
+    await createHomeBanner({ owner, imageUrl: sharedImageUrl });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(Product.findById(product._id)).resolves.toBeNull();
+    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+  });
+
+  it('does not delete product storage assets that are still used by another product', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/products/images/shared-product.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl: sharedImageUrl,
+      imageUrls: [sharedImageUrl],
+    });
+    await createProduct({
+      owner,
+      category,
+      title: 'Still using shared image',
+      imageUrl: sharedImageUrl,
+      imageUrls: [sharedImageUrl],
+    });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(Product.findById(product._id)).resolves.toBeNull();
+    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
   });
 
   it('rejects edit and delete requests from non-owners', async () => {

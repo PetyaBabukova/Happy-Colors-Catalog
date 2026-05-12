@@ -3,7 +3,7 @@
     justify-content: space-between;
     align-items: center;
     flex-wrap: nowrap;
-    padding: 1em 2em;   
+    padding-block: 1em;
     background-color: var(--light-green-transparent);
     gap: 1rem;
 }
@@ -209,7 +209,7 @@
         align-items: stretch;
         flex-wrap: wrap;
         gap: 1rem;
-        padding: 1rem;
+        padding-block: var(--page-inline-padding);
     }
 
     .headerTop {
