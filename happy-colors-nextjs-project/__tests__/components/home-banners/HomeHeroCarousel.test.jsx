@@ -38,7 +38,7 @@ describe('HomeHeroCarousel', () => {
     expect(screen.getByRole('heading', { name: 'Животинки' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Виж животинки' })).toHaveAttribute('href', '/search?q=животинки');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Покажи банер 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Следващ банер' }));
 
     expect(screen.getByRole('heading', { name: 'Декорация' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Виж декорация' })).toHaveAttribute('href', '/search?q=декорация');

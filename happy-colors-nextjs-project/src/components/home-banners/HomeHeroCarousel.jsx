@@ -60,6 +60,14 @@ export default function HomeHeroCarousel({ banners = [] }) {
     }
   }
 
+  function showPreviousBanner() {
+    setCurrentIndex((index) => (index - 1 + activeBanners.length) % activeBanners.length);
+  }
+
+  function showNextBanner() {
+    setCurrentIndex((index) => (index + 1) % activeBanners.length);
+  }
+
   return (
     <section className={`${styles.carousel} pageInline`} aria-label="Начални банери">
       <div className={styles.mediaFrame}>
@@ -71,8 +79,11 @@ export default function HomeHeroCarousel({ banners = [] }) {
           fetchPriority={currentIndex === 0 ? 'high' : 'auto'}
         />
         <div className={styles.content}>
-          <div className={styles.headingRow}>
+          <div className={styles.textPanel}>
             <h2>{currentBanner.title}</h2>
+            {currentBanner.description && <p>{currentBanner.description}</p>}
+          </div>
+          <div className={styles.ctaBar}>
             <Link href={currentBanner.ctaHref} className={styles.ctaLink}>
               {currentBanner.ctaLabel}
               <span aria-hidden="true" className={styles.arrowGroup}>
@@ -82,7 +93,6 @@ export default function HomeHeroCarousel({ banners = [] }) {
               </span>
             </Link>
           </div>
-          {currentBanner.description && <p>{currentBanner.description}</p>}
         </div>
 
         {user && (
@@ -107,22 +117,27 @@ export default function HomeHeroCarousel({ banners = [] }) {
             </button>
           </div>
         )}
-      </div>
-
-      {activeBanners.length > 1 && (
-        <div className={styles.carouselControls} aria-label="Избор на банер">
-          {activeBanners.map((banner, index) => (
+        {activeBanners.length > 1 && (
+          <div className={styles.carouselControls} aria-label="Навигация в банерите">
             <button
-              key={banner._id}
               type="button"
-              className={`${styles.dotButton} ${index === currentIndex ? styles.activeDot : ''}`}
-              aria-label={`Покажи банер ${index + 1}`}
-              aria-current={index === currentIndex ? 'true' : undefined}
-              onClick={() => setCurrentIndex(index)}
-            />
-          ))}
-        </div>
-      )}
+              className={`${styles.carouselArrow} ${styles.previousArrow}`}
+              aria-label="Предишен банер"
+              onClick={showPreviousBanner}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className={`${styles.carouselArrow} ${styles.nextArrow}`}
+              aria-label="Следващ банер"
+              onClick={showNextBanner}
+            >
+              ›
+            </button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
