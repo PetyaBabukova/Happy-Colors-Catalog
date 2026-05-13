@@ -9,6 +9,7 @@ import {
   getCategoryById,
   updateCategory 
 } from '../services/categoryServices.js';
+import { requireAuth } from '../middlewares/auth.js';
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ router.get('/visible', async (req, res) => {
 });
 
 // 🟢 Създаване на категория
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
     const created = await createCategory(req.body);
     res.status(201).json(created);
@@ -49,7 +50,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const result = await deleteCategory(req.params.id);
     res.status(200).json(result);
@@ -58,7 +59,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-router.get('/:categoryId', async (req, res) => {
+router.get('/:categoryId', requireAuth, async (req, res) => {
   try {
     const category = await getCategoryById(req.params.categoryId);
 
@@ -73,7 +74,7 @@ router.get('/:categoryId', async (req, res) => {
   }
 });
 
-router.put('/:categoryId', async (req, res) => {
+router.put('/:categoryId', requireAuth, async (req, res) => {
   try {
     const updated = await updateCategory(req.params.categoryId, req.body);
 

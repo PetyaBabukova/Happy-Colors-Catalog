@@ -50,7 +50,15 @@ function getClearCookieConfig() {
   };
 }
 
+function isRegistrationEnabled() {
+  return process.env.NODE_ENV !== 'production';
+}
+
 router.post(ROUTES.REGISTER, registerLimiter, async (req, res) => {
+  if (!isRegistrationEnabled()) {
+    return res.status(404).json({ message: 'Registration is disabled.' });
+  }
+
   try {
     const user = await registerUser(req.body);
     res.status(201).json(user);

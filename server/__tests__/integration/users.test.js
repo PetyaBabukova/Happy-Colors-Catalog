@@ -1,10 +1,24 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createExpressApp } from '../../server.js';
 import { buildUser, createUser } from './factories.js';
 
 describe('users integration', () => {
-  it('registers a user without returning a password', async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('rejects public registration in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const app = createExpressApp();
+    const user = buildUser({ email: 'disabled-register@example.com' });
+
+    const res = await request(app).post('/users/register').send(user).expect(404);
+
+    expect(res.body).toMatchObject({ message: 'Registration is disabled.' });
+  });
+
+  it('registers a user outside production without returning a password', async () => {
     const app = createExpressApp();
     const user = buildUser({ email: 'register@example.com' });
 

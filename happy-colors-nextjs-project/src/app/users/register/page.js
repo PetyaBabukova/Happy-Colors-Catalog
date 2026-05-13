@@ -1,4 +1,5 @@
 import RegisterForm from './RegisterForm';
+import { notFound } from 'next/navigation';
 
 export const metadata = {
   title: 'Регистрация',
@@ -11,5 +12,9 @@ export const metadata = {
 };
 
 export default function RegisterPage() {
+  if (process.env.NODE_ENV === 'production') {
+    notFound();
+  }
+
   return <RegisterForm />;
 }

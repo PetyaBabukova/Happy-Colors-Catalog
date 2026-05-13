@@ -28,6 +28,15 @@ describe('category admin pages', () => {
     setMockNavigation({ params: { categoryId: 'cat-1' } });
   });
 
+  it('redirects guests away from category management without loading categories', async () => {
+    const mockRouterPush = vi.fn();
+
+    render(<CategoriesManagerPage />, { mockRouterPush });
+
+    await waitFor(() => expect(mockRouterPush).toHaveBeenCalledWith('/users/login'));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('loads categories and protects the miscellaneous category from deletion', async () => {
     fetch.mockResolvedValueOnce(
       jsonResponse({
@@ -38,7 +47,7 @@ describe('category admin pages', () => {
       })
     );
 
-    const { container } = render(<CategoriesManagerPage />);
+    const { container } = render(<CategoriesManagerPage />, { user: { username: 'admin' } });
 
     expect(await screen.findByText('Candles')).toBeInTheDocument();
     expect(screen.getByText('Други')).toBeInTheDocument();
@@ -52,7 +61,7 @@ describe('category admin pages', () => {
       .mockResolvedValueOnce(jsonResponse({ body: { message: 'Deleted' } }))
       .mockResolvedValueOnce(jsonResponse({ body: [] }));
 
-    const { container } = render(<CategoriesManagerPage />);
+    const { container } = render(<CategoriesManagerPage />, { user: { username: 'admin' } });
 
     await screen.findByText('Candles');
     fireEvent.click(container.querySelector('a[class*="deleteLink"]'));
@@ -73,7 +82,7 @@ describe('category admin pages', () => {
     confirm.mockReturnValueOnce(false);
     fetch.mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'Candles' }] }));
 
-    const { container } = render(<CategoriesManagerPage />);
+    const { container } = render(<CategoriesManagerPage />, { user: { username: 'admin' } });
 
     await screen.findByText('Candles');
     fireEvent.click(container.querySelector('a[class*="deleteLink"]'));
@@ -84,7 +93,7 @@ describe('category admin pages', () => {
   it('shows category loading errors', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'Nope' } }));
 
-    const { container } = render(<CategoriesManagerPage />);
+    const { container } = render(<CategoriesManagerPage />, { user: { username: 'admin' } });
 
     await waitFor(() => expect(container.textContent).toMatch(/Грешка|Р“СЂРµС€РєР°/));
   });
