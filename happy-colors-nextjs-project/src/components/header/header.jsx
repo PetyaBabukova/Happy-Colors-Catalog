@@ -82,6 +82,7 @@ export default function Header() {
             </li>
 
             <li><Link href="/aboutus">За Happy Colors</Link></li>
+            <li><Link href="/faq">ЧЗВ</Link></li>
             {/* <li><Link href="/blog">Блог</Link></li> */}
             {/* <li><Link href="/partners">За партньори</Link></li> */}
             <li><Link href="/contacts">Контакти</Link></li>

@@ -1,0 +1,235 @@
+.faqPage {
+  width: 100%;
+  max-width: 1180px;
+  padding-block: 2rem 3rem;
+}
+
+.heroSection {
+  max-width: 920px;
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+.logo {
+  width: clamp(8rem, 18vw, 12rem);
+  height: auto;
+  margin: 0 auto 0.8rem;
+}
+
+.heroSection h1 {
+  margin-bottom: 0.4em;
+}
+
+.lead {
+  margin: 0;
+  color: var(--dark-green);
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.65;
+  text-align: center;
+}
+
+.notice {
+  max-width: 920px;
+  margin: 0 auto 1.75rem;
+  padding: 1rem 1.2rem;
+  border-left: 5px solid var(--dark-orange);
+  background-color: var(--light-yellow-transparent);
+  color: var(--dark-green);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.notice strong {
+  color: var(--dark-orange);
+}
+
+.notice a,
+.questionItem a {
+  color: var(--dark-orange);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.notice a:hover,
+.questionItem a:hover {
+  color: var(--dark-green);
+}
+
+.sectionNav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  max-width: 940px;
+  margin: 0 auto 2.5rem;
+}
+
+.sectionNav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--light-green);
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.6);
+  color: var(--dark-green);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.sectionNav a:hover {
+  border-color: var(--dark-orange);
+  color: var(--dark-orange);
+}
+
+.sections {
+  display: grid;
+  gap: 2.25rem;
+}
+
+.faqSection {
+  scroll-margin-top: 8rem;
+}
+
+.faqSection h2 {
+  margin-bottom: 0.7rem;
+  text-align: left;
+}
+
+.questionList {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.questionItem {
+  border: 1px solid rgba(1, 102, 77, 0.22);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.55);
+  color: var(--dark-green);
+  overflow: hidden;
+}
+
+.questionItem[open] {
+  border-color: rgba(255, 111, 97, 0.55);
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+.questionItem summary {
+  position: relative;
+  display: block;
+  min-height: 3.25rem;
+  padding: 0.9rem 3rem 0.9rem 1rem;
+  color: var(--dark-green);
+  cursor: pointer;
+  font-size: clamp(1.05rem, 2vw, 1.2rem);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.questionItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.questionItem summary::after {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background-color: var(--light-green-transparent);
+  color: var(--dark-green);
+  content: "+";
+  font-size: 1.3rem;
+  line-height: 1.35rem;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+.questionItem[open] summary::after {
+  content: "-";
+}
+
+.questionItem p {
+  margin: 0;
+  padding: 0 1rem 1rem;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.contactSection {
+  margin: 2.75rem auto 0;
+  padding: 1.5rem;
+  border-top: 2px solid var(--light-green);
+  text-align: center;
+}
+
+.contactSection h2 {
+  margin-bottom: 0.35rem;
+  text-align: center;
+}
+
+.contactSection p {
+  max-width: 680px;
+  margin: 0 auto 1rem;
+  font-size: 1.1rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.contactLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.65rem 1.2rem;
+  border-radius: 6px;
+  background-color: var(--dark-green);
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.contactLink:hover {
+  background-color: var(--dark-orange);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .faqPage {
+    max-width: 100%;
+    padding-block: 1.25rem 2rem;
+  }
+
+  .heroSection {
+    margin-bottom: 1rem;
+  }
+
+  .lead,
+  .notice {
+    text-align: left;
+  }
+
+  .sectionNav {
+    justify-content: flex-start;
+    margin-bottom: 2rem;
+  }
+
+  .sectionNav a {
+    flex: 1 1 100%;
+  }
+
+  .faqSection h2 {
+    font-size: 1.75rem;
+  }
+
+  .questionItem summary {
+    padding-right: 2.75rem;
+  }
+
+  .contactSection {
+    padding-inline: 0;
+  }
+}
