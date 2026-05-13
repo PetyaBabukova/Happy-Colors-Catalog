@@ -2,17 +2,30 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import baseURL from '@/config';
+import { useAuth } from '@/context/AuthContext';
 import { readResponseJsonSafely } from '@/utils/errorHandler';
 import styles from './categories.module.css';
 
 export default function CategoriesManagerPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!user) {
+      router.push('/users/login');
+      return;
+    }
+
     fetchCategories();
-  }, []);
+  }, [loading, router, user]);
 
   async function fetchCategories() {
     try {
@@ -54,6 +67,14 @@ export default function CategoriesManagerPage() {
     } catch (err) {
       setError(err.message || 'Неуспешно изтриване.');
     }
+  }
+
+  if (loading) {
+    return <p className="pageInline">Зареждане...</p>;
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
