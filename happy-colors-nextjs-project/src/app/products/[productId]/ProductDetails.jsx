@@ -403,7 +403,11 @@ export default function ProductDetails({ product }) {
 									Попитай
 								</button>
 							) : isAvailable ? (
-								<button onClick={handleAddToCart} className={styles.actionBtn}>
+								<button
+									onClick={handleAddToCart}
+									className={styles.actionBtn}
+									data-testid="add-to-cart-button"
+								>
 									Добави в количката
 								</button>
 							) : (

@@ -2,6 +2,8 @@ import express from 'express';
 import {
   createProduct,
   getAllProducts,
+  getHomepageFeaturedProducts,
+  updateHomepageFeaturedProducts,
   getProductById,
   deleteProduct,
   editProduct,
@@ -19,6 +21,25 @@ router.get('/', async (req, res) => {
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: 'Грешка при зареждане на продуктите' });
+  }
+});
+
+router.get('/homepage-featured', async (req, res) => {
+  try {
+    const products = await getHomepageFeaturedProducts();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Грешка при зареждане на продуктите за началната страница.' });
+  }
+});
+
+router.put('/homepage-featured', requireAuth, async (req, res) => {
+  try {
+    const products = await updateHomepageFeaturedProducts(req.body?.productIds);
+    res.status(200).json(products);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 });
 

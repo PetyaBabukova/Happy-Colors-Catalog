@@ -1,7 +1,7 @@
 # Happy Colors - Test Architecture Implementation Plan
 
-**Дата:** 2026-04-24
-**Статус:** Reviewed by Opus - bugs + gaps отразени
+**Дата:** 2026-05-08
+**Статус:** Updated after coverage backfill - hard local coverage gate passing, CI workflow deferred
 **Свързан дизайн документ:** `docs/DESIGN-DOC-TEST-ARCHITECTURE.md`
 **Цел:** Да въведем тестовата архитектура по малки, проверими фази, без да блокираме ежедневната разработка и без да включваме външни услуги в automated tests.
 
@@ -20,6 +20,30 @@
 5. component/API/integration/e2e expansion
 
 Не се опитваме да достигнем пълните 80% coverage в първия commit. Първо създаваме работеща инфраструктура, после качваме покритието фазово до target-а.
+
+### Current implementation status
+
+Completed locally:
+
+- Phase 0 - baseline inspection
+- Phase 1 - Vitest foundation and first unit tests
+- Phase 1B - unit coverage ramp and documented coverage gaps
+- Phase 1C - folded into Phase 1B as explicit coverage gap documentation
+- Phase 2 - frontend component test foundation
+- Phase 3 - Next.js API route tests
+- Phase 4 - backend integration tests
+- Phase 5 - Playwright smoke regression, including Opus-reviewed hardening
+- Phase 7 - initial Playwright regression expansion for auth, cart, checkout, and owner product controls
+
+Explicitly deferred for now:
+
+- Phase 6 - CI workflow
+
+Next active work:
+
+1. continue Playwright regression expansion for remaining product edge cases and Stripe checkout strategy
+2. business-critical deferred test areas where feasible without real external service calls
+3. CI workflow only after project decision re-enables it
 
 ---
 
@@ -113,16 +137,21 @@ Frontend Vitest projects:
 
 Root:
 
+Phase 1 adds the Vitest-focused root scripts. E2E scripts are added later in Phase 5.
+
 ```json
 {
   "test": "npm run test:server && npm run test:frontend",
   "test:server": "cd server && npm test",
   "test:server:unit": "cd server && npm run test:unit",
+  "test:server:coverage": "cd server && npm run test:coverage",
   "test:server:ci": "cd server && npm run test:ci",
   "test:frontend": "cd happy-colors-nextjs-project && npm test",
   "test:frontend:unit": "cd happy-colors-nextjs-project && npm run test:unit",
   "test:frontend:unit-jsdom": "cd happy-colors-nextjs-project && npm run test:unit-jsdom",
+  "test:frontend:coverage": "cd happy-colors-nextjs-project && npm run test:coverage",
   "test:frontend:ci": "cd happy-colors-nextjs-project && npm run test:ci",
+  "test:coverage": "npm run test:server:coverage && npm run test:frontend:coverage",
   "test:ci": "npm run test:server:ci && npm run test:frontend:ci"
 }
 ```
@@ -175,7 +204,9 @@ npm run test:unit-jsdom
 npm run test:coverage
 ```
 
-`npm run test:ci` може да fail-ва в началото, ако coverage още е под target-а. Това е очаквано, докато Phase 1B/1C/4 не добавят достатъчно unit и integration coverage.
+Current state after later coverage backfill: `npm run test:ci` is expected to pass with the 80/75/80/80 thresholds enabled for both server and frontend.
+
+Use `npm run test:coverage` when the goal is to inspect the HTML/text coverage report during local work. Use `npm run test:ci` when the goal is to enforce the configured thresholds and get the same hard local gate that Phase 6 will eventually wire into CI.
 
 ### Commit
 
@@ -187,9 +218,13 @@ Add Vitest unit test foundation
 
 ## Phase 1B - Coverage threshold ramp до 80%
 
+Status: completed as coverage ramp plus gap documentation. Later coverage backfill raised both server and frontend above the 80/75/80/80 threshold, so `test:ci` is now the hard local coverage gate.
+
+Traceability: the final local gate was reached by the frontend coverage boundary work in `92b699e` and the server coverage/GCS hardening work in `6cd0760`, after the earlier component and server payment coverage commits.
+
 ### Цел
 
-Да вдигнем Vitest coverage максимално рано, без да твърдим, че само unit тестовете ще стигнат глобалния 80% threshold. Понеже използваме `coverage.all: true`, всички untouched source файлове влизат в denominator-а; реалният hard gate се включва след Phase 4, когато integration тестовете допълнят coverage-а за controllers/services.
+Да вдигнем Vitest coverage максимално рано, без да твърдим, че само unit тестовете ще стигнат глобалния 80% threshold. Понеже използваме `coverage.all: true`, всички untouched source файлове влизат в denominator-а. Реалният hard gate вече е включен локално след последващия coverage backfill.
 
 ### Задачи
 
@@ -217,6 +252,14 @@ Frontend unit-jsdom coverage:
 - `src/utils/videoMetadata.js`
 - `src/hooks/useForm.js`
 
+Phase 1B разшири `videoMetadata` тестовете отвъд walking skeleton-а:
+
+- `loadedmetadata` event resolve-ва с duration
+- timeout path reject-ва с timeout error
+- video error event reject-ва с error
+- cleanup маха listeners/src и revoke-ва object URL
+- settled guard не позволява double resolve/reject
+
 ### Middleware testing helper
 
 Създава се shared helper:
@@ -236,7 +279,7 @@ npm run test:server:ci
 npm run test:frontend:ci
 ```
 
-Тези команди се пускат като diagnostic gate. Ако още fail-ват заради `coverage.all: true`, Phase 1B завършва с explicit coverage gap list, а hard CI gating се активира след Phase 4. Крайната цел остава:
+Тези команди вече са hard local gate след последващия coverage backfill. Phase 1B завърши с explicit coverage gap list, а по-късните server/frontend backfill commits вдигнаха числата до target-а:
 
 - 80% lines
 - 75% branches
@@ -255,22 +298,23 @@ Increase unit coverage and document coverage gaps
 
 ## Phase 1C - Coverage backfill checkpoint
 
+Status: completed. The explicit coverage gap documents (`docs/TEST-COVERAGE-GAPS-PHASE-1B.md` and later `docs/TEST-COVERAGE-GAPS-PHASE-4.md`) were the checkpoint output; later targeted backfill raised both server and frontend above the configured threshold.
+
 ### Цел
 
 Да направим честна проверка на глобалния coverage denominator след първите unit тестове. С `coverage.all: true` е вероятно backend controllers/services да дърпат процента надолу, докато не дойдат integration тестовете във Phase 4.
 
-### Задачи
+### Historical output
 
-- Пускане на `npm run test:coverage` в `server/` и frontend app-а.
-- Идентифициране на най-големите uncovered zones.
-- Решение дали даден uncovered файл трябва да получи unit тест веднага, или ще бъде покрит от integration/API/component тестове в следващите фази.
-- Създаване на кратък coverage gap list в PR/commit message или в локална checklist бележка.
+- Coverage reports were run in `server/` and the frontend app.
+- Най-големите uncovered zones бяха документирани в coverage gap docs.
+- Част от uncovered зоните бяха покрити от Phase 4 integration tests; последващите targeted backfill commits довършиха локалния coverage gate.
 
 ### Acceptance
 
-- Има ясен списък кои файлове още дърпат coverage под threshold.
-- Няма включен hard CI gate, ако coverage не може реалистично да мине преди Phase 4.
-- Hard gate се включва веднъж след Phase 4, когато `server/` и `happy-colors-nextjs-project/` могат реалистично да покрият 80/75/80/80.
+- Има исторически списък кои файлове дърпаха coverage под threshold преди targeted backfill-а.
+- `npm run test:ci` минава локално с включени coverage thresholds; verified on 2026-05-08 after `6cd0760`.
+- CI workflow остава deferred като отделно project decision, не заради coverage deficit.
 
 ### Commit
 
@@ -281,6 +325,8 @@ Document coverage backfill targets
 ---
 
 ## Phase 2 - Frontend component test foundation
+
+Status: completed.
 
 ### Цел
 
@@ -320,8 +366,9 @@ npm install --save-dev @vitejs/plugin-react@^4.0.0 @testing-library/react@^16.0.
 
 MSW:
 
-- да се добави само ако първите component тестове имат нужда от HTTP mocking
-- ако първите тестове са purely presentational, MSW setup може да се добави в следващ commit в същата фаза
+- installed as part of the component-test dependency set
+- not used by the initial presentational component tests
+- remains available for future component tests that need HTTP-layer mocking
 
 ### Package scripts
 
@@ -358,6 +405,8 @@ Add frontend component test foundation
 ---
 
 ## Phase 3 - Next.js API route tests
+
+Status: completed.
 
 ### Цел
 
@@ -415,6 +464,8 @@ Add Next API route tests
 ---
 
 ## Phase 4 - Backend integration tests
+
+Status: completed.
 
 ### Цел
 
@@ -506,9 +557,11 @@ Add backend integration tests
 Root:
 
 ```powershell
-npm install --save-dev @playwright/test@^1.45.0 dotenv@^16.0.0
+npm install --save-dev @playwright/test@^1.45.0
 npx playwright install
 ```
+
+Implementation note: `dotenv` remains a root production dependency because `server.js` imports it at runtime. Playwright itself is the dev dependency.
 
 ### Файлове за създаване
 
@@ -517,6 +570,7 @@ npx playwright install
 - `e2e/tests/smoke.spec.js`
 - `e2e/tests/products.spec.js`
 - `e2e/tests/cart.spec.js`
+- `e2e/tests/auth.spec.js`
 - `.env.test.example` като версиониран template без секрети
 - локален `.env.test`, който остава gitignored
 - root `.gitignore` entry за `.env.test`
@@ -528,28 +582,24 @@ Root:
 
 ```json
 {
-  "test:e2e": "npx playwright test",
-  "test:e2e:smoke": "npx playwright test --grep \"@smoke\"",
-  "test:e2e:ui": "npx playwright test --ui",
+  "test:e2e": "npx playwright test --config=e2e/playwright.config.js",
+  "test:e2e:smoke": "npx playwright test --config=e2e/playwright.config.js --grep \"@smoke\"",
+  "test:e2e:ui": "npx playwright test --config=e2e/playwright.config.js --ui",
   "test:all": "npm run test:ci && npm run test:e2e:smoke"
 }
 ```
 
+`test:all` uses the hard local Vitest coverage gate before the Playwright smoke run. Developers can still use `npm test` for a faster non-coverage loop during local iteration.
+
 ### Server strategy
 
-Playwright стартира root unified server:
+Playwright стартира root unified server чрез `webServer.command`:
 
 ```powershell
 npm run dev
 ```
 
-или dedicated:
-
-```powershell
-npm run start:test
-```
-
-ако се добави такъв script.
+`playwright.config.js` зарежда `.env.test` и подава test env vars към server процеса. `reuseExistingServer` остава `false`, за да не се използва случайно стар dev server с друга база.
 
 ### Environment
 
@@ -559,30 +609,46 @@ npm run start:test
 - `JWT_SECRET` test secret
 - dummy или test-mode Stripe values
 - dummy GCS values или routes, които не trigger-ват GCS в smoke
+- `DISABLE_EMAIL_DELIVERY=true` for Playwright e2e server runs, so checkout/order tests never send real email
 - `CATALOG_MODE` ясно зададен
+- `NEXT_PUBLIC_CATALOG_MODE` ясно зададен за frontend catalog-mode логиката
 
 ### Loading
 
-`e2e/global-setup.js` зарежда `.env.test` чрез `dotenv.config({ path: '.env.test' })` като първа операция. Ако Playwright `webServer` се използва вместо manual server startup в global setup-а, `playwright.config.js` трябва също да зареди `.env.test` преди `webServer.command`, за да наследи server процесът правилните env vars. Root `server.js` остава environment-agnostic и production env loading-ът не се променя.
+`e2e/global-setup.js` зарежда `.env.test` чрез `dotenv.config({ path: '.env.test' })`. `playwright.config.js` също зарежда `.env.test` преди `webServer.command` и подава env vars към server процеса. Root `server.js` остава environment-agnostic и production env loading-ът не се променя.
 
 `.env.test.example` се commit-ва като template без секрети. Реалният `.env.test` остава локален/CI secret и не трябва да влиза в git.
 
 ### Auth strategy
 
-- global setup login-ва owner/admin
-- записва `e2e/.auth/owner.json`
+- global setup seeds deterministic owner/category/product documents
+- owner/category/product use fixed ObjectIds to avoid stale cached product links across repeated e2e runs
+- global setup writes `e2e/.auth/owner.json`
 - authenticated tests използват `storageState`
 - `e2e/.auth/` е gitignored
+- auth token TTL is 4 hours to avoid debug/slow-run expiry flakes
+- token signing is local HS256 test scaffolding in `e2e/global-setup.js` and must stay in sync with the app auth token contract
+
+### E2E hardening decisions
+
+- `reuseExistingServer` stays `false`, so Playwright always starts the test server with `.env.test` instead of accidentally reusing a dev server connected to another database.
+- The test DB guard only allows non-test database names when `E2E_ALLOW_NON_TEST_DB=yes-i-know-this-can-delete-data`.
+- The smoke cart test exercises a real add-to-cart flow in non-catalog mode and verifies the seeded product appears in the cart.
+- The add-to-cart action uses `data-testid="add-to-cart-button"` to avoid order-based button selectors.
 
 ### Smoke scenarios
 
-Всички smoke сценарии са catalog-mode-agnostic; не изискват `@catalog-mode-sensitive` skip behavior.
+Smoke scenarios are catalog-mode-aware and do not use `@catalog-mode-sensitive` skip behavior. The cart smoke branches explicitly based on catalog mode.
 
 - homepage loads `@smoke`
 - products listing loads `@smoke @products`
 - product details loads `@smoke @products`
 - search page handles query or empty state `@smoke @search`
-- cart page opens `@smoke @cart`
+- cart flow loads or redirects safely; in non-catalog mode it adds the seeded product to the cart and verifies it appears there `@smoke @cart`
+
+Additional Phase 5 critical check:
+
+- seeded owner auth state works through `/api/users/me` `@critical @auth`
 
 ### Acceptance
 
@@ -602,6 +668,8 @@ Add Playwright smoke regression suite
 ---
 
 ## Phase 6 - CI workflow
+
+Status: deferred for now by project decision. Do not start this phase until CI is explicitly re-enabled.
 
 ### Цел
 
@@ -650,7 +718,8 @@ Workflow trigger-и:
 
 ### Acceptance
 
-- CI fail-ва при coverage drop под threshold.
+- When Phase 6 is implemented, Tier 1 must run `npm run test:ci` with the existing 80/75/80/80 thresholds.
+- Coverage failure behavior is already active locally through `test:ci`; Phase 6 only wires that existing gate into GitHub Actions.
 - CI fail-ва при failing unit/component/API/integration tests.
 - E2E smoke artifacts се пазят при failure.
 - Tier 4 cron job е enabled в GitHub Actions UI след първи successful nightly run.
@@ -665,6 +734,8 @@ Add CI test workflow
 
 ## Phase 7 - Full regression expansion
 
+Status: in progress. Initial critical regression slice completed for auth, cart, checkout, and owner product controls.
+
 ### Цел
 
 Да разширим Playwright suite-а от smoke към критични regression сценарии.
@@ -674,28 +745,34 @@ Add CI test workflow
 Auth:
 
 - register validation
-- login success
-- logout
+- login success - completed
+- invalid login rejection - completed
+- logout clears browser/API session - completed
 - protected page redirects
 
 Cart:
 
-- add to cart
-- increase/decrease quantity
-- remove product
-- cart persists after reload
+- add to cart is covered by smoke; expand with edge cases
+- increase/decrease quantity - completed
+- remove product - completed
+- cart persists after reload - completed
 
 Products:
 
 - product listing filters/search
 - product details media rendering
+- owner edit/delete controls visible for owned seeded product - completed
 - owner create/edit/delete flow
 
 Checkout:
 
-- shipping validation
-- delivery office lookup with mocked carrier behavior
-- order submit happy path, когато test-mode strategy е готова
+- empty checkout state - completed
+- shipping validation - completed for required fields and invalid phone/email before confirmation
+- delivery office lookup with mocked Econt behavior - completed
+- delivery office lookup with mocked Speedy behavior (selection only; submit deferred) - completed
+- Box Now address validation and card-only payment behavior - completed
+- COD order submit happy path - completed
+- Stripe card checkout test-mode strategy remains deferred
 
 Admin/owner:
 
@@ -718,7 +795,7 @@ Expand Playwright regression coverage
 
 ## Explicit Deferred Work
 
-Тези неща не блокират Phase 1:
+Тези неща не блокират current coverage/regression work:
 
 - Stripe webhook raw body/signature full coverage
 - Stripe payment end-to-end test-mode strategy
@@ -729,18 +806,9 @@ Expand Playwright regression coverage
 
 ---
 
-## Recommended First Implementation Slice
+## Historical First Implementation Slice
 
-Първият реален implementation slice трябва да е само:
-
-1. `server` Vitest install/config/scripts
-2. frontend Vitest install/config/scripts
-3. 2-3 backend pure unit tests
-4. 2-3 frontend pure unit tests
-5. coverage report без enforced threshold
-6. локален commit
-
-Това ще докаже, че test runner-ите работят в Windows repo-то, преди да добавяме React, MongoDB и Playwright complexity.
+Този slice вече е изпълнен в Phase 1. Той доказа, че Vitest runner-ите работят в Windows repo-то, преди да добавим React, MongoDB и Playwright complexity.
 
 ---
 
@@ -749,8 +817,12 @@ Expand Playwright regression coverage
 Преди да се счита фаза за приключена:
 
 - релевантните tests минават локално
-- `npm run test:ci` минава, след като coverage threshold-ът е включен като gate
 - няма реални calls към Stripe, GCS, email, Econt или Speedy
 - няма secrets в repo-то
 - нови auth state файлове като `e2e/.auth/` са gitignored
 - git status е чист след локален commit
+
+Coverage gate checklist:
+
+- `npm run test:ci` минава с включен coverage threshold
+- coverage drop под threshold fail-ва hard gate-а

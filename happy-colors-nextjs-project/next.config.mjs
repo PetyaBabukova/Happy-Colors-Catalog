@@ -4,6 +4,11 @@ const backendBaseUrl = String(
   process.env.NEXT_PUBLIC_BASE_URL ||
   'http://localhost:3030'
 ).replace(/\/+$/, '');
+const gcsBucketName = String(
+  process.env.GCS_BUCKET_NAME ||
+  process.env.NEXT_PUBLIC_GCS_BUCKET_NAME ||
+  'happycolors-store'
+).replace(/^\/+|\/+$/g, '');
 
 const nextConfig = {
   serverExternalPackages: ['mongoose', 'mongodb'],
@@ -16,6 +21,10 @@ const nextConfig = {
       {
         source: '/api/products/:path*',
         destination: `${backendBaseUrl}/products/:path*`,
+      },
+      {
+        source: '/api/home-banners/:path*',
+        destination: `${backendBaseUrl}/home-banners/:path*`,
       },
       {
         source: '/api/categories/:path*',
@@ -48,12 +57,12 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'cdncloudcart.com',
-        pathname: '/**',              // леко поправям от '**' на '/**'
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'storage.googleapis.com',
-        pathname: '/happycolors-store/**', // пътят към твоя bucket
+        pathname: `/${gcsBucketName}/**`,
       },
     ],
   },

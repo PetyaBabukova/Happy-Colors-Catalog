@@ -11,18 +11,22 @@ import styles from '../checkout.module.css';
 export default function PaymentCancelPage() {
   const router = useRouter();
 
-  if (isCatalogMode) {
-    router.push('/products');
-    return null;
-  }
-
   useEffect(() => {
+    if (isCatalogMode) {
+      router.push('/products');
+      return undefined;
+    }
+
     const t = setTimeout(() => {
       router.push('/checkout');
     }, 4000);
 
     return () => clearTimeout(t);
   }, [router]);
+
+  if (isCatalogMode) {
+    return null;
+  }
 
   return (
     <section className={styles.checkoutContainer}>

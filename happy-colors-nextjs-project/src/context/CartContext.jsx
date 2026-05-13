@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 
-const CartContext = createContext();
+export const CartContext = createContext();
 
 // Уникален ключ за количката в localStorage
 const CART_STORAGE_KEY = 'happycolors_cart_v2';

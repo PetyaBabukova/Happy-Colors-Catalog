@@ -9,17 +9,22 @@ import mongoose from './server/mongoose.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const envCandidates = [
-  path.resolve(__dirname, '.env'),
-  path.resolve(__dirname, 'server/.env'),
-  path.resolve(__dirname, '../Happy-Colors-SECRETS/.env'),
-];
+const isTest = process.env.NODE_ENV === 'test';
+const envCandidates = isTest
+  ? [path.resolve(__dirname, '.env.test')]
+  : [
+      path.resolve(__dirname, '.env'),
+      path.resolve(__dirname, 'server/.env'),
+      path.resolve(__dirname, '../Happy-Colors-SECRETS/.env'),
+    ];
 
 const envPath = envCandidates.find((candidatePath) => fs.existsSync(candidatePath));
 
 if (envPath) {
   dotenv.config({ path: envPath });
   console.log(`✅ ENV loaded from: ${envPath}`);
+} else if (isTest) {
+  console.warn('No .env.test file found. Using environment variables only.');
 } else {
   dotenv.config();
   console.warn('⚠️ No .env file found. Using environment variables.');

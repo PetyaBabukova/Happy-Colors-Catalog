@@ -6,7 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "cross-env CI_COVERAGE=true vitest run --coverage",
+    "test:unit": "vitest run --project unit",
+    "test:unit-jsdom": "vitest run --project unit-jsdom",
+    "test:api": "vitest run --project api",
+    "test:components": "vitest run --project components"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.3",
@@ -20,7 +28,15 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
-    "eslint-config-next": "15.3.1"
+    "eslint-config-next": "15.3.1",
+    "jsdom": "^25.0.1",
+    "msw": "^2.14.2",
+    "vitest": "^2.1.9"
   }
 }

@@ -1,17 +1,7 @@
 import User from '../models/User.js';
 import bcrypt from 'bcrypt';
 import validator from 'validator';
-import jwt from 'jsonwebtoken';
-
-function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret || String(secret).trim() === '') {
-    throw new Error('JWT_SECRET липсва в environment variables.');
-  }
-
-  return secret;
-}
+import { signAuthToken } from '../middlewares/auth.js';
 
 function normalizeEmail(email) {
   return String(email ?? '').trim().toLowerCase();
@@ -37,13 +27,12 @@ export async function loginUser(email, password) {
     throw new Error('Invalid credentials');
   }
 
-  const token = jwt.sign(
+  const token = signAuthToken(
     {
       _id: user._id,
       username: user.username,
       email: user.email,
     },
-    getJwtSecret(),
     { expiresIn: '1d' }
   );
 

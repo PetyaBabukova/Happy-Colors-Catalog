@@ -147,15 +147,10 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
         : [];
 
     setFormValues({
-      title: '',
-      description: '',
-      category: '',
-      price: '',
-      imageUrl: '',
-      imageUrls: [],
-      videos: [],
-      availability: 'available',
       ...initialValues,
+      title: initialValues.title || '',
+      description: initialValues.description || '',
+      price: initialValues.price || '',
       imageUrls: normalizedImageUrls,
       imageUrl: normalizedImageUrls[0] || initialValues.imageUrl || '',
       category: initialValues.category?._id || initialValues.category || '',

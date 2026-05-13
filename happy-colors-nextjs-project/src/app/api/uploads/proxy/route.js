@@ -16,6 +16,10 @@ import {
 export const runtime = 'nodejs';
 
 const KIND_CONFIG = {
+  'home-banner-image': {
+    folder: 'home-banners/images',
+    validateFile: validateImageUploadFile,
+  },
   video: {
     folder: 'products/videos',
     validateFile: validateVideoUploadFile,

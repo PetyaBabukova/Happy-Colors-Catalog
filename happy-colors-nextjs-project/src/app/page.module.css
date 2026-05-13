@@ -1,216 +1,65 @@
 /* happy-colors-nextjs-project/src/app/page.module.css */
 
-.heroSection {
-  display: grid;
-  grid-template-rows: 1fr;
-  grid-template-columns: 1fr;
-  min-height: 85vh;
-  margin-bottom: 3rem;
-}
-
-.heroMedia {
-  grid-row: 1 / -1;
-  grid-column: 1 / -1;
-  min-height: inherit;
-}
-
-.heroPicture {
-  display: block;
+.introSection,
+.favoriteSection,
+.faqSection {
   width: 100%;
-  height: 100%;
+  margin: 0 auto;
 }
 
-.heroImage {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.introSection {
+  padding-top: 1rem;
+  padding-bottom: 2rem;
 }
 
-.heroContent {
-  grid-row: 1 / -1;
-  grid-column: 1 / -1;
-  align-self: end;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 3rem 4rem;
-  width: 100%;
-}
-
-.heroContent h1 {
-  text-align: left;
-  margin-bottom: 0.2em;
-  font-size: clamp(1.8rem, 4vw, 4em);
-}
-
-.homeSubtitle {
-  text-align: left;
+.introSection h1 {
   margin-bottom: 0.5em;
 }
 
-.heroBottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 2rem;
-}
-
-.homePageIntro {
-  max-width: 60%;
-  font-size: 1.4rem;
-}
-
-.hiroShopLink {
-  text-decoration: none;
-  padding: 0.3rem 0.8rem;
-  border-radius: 0.5em;
-  color: var(--dark-orange);
-  font-weight: lighter;
-  font-size: 2em;
-  white-space: nowrap;
-  transition: all 0.3s ease-in-out;
-}
-
-.hiroShopLink svg {
-  display: inline-block;
-    max-width: 1rem;
-
-}
-
-.hiroShopLink:hover {
-  /* background: var(--dark-orange); */
-  color: var(--dark-green);
-  /* box-shadow: 0 0 10px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.1); */
-}
-
-.breadcrumb {
-  padding: 0.6em;
-}
-
-.breadcrumb p {
+.introSection p {
   margin: 0;
+  color: var(--dark-green);
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.55;
 }
 
-.shoppingCategories svg{
-  display: inline-block;
-  color: var(--light-green);
-  max-width: 1rem;
+.favoriteSection {
+  padding-top: 1rem;
+  padding-bottom: 2.5rem;
 }
 
-.shoppingCategories {
-  display: flex;
-  flex-wrap: wrap;
+.favoriteSection h2 {
+  margin: 0;
+  color: var(--dark-green);
+  text-align: center;
+}
+
+.faqSection {
+  padding-bottom: 3rem;
+  text-align: center;
+}
+
+.faqLink {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 2em;
-}
-
-.shoppingCategory {
-  flex: 0 1 23%;
-}
-
-.shoppingCategory a {
+  gap: 0.15rem;
+  color: var(--dark-orange);
+  font-size: clamp(1.35rem, 2.6vw, 2.25rem);
+  font-weight: 300;
+  line-height: 1.1;
   text-decoration: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+}
+
+.faqLink:hover {
+  color: var(--dark-green);
+}
+
+.faqArrowGroup {
+  display: inline-flex;
   align-items: center;
-  border: 1px solid var(--light-green);
-  border-radius: 0.5em;
-  padding: 1.2em;
-}
-
-.shoppingCategory a:hover {
-  background-color: var(--light-green-transparent);
-}
-
-.shoppingCategoryImageContainer {
-  flex: 1 0 300px;
-  min-width: 100%;
-  border-radius: 0.5em;
-  overflow: hidden;
-  max-width: 15%;
-}
-
-.shoppingCategoryImageContainer :global(img) {
-  width: 100%;
-  height: auto;
-}
-
-.categoryDescription {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.shoppingCategory p {
-  font-size: 1.4rem;
-  font-weight: normal;
-  color: #003427;
-}
-
-p.learnMorelink{
-  color: var(--light-green);
-  align-self: flex-end;
-  margin-top: 0.5em;
+  margin-left: 0.2rem;
+  letter-spacing: 0;
 }
 
 @media screen and (max-width: 768px) {
-
-  .heroSection {
-    min-height: 60vh;
-    margin-bottom: 2em;
-  }
-
-  .heroContent {
-    padding: 1.5rem;
-    gap: 0.5rem;
-  }
-
-  .heroContent h1 {
-    font-size: 1.8rem;
-  }
-
-  .heroBottom {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .homePageIntro {
-    max-width: 100%;
-    font-size: 1.1rem;
-  }
-
-  .hiroShopLink {
-    align-self: flex-end;
-    font-size: 1.5em;
-  }
-
-  .shoppingCategories {
-    flex-direction: column;
-  }
-
-  .shoppingCategoryy {
-    flex: 1 0 100%;
-  }
-
-  .shoppingCategoryImageContainer {
-    max-width: 100%;
-  }
-
-  .shoppingCategory a {
-    border: none;
-    border-radius: none;
-  }
-
-  .shoppingCategory::after {
-    content: '';
-    display: block;
-    width: 50%;
-    height: 1px;
-    background-color: var(--light-green);
-    margin: 1em auto 0;
-  }
 }

@@ -1,13 +1,23 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
+import { requireApiAuth } from '../../_lib/auth';
+
 export async function POST(request) {
   try {
+    const auth = requireApiAuth(request);
+
+    if (!auth.ok) {
+      return NextResponse.json({ message: auth.message }, { status: auth.status });
+    }
+
     const body = await request.json().catch(() => ({}));
     const productId = typeof body?.productId === 'string' ? body.productId.trim() : '';
 
     revalidateTag('products');
+    revalidateTag('homepage-featured-products');
     revalidatePath('/products');
+    revalidatePath('/');
 
     if (productId) {
       revalidatePath(`/products/${productId}`);
