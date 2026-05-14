@@ -28,7 +28,6 @@ describe('sitemap', () => {
   it('adds static and product entries for the production sitemap', async () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
-    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://happycolors.eu/api');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
@@ -45,7 +44,7 @@ describe('sitemap', () => {
     const entries = await sitemap();
 
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/products', {
-      next: { revalidate: 3600 },
+      next: { revalidate: 3600, tags: ['products'] },
     });
     expect(entries).toEqual([
       {
@@ -101,6 +100,9 @@ describe('sitemap', () => {
     const { default: sitemap } = await import('../../../src/app/sitemap.js');
     const entries = await sitemap();
 
+    expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/products', {
+      next: { revalidate: 3600, tags: ['products'] },
+    });
     expect(entries).toHaveLength(5);
     expect(entries.map((entry) => entry.url)).toEqual([
       'https://happycolors.eu/',

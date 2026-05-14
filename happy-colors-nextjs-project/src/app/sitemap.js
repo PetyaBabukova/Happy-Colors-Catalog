@@ -4,9 +4,10 @@ import {
   PROD_SITE_URL,
   shouldExposeSitemap,
 } from '@/config/siteSeo';
-import baseURL from '@/config';
 
 export const revalidate = 3600;
+
+const PRODUCTS_API_URL = `${PROD_SITE_URL}/api/products`;
 
 export default async function sitemap() {
   if (!shouldExposeSitemap) {
@@ -18,8 +19,8 @@ export default async function sitemap() {
   let productEntries = [];
 
   try {
-    const res = await fetch(`${baseURL}/products`, {
-      next: { revalidate: 3600 },
+    const res = await fetch(PRODUCTS_API_URL, {
+      next: { revalidate: 3600, tags: ['products'] },
     });
 
     if (res.ok) {
