@@ -44,6 +44,8 @@ describe('products integration', () => {
       title: 'Created Product',
       owner: String(owner._id),
     });
+    expect(res.body.createdAt).toBeTruthy();
+    expect(res.body.updatedAt).toBeTruthy();
   });
 
   it('rejects product creation without authentication', async () => {

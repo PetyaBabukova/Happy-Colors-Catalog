@@ -30,70 +30,73 @@ const productVideoSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const productSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, "Title is required!"],
-  },
-  description: {
-    type: String,
-    required: [true, "Description is required!"],
-  },
-  price: {
-    type: Number,
-    required: [true, "Price is required!"],
-  },
-  imageUrl: {
-    type: String,
-    default: '',
-  },
-  imageUrls: {
-    type: [String],
-    default: [],
-  },
-  videos: {
-    type: [productVideoSchema],
-    default: [],
-  },
-  category: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Category',
-    required: [true, "Category is required!"],
-  },
-  availability: {
-    type: String,
-    enum: ['available', 'unavailable'],
-    default: 'available',
-    required: true,
-  },
-  isHomepageFeatured: {
-    type: Boolean,
-    default: false,
-    index: true,
-  },
-  homepageFeaturedOrder: {
-    type: Number,
-    default: 0,
-  },
-  feedback: [
-    {
-      name: String,
-      comment: String,
-      rating: Number,
-    }
-  ],
-  accessories: [
-    {
+const productSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: [true, "Title is required!"],
+    },
+    description: {
+      type: String,
+      required: [true, "Description is required!"],
+    },
+    price: {
+      type: Number,
+      required: [true, "Price is required!"],
+    },
+    imageUrl: {
+      type: String,
+      default: '',
+    },
+    imageUrls: {
+      type: [String],
+      default: [],
+    },
+    videos: {
+      type: [productVideoSchema],
+      default: [],
+    },
+    category: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Accessory'
-    }
-  ],
-  owner: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, "Owner is required!"],
+      ref: 'Category',
+      required: [true, "Category is required!"],
+    },
+    availability: {
+      type: String,
+      enum: ['available', 'unavailable'],
+      default: 'available',
+      required: true,
+    },
+    isHomepageFeatured: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    homepageFeaturedOrder: {
+      type: Number,
+      default: 0,
+    },
+    feedback: [
+      {
+        name: String,
+        comment: String,
+        rating: Number,
+      }
+    ],
+    accessories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Accessory'
+      }
+    ],
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, "Owner is required!"],
+    },
   },
-});
+  { timestamps: true }
+);
 
 productSchema.index({ isHomepageFeatured: 1, homepageFeaturedOrder: 1, _id: 1 });
 
