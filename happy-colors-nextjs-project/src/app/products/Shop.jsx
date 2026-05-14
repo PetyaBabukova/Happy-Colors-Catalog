@@ -39,7 +39,7 @@ if (grouped['Други']) {
   return (
     <>
     <section className={styles.shopPage}>
-      <h1 className={styles.shopPageTitle}>Плетени играчки, аксесоари и декорация за дома</h1>
+      <h1 className={styles.shopPageTitle}>Плетени играчки, аксесоари и декорация</h1>
 
       <section className={`${styles.categories} pageInline`}>
         {categories.map((category) => (

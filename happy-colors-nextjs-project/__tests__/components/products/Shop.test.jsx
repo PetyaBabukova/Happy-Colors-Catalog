@@ -19,6 +19,12 @@ describe('Shop', () => {
   it('renders no category sections for an empty product list', () => {
     render(<Shop products={[]} />);
 
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Плетени играчки, аксесоари и декорация',
+      })
+    ).toBeInTheDocument();
     expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0);
     expect(screen.queryAllByTestId(/product-/)).toHaveLength(0);
   });

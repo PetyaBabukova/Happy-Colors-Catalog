@@ -65,7 +65,12 @@ describe('HomeHeroCarousel', () => {
   it('renders fallback hero when there are no banners', () => {
     render(<HomeHeroCarousel banners={[]} />);
 
-    expect(screen.getByRole('heading', { name: 'Плетени играчки, аксесоари и декорация за дома' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        level: 2,
+        name: 'Плетени играчки, аксесоари и декорация за дома',
+      })
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Каталог' })).toHaveAttribute('href', '/products');
   });
 });

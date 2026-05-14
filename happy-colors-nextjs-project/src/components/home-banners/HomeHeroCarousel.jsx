@@ -36,7 +36,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
     return (
       <section className={`${styles.emptyHero} pageInline`}>
         <div className={styles.fallbackContent}>
-          <h1>Плетени играчки, аксесоари и декорация за дома</h1>
+          <h2>Плетени играчки, аксесоари и декорация за дома</h2>
           <p>Ръчно изработени изделия за подарък, уют и специални поводи.</p>
           <Link href="/products" className={styles.ctaLink}>Каталог</Link>
         </div>
