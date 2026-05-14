@@ -21,7 +21,7 @@ export default async function Home() {
       <HomeHeroCarousel banners={banners} />
 
       <section className={`${styles.introSection} pageInline`}>
-        <h1>Плетени играчки, аксесоари и декорация за дома</h1>
+        <h1>Ръчно изработени плетени играчки, аксесоари и декорация за дома</h1>
         <p>{INTRO_TEXT}</p>
       </section>
 

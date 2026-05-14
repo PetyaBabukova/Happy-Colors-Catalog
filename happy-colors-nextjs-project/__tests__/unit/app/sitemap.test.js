@@ -67,6 +67,12 @@ describe('sitemap', () => {
         priority: 0.7,
       },
       {
+        url: 'https://happycolors.eu/faq',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.6,
+      },
+      {
         url: 'https://happycolors.eu/contacts',
         lastModified: new Date('2026-05-07T09:00:00.000Z'),
         changeFrequency: 'monthly',
@@ -95,11 +101,12 @@ describe('sitemap', () => {
     const { default: sitemap } = await import('../../../src/app/sitemap.js');
     const entries = await sitemap();
 
-    expect(entries).toHaveLength(4);
+    expect(entries).toHaveLength(5);
     expect(entries.map((entry) => entry.url)).toEqual([
       'https://happycolors.eu/',
       'https://happycolors.eu/products',
       'https://happycolors.eu/aboutus',
+      'https://happycolors.eu/faq',
       'https://happycolors.eu/contacts',
     ]);
   });

@@ -15,14 +15,14 @@ export default function AboutUs() {
   return (
     <>
       <section className={styles.aboutSection}>
-        <div className={styles.aboutImage} aria-hidden="true">
+        <div className={styles.aboutImage}>
           <picture className={styles.aboutPicture}>
             <source media="(max-width: 768px)" srcSet="/aboutUs_Hero_banner_mobile.webp" />
             <source media="(min-width: 769px)" srcSet="/aboutUs_Hero_banner_laptop.webp" />
             <img
               className={styles.aboutHeroImage}
               src="/aboutUs_Hero_banner_laptop.webp"
-              alt=""
+              alt="Плетени играчки и ръчно изработени изделия от Happy Colors"
               fetchPriority="high"
             />
           </picture>

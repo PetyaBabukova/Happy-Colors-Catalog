@@ -35,6 +35,7 @@ describe('/api/revalidate/products', () => {
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
     expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
   });
 
@@ -59,6 +60,7 @@ describe('/api/revalidate/products', () => {
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
     expect(revalidatePath).not.toHaveBeenCalledWith('/products/undefined');
   });
 

@@ -18,6 +18,7 @@ export async function POST(request) {
     revalidateTag('homepage-featured-products');
     revalidatePath('/products');
     revalidatePath('/');
+    revalidatePath('/sitemap.xml');
 
     if (productId) {
       revalidatePath(`/products/${productId}`);

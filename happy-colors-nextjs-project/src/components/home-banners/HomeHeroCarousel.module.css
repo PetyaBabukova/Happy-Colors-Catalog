@@ -14,6 +14,16 @@
   background: var(--lightest-green);
 }
 
+.mediaFrame {
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.mediaFrameDragging {
+  cursor: grabbing;
+}
+
 .emptyHero {
   display: flex;
   align-items: flex-end;
@@ -57,7 +67,7 @@
 }
 
 .content h2,
-.fallbackContent h1 {
+.fallbackContent h2 {
   margin: 0;
   color: var(--dark-green);
   font-size: clamp(1.35rem, 2.6vw, 2.25rem);
