@@ -44,6 +44,22 @@ describe('HomeHeroCarousel', () => {
     expect(screen.getByRole('link', { name: 'Виж декорация' })).toHaveAttribute('href', '/search?q=декорация');
   });
 
+  it('switches slides with a horizontal pointer drag', () => {
+    render(<HomeHeroCarousel banners={banners} />);
+
+    const mediaFrame = screen.getByAltText('Животинки').parentElement;
+    const pointerDown = new Event('pointerdown', { bubbles: true });
+    const pointerUp = new Event('pointerup', { bubbles: true });
+
+    Object.assign(pointerDown, { pointerId: 1, clientX: 240 });
+    Object.assign(pointerUp, { pointerId: 1, clientX: 120 });
+
+    fireEvent(mediaFrame, pointerDown);
+    fireEvent(mediaFrame, pointerUp);
+
+    expect(screen.getByRole('heading', { name: 'Декорация' })).toBeInTheDocument();
+  });
+
   it('shows edit and delete controls only for authenticated users', async () => {
     const { mockRouterPush } = render(<HomeHeroCarousel banners={banners} />, {
       user: { _id: 'user-1', email: 'owner@example.com' },
