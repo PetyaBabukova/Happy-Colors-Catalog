@@ -1,0 +1,188 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #c7c7c7;
+  border-radius: 4px;
+  background: white;
+  overflow: hidden;
+}
+
+.wrapperInvalid {
+  border-color: var(--dark-orange);
+  background: var(--lighter-orange);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #d6d6d6;
+  background: #fbfbfb;
+}
+
+/*
+ * Bumped specificity (.toolbar .toolbarButton instead of .toolbarButton) and
+ * explicit resets for properties the global `button {}` rule in globals.css
+ * forces (width, background-color, color, padding, font-size, font-weight,
+ * align-self, border-radius). Without these, the global reset wins and the
+ * toolbar collapses to two huge dark-green columns.
+ */
+.toolbar .toolbarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  min-width: 2rem;
+  max-width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  background-color: transparent;
+  color: #444;
+  font-size: 1rem;
+  font-weight: 400;
+  align-self: auto;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+  box-shadow: none;
+}
+
+.toolbar .toolbarButton:hover:not(:disabled),
+.toolbar .toolbarButton:focus-visible {
+  background: #e8e8e8;
+  background-color: #e8e8e8;
+  color: var(--dark-green);
+  outline: none;
+  box-shadow: none;
+}
+
+.toolbar .toolbarButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar .toolbarButton svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.toolbar .active {
+  background: var(--dark-green);
+  background-color: var(--dark-green);
+  color: white;
+}
+
+.toolbar .active:hover:not(:disabled),
+.toolbar .active:focus-visible {
+  background: var(--dark-green);
+  background-color: var(--dark-green);
+  color: white;
+}
+
+.toolbar .separator {
+  display: inline-block;
+  width: 1px;
+  height: 1.4rem;
+  margin: 0 0.3rem;
+  background: #d6d6d6;
+}
+
+.editorHost {
+  display: flex;
+  flex-direction: column;
+}
+
+.editorPlaceholder {
+  min-height: 12rem;
+  padding: 0.9rem 1rem;
+}
+
+.wrapper :global(.ProseMirror) {
+  min-height: 12rem;
+  padding: 0.9rem 1rem;
+  outline: none;
+  color: var(--dark-green);
+  font-style: normal;
+  line-height: 1.55;
+}
+
+.wrapper :global(.ProseMirror:focus) {
+  outline: none;
+}
+
+.wrapper :global(.ProseMirror p) {
+  margin: 0 0 0.6em 0;
+  text-align: inherit;
+}
+
+.wrapper :global(.ProseMirror p:last-child) {
+  margin-bottom: 0;
+}
+
+.wrapper :global(.ProseMirror h2) {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em 0;
+  text-align: inherit;
+  line-height: 1.3;
+}
+
+.wrapper :global(.ProseMirror h3) {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em 0;
+  text-align: inherit;
+  line-height: 1.3;
+}
+
+.wrapper :global(.ProseMirror h4) {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em 0;
+  text-align: inherit;
+  line-height: 1.3;
+}
+
+.wrapper :global(.ProseMirror ul) {
+  padding-left: 1.5rem;
+  margin: 0 0 0.6em 0;
+  list-style: disc;
+}
+
+.wrapper :global(.ProseMirror ol) {
+  padding-left: 1.5rem;
+  margin: 0 0 0.6em 0;
+  list-style: decimal;
+}
+
+.wrapper :global(.ProseMirror li) {
+  margin-bottom: 0.2em;
+}
+
+.wrapper :global(.ProseMirror li > p) {
+  margin: 0;
+}
+
+.wrapper :global(.ProseMirror a) {
+  color: var(--dark-orange);
+  text-decoration: underline;
+}
+
+.wrapper :global(.ProseMirror strong) {
+  font-weight: 700;
+}
+
+.wrapper :global(.ProseMirror em) {
+  font-style: italic;
+}
+
+.wrapper :global(.ProseMirror u) {
+  text-decoration: underline;
+}

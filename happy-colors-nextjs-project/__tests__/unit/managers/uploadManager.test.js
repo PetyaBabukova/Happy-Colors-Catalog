@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteSignedUploadedFile,
+  uploadBlogArticleImage,
   uploadImageToBucket,
   uploadImagesToBucket,
   uploadSignedFile,
@@ -111,6 +112,57 @@ describe('uploadManager', () => {
     );
 
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('uploads a blog article image through the blog image route', async () => {
+    const file = buildFile();
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          kind: 'hero',
+          imageUrl: 'https://cdn.test/blog/articles/hero/article.webp',
+          objectName: 'blog/articles/hero/article.webp',
+          deleteToken: 'hero-token',
+        },
+      })
+    );
+
+    await expect(uploadBlogArticleImage({ kind: 'hero', file })).resolves.toEqual({
+      kind: 'hero',
+      imageUrl: 'https://cdn.test/blog/articles/hero/article.webp',
+      objectName: 'blog/articles/hero/article.webp',
+      deleteToken: 'hero-token',
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/api/blog/images', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('rejects unsupported blog image kinds before calling the network', async () => {
+    await expect(uploadBlogArticleImage({ kind: 'banner', file: buildFile() })).rejects.toThrow(
+      'Unsupported blog image upload type.'
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('uses backend error messages from blog image upload failures', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'File too large' } }));
+
+    await expect(uploadBlogArticleImage({ kind: 'hero', file: buildFile() })).rejects.toThrow('File too large');
+  });
+
+  it('throws an explicit error when blog image upload response is incomplete', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          imageUrl: 'https://cdn.test/blog/articles/hero/article.webp',
+        },
+      })
+    );
+
+    await expect(uploadBlogArticleImage({ kind: 'hero', file: buildFile() })).rejects.toThrow(
+      'Unexpected response from blog image upload route.'
+    );
   });
 
   it('does not call delete route when objectName is empty', async () => {

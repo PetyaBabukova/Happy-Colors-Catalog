@@ -7,12 +7,16 @@ const file = vi.fn(() => ({ delete: deleteFile }));
 const bucket = vi.fn(() => ({ file }));
 const getStorage = vi.fn(() => ({ bucket }));
 const verifyUploadDeleteToken = vi.fn(() => ({ ok: true }));
-const findOne = vi.fn();
+const productFindOne = vi.fn();
+const blogArticleFindOne = vi.fn();
+const collection = vi.fn((name) => ({
+  findOne: name === 'blogarticles' ? blogArticleFindOne : productFindOne,
+}));
 const connectToMongo = vi.fn(() =>
   Promise.resolve({
     connection: {
       db: {
-        collection: vi.fn(() => ({ findOne })),
+        collection,
       },
     },
   })
@@ -29,7 +33,9 @@ describe('/api/uploads/delete', () => {
     authResult = { ok: true, user: authUser };
     bucketName = 'test-bucket';
     deleteFile.mockResolvedValue(undefined);
-    findOne.mockResolvedValue(null);
+    collection.mockClear();
+    productFindOne.mockResolvedValue(null);
+    blogArticleFindOne.mockResolvedValue(null);
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth: vi.fn(() => authResult),
@@ -68,6 +74,25 @@ describe('/api/uploads/delete', () => {
     });
     expect(file).toHaveBeenCalledWith('products/videos/test-video.mp4');
     expect(deleteFile).toHaveBeenCalledWith({ ignoreNotFound: true });
+  });
+
+  it('deletes unattached blog image uploads with a valid delete token', async () => {
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest({
+        objectName: 'blog/articles/thumbnails/article.webp',
+        deleteToken: 'valid-token',
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(verifyUploadDeleteToken).toHaveBeenCalledWith({
+      token: 'valid-token',
+      objectName: 'blog/articles/thumbnails/article.webp',
+      userId: 'user-1',
+    });
+    expect(file).toHaveBeenCalledWith('blog/articles/thumbnails/article.webp');
   });
 
   it('rejects unauthorized requests', async () => {
@@ -109,9 +134,34 @@ describe('/api/uploads/delete', () => {
   it('rejects assets already attached to products', async () => {
     const { POST } = await loadRoute();
 
-    findOne.mockResolvedValueOnce({ _id: 'product-1' });
+    productFindOne.mockResolvedValueOnce({ _id: 'product-1' });
     await expect(
       POST(createJsonRequest({ objectName: 'products/posters/poster.webp', deleteToken: 'valid-token' }))
+    ).resolves.toMatchObject({ status: 409 });
+    expect(deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects assets already attached to blog articles', async () => {
+    const { POST } = await loadRoute();
+
+    blogArticleFindOne.mockResolvedValueOnce({ _id: 'blog-article-1' });
+    await expect(
+      POST(createJsonRequest({ objectName: 'blog/articles/hero/article.webp', deleteToken: 'valid-token' }))
+    ).resolves.toMatchObject({ status: 409 });
+    expect(deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects thumbnail assets already attached to blog articles', async () => {
+    const { POST } = await loadRoute();
+
+    blogArticleFindOne.mockResolvedValueOnce({ _id: 'blog-article-1' });
+    await expect(
+      POST(
+        createJsonRequest({
+          objectName: 'blog/articles/thumbnails/article.webp',
+          deleteToken: 'valid-token',
+        })
+      )
     ).resolves.toMatchObject({ status: 409 });
     expect(deleteFile).not.toHaveBeenCalled();
   });
