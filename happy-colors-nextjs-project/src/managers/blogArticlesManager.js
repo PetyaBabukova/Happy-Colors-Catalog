@@ -56,10 +56,7 @@ export async function invalidateBlogCaches(articleId) {
 
 export async function getBlogArticles() {
   const res = await fetch(`${baseURL}/blog-articles`, {
-    next: {
-      revalidate: 60,
-      tags: ['blog-articles'],
-    },
+    cache: 'no-store',
   });
   const data = await readOrThrow(res, 'Неуспешно зареждане на блог статиите.');
 
@@ -72,10 +69,7 @@ export async function getBlogArticles() {
 
 export async function getBlogArticleById(articleId) {
   const res = await fetch(`${baseURL}/blog-articles/${articleId}`, {
-    next: {
-      revalidate: 60,
-      tags: ['blog-articles'],
-    },
+    cache: 'no-store',
   });
 
   return readOrThrow(res, 'Неуспешно зареждане на блог статията.');

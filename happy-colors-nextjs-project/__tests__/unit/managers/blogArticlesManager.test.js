@@ -39,12 +39,12 @@ describe('blogArticlesManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       'http://localhost:3000/api/blog-articles',
-      expect.objectContaining({ next: { revalidate: 60, tags: ['blog-articles'] } })
+      expect.objectContaining({ cache: 'no-store' })
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       'http://localhost:3000/api/blog-articles/aaaaaaaaaaaaaaaaaaaaaaaa',
-      expect.objectContaining({ next: { revalidate: 60, tags: ['blog-articles'] } })
+      expect.objectContaining({ cache: 'no-store' })
     );
     expect(fetch).toHaveBeenNthCalledWith(
       3,
