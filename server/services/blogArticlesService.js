@@ -3,7 +3,6 @@ import sanitizeHtml from 'sanitize-html';
 import BlogArticle from '../models/BlogArticle.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
 
-const ARTICLE_STATUSES = new Set(['draft', 'published']);
 const CREATE_FIELDS = new Set([
   'title',
   'contentHtml',
@@ -13,7 +12,6 @@ const CREATE_FIELDS = new Set([
   'heroImageAlt',
   'seoTitle',
   'seoDescription',
-  'status',
 ]);
 const EDIT_FIELDS = new Set([
   'title',
@@ -613,7 +611,7 @@ export async function getAdminBlogArticles(userId) {
   assertUser(userId);
 
   // V1 follows the trusted-operator model: any authenticated operator can manage
-  // the full editorial queue, including drafts created by other operators.
+  // the full blog queue.
   return BlogArticle.find().sort({ updatedAt: -1 }).lean();
 }
 
@@ -652,16 +650,11 @@ export async function createBlogArticle(data, userId) {
   assertUser(userId);
 
   const picked = pickFields(data, CREATE_FIELDS);
-  const status = picked.status || 'draft';
-
-  if (!ARTICLE_STATUSES.has(status)) {
-    throw createError('Article status is invalid.');
-  }
 
   const article = new BlogArticle({
     ...normalizeArticleFields(picked, { requireAll: true }),
-    status,
-    publishedAt: status === 'published' ? new Date() : null,
+    status: 'published',
+    publishedAt: new Date(),
     owner: userId,
   });
   const savedArticle = await article.save();
@@ -673,7 +666,7 @@ export async function editBlogArticle(articleId, data, userId) {
   assertUser(userId);
 
   if (hasOwn(data, 'status')) {
-    throw createError('Use the status endpoint to change article status.');
+    throw createError('Article status cannot be changed.');
   }
 
   const article = await findArticleOrThrow(articleId);
@@ -697,25 +690,6 @@ export async function editBlogArticle(articleId, data, userId) {
       excludeArticleId: article._id,
     });
   }
-
-  return serializeArticle(article);
-}
-
-export async function updateBlogArticleStatus(articleId, status, userId) {
-  assertUser(userId);
-
-  if (!ARTICLE_STATUSES.has(status)) {
-    throw createError('Article status is invalid.');
-  }
-
-  const article = await findArticleOrThrow(articleId);
-  article.status = status;
-
-  if (status === 'published' && !article.publishedAt) {
-    article.publishedAt = new Date();
-  }
-
-  await article.save();
 
   return serializeArticle(article);
 }

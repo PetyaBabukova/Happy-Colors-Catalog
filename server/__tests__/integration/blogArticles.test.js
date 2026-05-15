@@ -10,7 +10,7 @@ import {
   createUser,
 } from './factories.js';
 
-function publishedFields(overrides = {}) {
+function articleFields(overrides = {}) {
   return {
     status: 'published',
     publishedAt: new Date('2026-05-01T10:00:00.000Z'),
@@ -19,26 +19,25 @@ function publishedFields(overrides = {}) {
 }
 
 describe('blog articles integration', () => {
-  it('lists only published, non-archived articles publicly newest-first', async () => {
+  it('lists non-archived articles publicly newest-first', async () => {
     const app = createExpressApp();
     const owner = await createUser();
     const oldPublished = await createBlogArticle(
-      publishedFields({
+      articleFields({
         owner,
         title: 'Old published',
         publishedAt: new Date('2026-05-01T10:00:00.000Z'),
       })
     );
     const newestPublished = await createBlogArticle(
-      publishedFields({
+      articleFields({
         owner,
         title: 'Newest published',
         publishedAt: new Date('2026-05-02T10:00:00.000Z'),
       })
     );
-    await createBlogArticle({ owner, title: 'Draft article', status: 'draft' });
     await createBlogArticle(
-      publishedFields({
+      articleFields({
         owner,
         title: 'Archived article',
         archivedAt: new Date('2026-05-03T10:00:00.000Z'),
@@ -64,13 +63,12 @@ describe('blog articles integration', () => {
     expect(res.body[0]).not.toHaveProperty('archivedAt');
   });
 
-  it('returns public detail only for published, non-archived articles', async () => {
+  it('returns public detail only for non-archived articles', async () => {
     const app = createExpressApp();
     const owner = await createUser();
-    const published = await createBlogArticle(publishedFields({ owner, title: 'Public article' }));
-    const draft = await createBlogArticle({ owner, status: 'draft' });
+    const published = await createBlogArticle(articleFields({ owner, title: 'Public article' }));
     const archived = await createBlogArticle(
-      publishedFields({ owner, archivedAt: new Date('2026-05-03T10:00:00.000Z') })
+      articleFields({ owner, archivedAt: new Date('2026-05-03T10:00:00.000Z') })
     );
 
     const res = await request(app).get(`/blog-articles/${published._id}`).expect(200);
@@ -83,7 +81,6 @@ describe('blog articles integration', () => {
     expect(res.body).not.toHaveProperty('archivedAt');
 
     await request(app).get('/blog-articles/not-a-valid-id').expect(404);
-    await request(app).get(`/blog-articles/${draft._id}`).expect(404);
     await request(app).get(`/blog-articles/${archived._id}`).expect(404);
   });
 
@@ -91,8 +88,8 @@ describe('blog articles integration', () => {
     const app = createExpressApp();
     const owner = await createUser();
     const cookie = authCookie(owner);
-    const draft = await createBlogArticle({ owner, title: 'Draft in admin' });
-    const published = await createBlogArticle(publishedFields({ owner, title: 'Published in admin' }));
+    const article = await createBlogArticle({ owner, title: 'Article in admin' });
+    const published = await createBlogArticle(articleFields({ owner, title: 'Published in admin' }));
     const archived = await createBlogArticle({
       owner,
       title: 'Archived in admin',
@@ -100,18 +97,18 @@ describe('blog articles integration', () => {
     });
 
     await request(app).get('/blog-articles/admin').expect(401);
-    await request(app).get(`/blog-articles/admin/${draft._id}`).expect(401);
+    await request(app).get(`/blog-articles/admin/${article._id}`).expect(401);
 
     const listRes = await request(app).get('/blog-articles/admin').set('Cookie', cookie).expect(200);
     expect(listRes.body.map((article) => article.title)).toEqual(
-      expect.arrayContaining(['Draft in admin', 'Published in admin', 'Archived in admin'])
+      expect.arrayContaining(['Article in admin', 'Published in admin', 'Archived in admin'])
     );
 
     const detailRes = await request(app)
-      .get(`/blog-articles/admin/${draft._id}`)
+      .get(`/blog-articles/admin/${article._id}`)
       .set('Cookie', cookie)
       .expect(200);
-    expect(detailRes.body.title).toBe('Draft in admin');
+    expect(detailRes.body.title).toBe('Article in admin');
     expect(listRes.body.find((article) => article._id === String(archived._id))).toBeTruthy();
     expect(listRes.body.find((article) => article._id === String(published._id))).toBeTruthy();
   });
@@ -120,7 +117,7 @@ describe('blog articles integration', () => {
     const app = createExpressApp();
     const owner = await createUser();
     const payload = {
-      ...buildBlogArticle({ owner, status: 'published' }),
+      ...buildBlogArticle({ owner, status: 'draft' }),
       owner: 'client-owner-is-ignored',
       excerpt: 'client excerpt is ignored',
       newsletterReady: true,
@@ -150,7 +147,7 @@ describe('blog articles integration', () => {
     expect(res.body.contentHtml).not.toContain('position');
   });
 
-  it('creates drafts without publishedAt when status is omitted', async () => {
+  it('creates published articles when status is omitted', async () => {
     const app = createExpressApp();
     const owner = await createUser();
 
@@ -160,8 +157,8 @@ describe('blog articles integration', () => {
       .send(buildBlogArticle({ owner, status: undefined }))
       .expect(201);
 
-    expect(res.body.status).toBe('draft');
-    expect(res.body.publishedAt).toBeNull();
+    expect(res.body.status).toBe('published');
+    expect(res.body.publishedAt).toBeTruthy();
   });
 
   it('rejects invalid create payloads and image URLs', async () => {
@@ -222,7 +219,7 @@ describe('blog articles integration', () => {
     const owner = await createUser();
     const cookie = authCookie(owner);
     const article = await createBlogArticle(
-      publishedFields({
+      articleFields({
         owner,
         title: 'Original title',
         publishedAt: new Date('2026-05-01T10:00:00.000Z'),
@@ -268,60 +265,22 @@ describe('blog articles integration', () => {
     expect(new Date(res.body.publishedAt).toISOString()).toBe(originalPublishedAt);
   });
 
-  it('patches status while preserving the first publishedAt timestamp', async () => {
-    const app = createExpressApp();
-    const owner = await createUser();
-    const cookie = authCookie(owner);
-    const draft = await createBlogArticle({ owner, status: 'draft' });
-
-    await request(app).patch(`/blog-articles/${draft._id}/status`).send({ status: 'published' }).expect(401);
-
-    await request(app)
-      .patch(`/blog-articles/${draft._id}/status`)
-      .set('Cookie', cookie)
-      .send({ status: 'archived' })
-      .expect(400);
-
-    const publishRes = await request(app)
-      .patch(`/blog-articles/${draft._id}/status`)
-      .set('Cookie', cookie)
-      .send({ status: 'published' })
-      .expect(200);
-    const firstPublishedAt = publishRes.body.publishedAt;
-
-    const draftRes = await request(app)
-      .patch(`/blog-articles/${draft._id}/status`)
-      .set('Cookie', cookie)
-      .send({ status: 'draft' })
-      .expect(200);
-    expect(draftRes.body.publishedAt).toBe(firstPublishedAt);
-
-    const republishRes = await request(app)
-      .patch(`/blog-articles/${draft._id}/status`)
-      .set('Cookie', cookie)
-      .send({ status: 'published' })
-      .expect(200);
-    expect(republishRes.body.publishedAt).toBe(firstPublishedAt);
-  });
-
   it('rate limits blog article mutation routes through the shared bucket', async () => {
     const app = createExpressApp();
     const owner = await createUser();
     const cookie = authCookie(owner);
-    const article = await createBlogArticle({ owner, status: 'draft' });
+    const article = await createBlogArticle({ owner });
 
     for (let index = 0; index < 20; index += 1) {
       await request(app)
-        .patch(`/blog-articles/${article._id}/status`)
+        .patch(`/blog-articles/${article._id}/archive`)
         .set('Cookie', cookie)
-        .send({ status: index % 2 === 0 ? 'published' : 'draft' })
         .expect(200);
     }
 
     await request(app)
-      .patch(`/blog-articles/${article._id}/status`)
+      .patch(`/blog-articles/${article._id}/archive`)
       .set('Cookie', cookie)
-      .send({ status: 'published' })
       .expect(429);
   });
 
@@ -329,7 +288,7 @@ describe('blog articles integration', () => {
     const app = createExpressApp();
     const owner = await createUser();
     const cookie = authCookie(owner);
-    const article = await createBlogArticle(publishedFields({ owner }));
+    const article = await createBlogArticle(articleFields({ owner }));
 
     await request(app).patch(`/blog-articles/${article._id}/archive`).expect(401);
     await request(app).patch(`/blog-articles/${article._id}/restore`).expect(401);

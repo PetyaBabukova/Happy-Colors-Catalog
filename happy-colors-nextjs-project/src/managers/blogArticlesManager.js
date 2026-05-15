@@ -14,7 +14,7 @@ const EDIT_FIELDS = [
   'seoTitle',
   'seoDescription',
 ];
-const CREATE_FIELDS = [...EDIT_FIELDS, 'status'];
+const CREATE_FIELDS = [...EDIT_FIELDS];
 
 function pickFields(values = {}, fields) {
   return fields.reduce((payload, field) => {
@@ -126,20 +126,6 @@ export async function editBlogArticle(articleId, values) {
     body: JSON.stringify(pickFields(values, EDIT_FIELDS)),
   });
   const article = await readOrThrow(res, 'Неуспешно редактиране на блог статия.');
-
-  await invalidateBlogCaches(articleId);
-
-  return article;
-}
-
-export async function updateBlogArticleStatus(articleId, status) {
-  const res = await fetch(`${baseURL}/blog-articles/${articleId}/status`, {
-    method: 'PATCH',
-    headers: JSON_HEADERS,
-    credentials: 'include',
-    body: JSON.stringify({ status }),
-  });
-  const article = await readOrThrow(res, 'Неуспешна промяна на статуса на блог статия.');
 
   await invalidateBlogCaches(articleId);
 

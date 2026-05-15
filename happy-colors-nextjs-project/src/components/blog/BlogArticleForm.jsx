@@ -27,7 +27,6 @@ const INITIAL_VALUES = {
   heroImageAlt: '',
   seoTitle: '',
   seoDescription: '',
-  status: 'published',
 };
 
 function normalizeValues(initialValues = {}) {
@@ -43,7 +42,6 @@ function normalizeValues(initialValues = {}) {
     heroImageAlt: initialValues.heroImageAlt || '',
     seoTitle: initialValues.seoTitle || '',
     seoDescription: initialValues.seoDescription || '',
-    status: initialValues.status || 'published',
   };
 }
 
@@ -61,7 +59,6 @@ function validate(values) {
   if (!values.thumbnailImageUrl) invalidFields.push('thumbnailImageUrl');
   if (!values.heroImageAlt.trim()) invalidFields.push('heroImageAlt');
   if (values.heroImageAlt.trim().length > FIELD_LIMITS.heroImageAlt) invalidFields.push('heroImageAlt');
-  if (!['draft', 'published'].includes(values.status)) invalidFields.push('status');
   if (values.seoTitle.trim().length > FIELD_LIMITS.seoTitle) invalidFields.push('seoTitle');
   if (values.seoDescription.trim().length > FIELD_LIMITS.seoDescription) invalidFields.push('seoDescription');
 
@@ -212,7 +209,6 @@ export default function BlogArticleForm({
       heroImageAlt: values.heroImageAlt.trim(),
       seoTitle: values.seoTitle.trim(),
       seoDescription: values.seoDescription.trim(),
-      status: values.status,
     };
 
     try {

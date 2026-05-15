@@ -57,8 +57,8 @@ const blogArticleSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['draft', 'published'],
-      default: 'draft',
+      enum: ['published'],
+      default: 'published',
       index: true,
     },
     publishedAt: {

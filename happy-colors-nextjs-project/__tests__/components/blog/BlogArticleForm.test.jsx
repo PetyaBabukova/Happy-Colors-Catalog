@@ -106,7 +106,6 @@ describe('BlogArticleForm', () => {
       heroImageAlt: 'Цветна снимка',
       seoTitle: 'SEO',
       seoDescription: 'SEO описание',
-      status: 'published',
     });
     expect(payload).not.toHaveProperty('owner');
     expect(payload).not.toHaveProperty('excerpt');
@@ -126,7 +125,6 @@ describe('BlogArticleForm', () => {
           heroImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/hero/old.webp',
           thumbnailImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/old.webp',
           heroImageAlt: 'Стара снимка',
-          status: 'published',
           archivedAt: '2026-05-15T00:00:00.000Z',
         }}
         onSubmit={vi.fn()}

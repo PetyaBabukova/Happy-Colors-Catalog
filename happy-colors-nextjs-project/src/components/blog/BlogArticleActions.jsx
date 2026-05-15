@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { archiveBlogArticle, updateBlogArticleStatus } from '@/managers/blogArticlesManager';
+import { archiveBlogArticle } from '@/managers/blogArticlesManager';
 import styles from './blogPublic.module.css';
 
 export default function BlogArticleActions({ articleId }) {
@@ -16,20 +16,6 @@ export default function BlogArticleActions({ articleId }) {
   if (!user || !articleId) {
     return null;
   }
-
-  const handlePublish = async () => {
-    setError('');
-    setBusyAction('publish');
-
-    try {
-      await updateBlogArticleStatus(articleId, 'published');
-      router.refresh();
-    } catch (err) {
-      setError(err.message || 'Неуспешно публикуване на статията.');
-    } finally {
-      setBusyAction('');
-    }
-  };
 
   const handleDelete = async () => {
     if (!window.confirm('Сигурни ли сте, че искате да изтриете тази блог статия?')) {
@@ -58,9 +44,6 @@ export default function BlogArticleActions({ articleId }) {
         </Link>
         <button type="button" onClick={handleDelete} disabled={Boolean(busyAction)}>
           {busyAction === 'delete' ? 'Изтриване...' : 'Изтрий'}
-        </button>
-        <button type="button" onClick={handlePublish} disabled={Boolean(busyAction)}>
-          {busyAction === 'publish' ? 'Публикуване...' : 'Публикувай статията'}
         </button>
       </div>
       {error && <p className={styles.articleActionError}>{error}</p>}

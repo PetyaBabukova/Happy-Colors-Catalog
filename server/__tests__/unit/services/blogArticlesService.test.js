@@ -11,7 +11,6 @@ import {
   getAdminBlogArticles,
   restoreBlogArticle,
   sanitizeArticleHtml,
-  updateBlogArticleStatus,
   validateBlogImageUrl,
   validateContentJson,
 } from '../../../services/blogArticlesService.js';
@@ -47,7 +46,6 @@ function buildArticlePayload(overrides = {}) {
     thumbnailImageUrl:
       'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/article.webp',
     heroImageAlt: 'Colorful hero image',
-    status: 'draft',
     ...overrides,
   };
 }
@@ -308,11 +306,11 @@ describe('blogArticlesService persistence behavior', () => {
     delete process.env.GCS_BUCKET_NAME;
   });
 
-  it('creates articles with owner stamping, sanitized body, contentJson, excerpt, and publishedAt rules', async () => {
+  it('creates published articles with owner stamping, sanitized body, contentJson, and excerpt', async () => {
     const ownerId = new mongoose.Types.ObjectId().toString();
     const clientOwnerId = new mongoose.Types.ObjectId().toString();
 
-    const draft = await createBlogArticle(
+    const article = await createBlogArticle(
       buildArticlePayload({
         owner: clientOwnerId,
         excerpt: 'client excerpt',
@@ -321,26 +319,16 @@ describe('blogArticlesService persistence behavior', () => {
       }),
       ownerId
     );
-    const published = await createBlogArticle(
-      buildArticlePayload({
-        title: 'Published article',
-        status: 'published',
-        heroImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/hero/published.webp',
-        thumbnailImageUrl:
-          'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/published.webp',
-      }),
-      ownerId
-    );
 
-    expect(String(draft.owner)).toBe(ownerId);
-    expect(String(draft.owner)).not.toBe(clientOwnerId);
-    expect(draft.newsletterReady).toBe(false);
-    expect(draft.contentHtml).not.toContain('script');
-    expect(draft.contentText).toBe('Hello world');
-    expect(draft.excerpt).toBe('Hello world');
-    expect(draft.contentJson).toEqual(validContentJson);
-    expect(draft.publishedAt).toBeNull();
-    expect(published.publishedAt).toBeInstanceOf(Date);
+    expect(String(article.owner)).toBe(ownerId);
+    expect(String(article.owner)).not.toBe(clientOwnerId);
+    expect(article.status).toBe('published');
+    expect(article.newsletterReady).toBe(false);
+    expect(article.contentHtml).not.toContain('script');
+    expect(article.contentText).toBe('Hello world');
+    expect(article.excerpt).toBe('Hello world');
+    expect(article.contentJson).toEqual(validContentJson);
+    expect(article.publishedAt).toBeInstanceOf(Date);
   });
 
   it('rejects missing auth and field lengths at the service boundary', async () => {
@@ -403,7 +391,7 @@ describe('blogArticlesService persistence behavior', () => {
     expect(updated.publishedAt.toISOString()).toBe(originalPublishedAt.toISOString());
   });
 
-  it('keeps status transitions, archive, restore, and admin list behavior explicit', async () => {
+  it('keeps archive, restore, and admin list behavior explicit', async () => {
     const firstOwnerId = new mongoose.Types.ObjectId().toString();
     const secondOwnerId = new mongoose.Types.ObjectId().toString();
     const first = await createBlogArticle(buildArticlePayload({ title: 'First' }), firstOwnerId);
@@ -420,14 +408,6 @@ describe('blogArticlesService persistence behavior', () => {
     await expect(getAdminBlogArticles(null)).rejects.toMatchObject({ statusCode: 401 });
     await expect(getAdminBlogArticles(firstOwnerId)).resolves.toHaveLength(2);
 
-    const published = await updateBlogArticleStatus(first._id, 'published', firstOwnerId);
-    const firstPublishedAt = published.publishedAt.toISOString();
-    const draftAgain = await updateBlogArticleStatus(first._id, 'draft', firstOwnerId);
-    const republished = await updateBlogArticleStatus(first._id, 'published', firstOwnerId);
-
-    expect(draftAgain.publishedAt.toISOString()).toBe(firstPublishedAt);
-    expect(republished.publishedAt.toISOString()).toBe(firstPublishedAt);
-
     const archived = await archiveBlogArticle(second._id, firstOwnerId);
     const secondArchive = await archiveBlogArticle(second._id, firstOwnerId);
     const restored = await restoreBlogArticle(second._id, firstOwnerId);
@@ -435,6 +415,7 @@ describe('blogArticlesService persistence behavior', () => {
     expect(archived.archivedAt).toBeInstanceOf(Date);
     expect(secondArchive.archivedAt.toISOString()).toBe(archived.archivedAt.toISOString());
     expect(restored.archivedAt).toBeNull();
-    expect(restored.status).toBe('draft');
+    expect(restored.status).toBe('published');
+    expect(first.status).toBe('published');
   });
 });

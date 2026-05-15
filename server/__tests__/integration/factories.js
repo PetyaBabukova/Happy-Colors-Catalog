@@ -107,7 +107,8 @@ export function buildBlogArticle({ owner, ...overrides } = {}) {
     heroImageUrl: `https://storage.googleapis.com/test-bucket/blog/articles/hero/${id}.webp`,
     thumbnailImageUrl: `https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/${id}.webp`,
     heroImageAlt: `Hero image for ${id}`,
-    status: 'draft',
+    status: 'published',
+    publishedAt: new Date(),
     owner: owner?._id || owner,
     ...overrides,
   };

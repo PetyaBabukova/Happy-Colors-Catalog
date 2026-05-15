@@ -10,7 +10,6 @@ import {
   getPublicBlogArticleById,
   getPublicBlogArticles,
   restoreBlogArticle,
-  updateBlogArticleStatus,
 } from '../services/blogArticlesService.js';
 
 const router = express.Router();
@@ -96,20 +95,6 @@ router.post('/', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
 router.put('/:articleId', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
   try {
     const article = await editBlogArticle(req.params.articleId, req.body, req.user?._id);
-
-    res.json(article);
-  } catch (error) {
-    sendError(res, error, 400);
-  }
-});
-
-router.patch('/:articleId/status', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
-  try {
-    const article = await updateBlogArticleStatus(
-      req.params.articleId,
-      req.body?.status,
-      req.user?._id
-    );
 
     res.json(article);
   } catch (error) {

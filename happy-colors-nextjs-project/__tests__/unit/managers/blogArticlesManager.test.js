@@ -9,7 +9,6 @@ import {
   getBlogArticles,
   invalidateBlogCaches,
   restoreBlogArticle,
-  updateBlogArticleStatus,
 } from '../../../src/managers/blogArticlesManager.js';
 
 function jsonResponse({ ok = true, body = {} } = {}) {
@@ -59,10 +58,8 @@ describe('blogArticlesManager', () => {
     );
   });
 
-  it('creates, edits, and patches articles while invalidating caches', async () => {
+  it('creates and edits articles while invalidating caches', async () => {
     fetch
-      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'article-1' } }))
-      .mockResolvedValueOnce(jsonResponse())
       .mockResolvedValueOnce(jsonResponse({ body: { _id: 'article-1' } }))
       .mockResolvedValueOnce(jsonResponse())
       .mockResolvedValueOnce(jsonResponse({ body: { _id: 'article-1' } }))
@@ -70,15 +67,11 @@ describe('blogArticlesManager', () => {
 
     await createBlogArticle({ title: 'Title', status: 'draft', owner: 'ignored' });
     await editBlogArticle('article-1', { title: 'Edited', status: 'published', excerpt: 'ignored' });
-    await updateBlogArticleStatus('article-1', 'published');
 
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ title: 'Title', status: 'draft' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ title: 'Title' });
     expect(JSON.parse(fetch.mock.calls[2][1].body)).toEqual({ title: 'Edited' });
-    expect(fetch.mock.calls[4][0]).toBe('http://localhost:3000/api/blog-articles/article-1/status');
-    expect(JSON.parse(fetch.mock.calls[4][1].body)).toEqual({ status: 'published' });
     expect(fetch.mock.calls[1][0]).toBe('/api/revalidate/blog');
     expect(fetch.mock.calls[3][0]).toBe('/api/revalidate/blog');
-    expect(fetch.mock.calls[5][0]).toBe('/api/revalidate/blog');
   });
 
   it('archives, restores, and logs revalidation failures without failing mutations', async () => {
