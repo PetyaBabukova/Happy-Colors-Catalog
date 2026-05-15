@@ -3,6 +3,8 @@ import { getBlogArticle } from '@/lib/getBlogArticle';
 import { getBlogArticles } from '@/managers/blogArticlesManager';
 import styles from '@/components/blog/blogPublic.module.css';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Блог',
   description: 'Идеи, истории и вдъхновение за ръчно изработени подаръци, плетени играчки и уютна декорация от Happy Colors.',

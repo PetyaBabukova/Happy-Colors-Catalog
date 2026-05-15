@@ -22,6 +22,15 @@ describe('blog articles integration', () => {
   it('lists non-archived articles publicly newest-first', async () => {
     const app = createExpressApp();
     const owner = await createUser();
+    const legacyDraft = buildBlogArticle({
+      owner,
+      title: 'Legacy draft should be public after draft removal',
+      status: 'draft',
+      publishedAt: null,
+      createdAt: new Date('2026-04-30T10:00:00.000Z'),
+      updatedAt: new Date('2026-04-30T10:00:00.000Z'),
+    });
+    const legacyDraftInsert = await BlogArticle.collection.insertOne(legacyDraft);
     const oldPublished = await createBlogArticle(
       articleFields({
         owner,
@@ -49,6 +58,7 @@ describe('blog articles integration', () => {
     expect(res.body.map((article) => article._id)).toEqual([
       String(newestPublished._id),
       String(oldPublished._id),
+      String(legacyDraftInsert.insertedId),
     ]);
     expect(res.body[0]).toMatchObject({
       title: 'Newest published',
@@ -67,6 +77,14 @@ describe('blog articles integration', () => {
     const app = createExpressApp();
     const owner = await createUser();
     const published = await createBlogArticle(articleFields({ owner, title: 'Public article' }));
+    const legacyDraftInsert = await BlogArticle.collection.insertOne(
+      buildBlogArticle({
+        owner,
+        title: 'Legacy public article',
+        status: 'draft',
+        publishedAt: null,
+      })
+    );
     const archived = await createBlogArticle(
       articleFields({ owner, archivedAt: new Date('2026-05-03T10:00:00.000Z') })
     );
@@ -79,6 +97,9 @@ describe('blog articles integration', () => {
     expect(res.body).not.toHaveProperty('newsletterReady');
     expect(res.body).not.toHaveProperty('newsletterSentAt');
     expect(res.body).not.toHaveProperty('archivedAt');
+
+    const legacyRes = await request(app).get(`/blog-articles/${legacyDraftInsert.insertedId}`).expect(200);
+    expect(legacyRes.body.title).toBe('Legacy public article');
 
     await request(app).get('/blog-articles/not-a-valid-id').expect(404);
     await request(app).get(`/blog-articles/${archived._id}`).expect(404);
@@ -311,6 +332,22 @@ describe('blog articles integration', () => {
       .expect(200);
     expect(restoreRes.body.archivedAt).toBeNull();
     expect(restoreRes.body.status).toBe('published');
+
+    const legacyDraftInsert = await BlogArticle.collection.insertOne(
+      buildBlogArticle({
+        owner,
+        title: 'Legacy draft to archive',
+        status: 'draft',
+        publishedAt: null,
+      })
+    );
+    const legacyArchiveRes = await request(app)
+      .patch(`/blog-articles/${legacyDraftInsert.insertedId}/archive`)
+      .set('Cookie', cookie)
+      .expect(200);
+    expect(legacyArchiveRes.body.status).toBe('published');
+    expect(legacyArchiveRes.body.publishedAt).toBeTruthy();
+    await request(app).get(`/blog-articles/${legacyDraftInsert.insertedId}`).expect(404);
   });
 
   it('cleans up replaced blog images only after saving and only when unreferenced', async () => {
