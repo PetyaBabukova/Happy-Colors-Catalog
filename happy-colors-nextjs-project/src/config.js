@@ -4,31 +4,44 @@ function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '');
 }
 
-function getExplicitApiOverride() {
-  const rawValue = process.env.NEXT_PUBLIC_API_URL?.trim();
+function normalizeAbsoluteUrl(value) {
+  const rawValue = String(value || '').trim();
 
   if (!rawValue) {
     return '';
   }
 
-  const normalizedValue = stripTrailingSlash(rawValue);
+  return stripTrailingSlash(rawValue);
+}
 
-  if (normalizedValue === '/api' || normalizedValue.endsWith('/api')) {
-    return normalizedValue;
+function getServerSiteApiUrl() {
+  const siteUrl =
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
+    normalizeAbsoluteUrl(process.env.RENDER_EXTERNAL_URL) ||
+    normalizeAbsoluteUrl(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
+
+  if (siteUrl) {
+    return `${siteUrl}/api`;
   }
 
   return '';
 }
 
-const explicitOverride = getExplicitApiOverride();
+const explicitOverride = normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_API_URL);
 
 let baseURL;
 
 if (explicitOverride) {
   baseURL = explicitOverride;
 } else if (isServer) {
-  const port = process.env.PORT || '3000';
-  baseURL = `http://localhost:${port}/api`;
+  const siteApiUrl = getServerSiteApiUrl();
+
+  if (siteApiUrl) {
+    baseURL = siteApiUrl;
+  } else {
+    const port = process.env.PORT || '3000';
+    baseURL = `http://localhost:${port}/api`;
+  }
 } else {
   baseURL = '/api';
 }
