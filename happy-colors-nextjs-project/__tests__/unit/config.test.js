@@ -6,6 +6,7 @@ describe('config baseURL', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.resetModules();
   });
@@ -26,8 +27,29 @@ describe('config baseURL', () => {
     expect(baseURL).toBe('https://api.happycolors.eu');
   });
 
+  it('uses NEXT_PUBLIC_BASE_URL as a server-side backend override', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'http://localhost:3030/');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
+
+    const { default: baseURL } = await import('../../src/config.js');
+
+    expect(baseURL).toBe('http://localhost:3030');
+  });
+
+  it('uses the same-origin API proxy in the browser', async () => {
+    vi.stubGlobal('window', {});
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.happycolors.eu');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'http://localhost:3030');
+
+    const { default: baseURL } = await import('../../src/config.js');
+
+    expect(baseURL).toBe('/api');
+  });
+
   it('uses the deployed site API URL for server-side fetches when no API override is configured', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', '');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://preview.happycolors.eu/');
     vi.stubEnv('PORT', '4321');
 
@@ -38,6 +60,8 @@ describe('config baseURL', () => {
 
   it('defaults to the local server API URL when no override is configured', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
     vi.stubEnv('PORT', '');
 
     const { default: baseURL } = await import('../../src/config.js');

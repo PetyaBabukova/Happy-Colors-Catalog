@@ -27,13 +27,17 @@ function getServerSiteApiUrl() {
   return '';
 }
 
-const explicitOverride = normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_API_URL);
+const explicitServerOverride =
+  normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_API_URL) ||
+  normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_BASE_URL);
 
 let baseURL;
 
-if (explicitOverride) {
-  baseURL = explicitOverride;
-} else if (isServer) {
+if (!isServer) {
+  baseURL = '/api';
+} else if (explicitServerOverride) {
+  baseURL = explicitServerOverride;
+} else {
   const siteApiUrl = getServerSiteApiUrl();
 
   if (siteApiUrl) {
@@ -42,8 +46,6 @@ if (explicitOverride) {
     const port = process.env.PORT || '3000';
     baseURL = `http://localhost:${port}/api`;
   }
-} else {
-  baseURL = '/api';
 }
 
 export default baseURL;
