@@ -110,6 +110,48 @@ export async function uploadSignedFile({ kind, file }) {
   throw new Error('Неподдържан тип upload.');
 }
 
+export async function uploadBlogArticleImage({ kind, file }) {
+  if (!file) {
+    throw new Error('No file was selected.');
+  }
+
+  if (!['hero', 'thumbnail'].includes(kind)) {
+    throw new Error('Unsupported blog image upload type.');
+  }
+
+  const formData = new FormData();
+  formData.append('kind', kind);
+  formData.append('file', file);
+
+  const res = await fetch('/api/blog/images', {
+    method: 'POST',
+    body: formData,
+  });
+
+  let data = null;
+
+  try {
+    data = await res.json();
+  } catch {
+    // Ignore JSON parse errors and keep the generic message below.
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.message || 'Error while uploading the blog image.');
+  }
+
+  if (!data?.imageUrl || !data?.objectName || !data?.deleteToken || data?.kind !== kind) {
+    throw new Error('Unexpected response from blog image upload route.');
+  }
+
+  return {
+    kind: data.kind,
+    imageUrl: data.imageUrl,
+    objectName: data.objectName,
+    deleteToken: data.deleteToken,
+  };
+}
+
 export async function deleteSignedUploadedFile(objectName, deleteToken) {
   if (!objectName) {
     return;

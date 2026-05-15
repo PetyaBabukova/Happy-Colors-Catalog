@@ -8,6 +8,30 @@ import {
 export const revalidate = 3600;
 
 const PRODUCTS_API_URL = `${PROD_SITE_URL}/api/products`;
+const BLOG_API_URL = `${PROD_SITE_URL}/api/blog-articles`;
+
+async function fetchSitemapEntries(apiUrl, tag, buildEntry, errorMessage) {
+  try {
+    const res = await fetch(apiUrl, {
+      next: { revalidate: 3600, tags: [tag] },
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const items = await res.json();
+
+    if (!Array.isArray(items)) {
+      return [];
+    }
+
+    return items.filter((item) => item?._id).map(buildEntry);
+  } catch (error) {
+    console.error(errorMessage, error);
+    return [];
+  }
+}
 
 export default async function sitemap() {
   if (!shouldExposeSitemap) {
@@ -16,32 +40,30 @@ export default async function sitemap() {
 
   const now = new Date();
 
-  let productEntries = [];
-
-  try {
-    const res = await fetch(PRODUCTS_API_URL, {
-      next: { revalidate: 3600, tags: ['products'] },
-    });
-
-    if (res.ok) {
-      const products = await res.json();
-
-      if (Array.isArray(products)) {
-        productEntries = products
-          .filter((product) => product?._id)
-          .map((product) => ({
-            url: `${PROD_SITE_URL}/products/${product._id}`,
-            lastModified: new Date(
-              product.updatedAt || product.createdAt || now
-            ),
-            changeFrequency: 'weekly',
-            priority: 0.8,
-          }));
-      }
-    }
-  } catch (error) {
-    console.error('Грешка при генериране на sitemap за продуктите:', error);
-  }
+  const [productEntries, blogEntries] = await Promise.all([
+    fetchSitemapEntries(
+      PRODUCTS_API_URL,
+      'products',
+      (product) => ({
+        url: `${PROD_SITE_URL}/products/${product._id}`,
+        lastModified: new Date(product.updatedAt || product.createdAt || now),
+        changeFrequency: 'weekly',
+        priority: 0.8,
+      }),
+      'Грешка при генериране на sitemap за продуктите:'
+    ),
+    fetchSitemapEntries(
+      BLOG_API_URL,
+      'blog-articles',
+      (article) => ({
+        url: `${PROD_SITE_URL}/blog/${article._id}`,
+        lastModified: new Date(article.updatedAt || article.publishedAt || article.createdAt || now),
+        changeFrequency: 'monthly',
+        priority: 0.65,
+      }),
+      'Грешка при генериране на sitemap за блога:'
+    ),
+  ]);
 
   return [
     {
@@ -69,11 +91,18 @@ export default async function sitemap() {
       priority: 0.6,
     },
     {
+      url: `${PROD_SITE_URL}/blog`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    },
+    {
       url: `${PROD_SITE_URL}/contacts`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     ...productEntries,
+    ...blogEntries,
   ];
 }

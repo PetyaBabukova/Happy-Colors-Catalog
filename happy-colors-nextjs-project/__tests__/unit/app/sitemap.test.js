@@ -25,19 +25,29 @@ describe('sitemap', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('adds static and product entries for the production sitemap', async () => {
+  it('adds static, product, and blog entries for the production sitemap', async () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => [
-          { _id: 'red-candle', updatedAt: '2026-05-01T12:00:00.000Z' },
-          { title: 'Missing id' },
-          { _id: 'blue-soap', createdAt: '2026-04-28T10:00:00.000Z' },
-        ],
-      }))
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            { _id: 'red-candle', updatedAt: '2026-05-01T12:00:00.000Z' },
+            { title: 'Missing id' },
+            { _id: 'blue-soap', createdAt: '2026-04-28T10:00:00.000Z' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            { _id: 'blog-1', updatedAt: '2026-05-03T12:00:00.000Z' },
+            { title: 'Missing id' },
+            { _id: 'blog-2', publishedAt: '2026-05-02T10:00:00.000Z' },
+          ],
+        })
     );
 
     const { default: sitemap } = await import('../../../src/app/sitemap.js');
@@ -45,6 +55,9 @@ describe('sitemap', () => {
 
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/products', {
       next: { revalidate: 3600, tags: ['products'] },
+    });
+    expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
+      next: { revalidate: 3600, tags: ['blog-articles'] },
     });
     expect(entries).toEqual([
       {
@@ -72,6 +85,12 @@ describe('sitemap', () => {
         priority: 0.6,
       },
       {
+        url: 'https://happycolors.eu/blog',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'weekly',
+        priority: 0.7,
+      },
+      {
         url: 'https://happycolors.eu/contacts',
         lastModified: new Date('2026-05-07T09:00:00.000Z'),
         changeFrequency: 'monthly',
@@ -89,10 +108,22 @@ describe('sitemap', () => {
         changeFrequency: 'weekly',
         priority: 0.8,
       },
+      {
+        url: 'https://happycolors.eu/blog/blog-1',
+        lastModified: new Date('2026-05-03T12:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.65,
+      },
+      {
+        url: 'https://happycolors.eu/blog/blog-2',
+        lastModified: new Date('2026-05-02T10:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.65,
+      },
     ]);
   });
 
-  it('falls back to static entries when the product fetch fails', async () => {
+  it('falls back to static entries when dynamic sitemap fetches fail', async () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
@@ -103,12 +134,16 @@ describe('sitemap', () => {
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/products', {
       next: { revalidate: 3600, tags: ['products'] },
     });
-    expect(entries).toHaveLength(5);
+    expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
+      next: { revalidate: 3600, tags: ['blog-articles'] },
+    });
+    expect(entries).toHaveLength(6);
     expect(entries.map((entry) => entry.url)).toEqual([
       'https://happycolors.eu/',
       'https://happycolors.eu/products',
       'https://happycolors.eu/aboutus',
       'https://happycolors.eu/faq',
+      'https://happycolors.eu/blog',
       'https://happycolors.eu/contacts',
     ]);
   });

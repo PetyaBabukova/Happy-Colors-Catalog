@@ -35,7 +35,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/image', () => ({
-  default: ({ alt, priority, ...props }) => React.createElement('img', { alt, ...props }),
+  default: ({ alt, fill, priority, ...props }) => React.createElement('img', { alt, ...props }),
 }));
 
 beforeEach(() => {

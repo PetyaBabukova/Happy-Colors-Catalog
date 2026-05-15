@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import Category from '../../models/Category.js';
+import BlogArticle from '../../models/BlogArticle.js';
 import HomeBanner from '../../models/HomeBanner.js';
 import Order from '../../models/Order.js';
 import Product from '../../models/Product.js';
@@ -86,6 +87,36 @@ export async function createHomeBanner(overrides = {}) {
   const owner = overrides.owner || (await createUser());
 
   return HomeBanner.create(buildHomeBanner({ ...overrides, owner }));
+}
+
+export function buildBlogArticle({ owner, ...overrides } = {}) {
+  const id = nextId('blog-article');
+
+  return {
+    title: `Blog Article ${id}`,
+    contentHtml: '<p>Helpful colorful article body.</p>',
+    contentJson: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Helpful colorful article body.' }],
+        },
+      ],
+    },
+    heroImageUrl: `https://storage.googleapis.com/test-bucket/blog/articles/hero/${id}.webp`,
+    thumbnailImageUrl: `https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/${id}.webp`,
+    heroImageAlt: `Hero image for ${id}`,
+    status: 'draft',
+    owner: owner?._id || owner,
+    ...overrides,
+  };
+}
+
+export async function createBlogArticle(overrides = {}) {
+  const owner = overrides.owner || (await createUser());
+
+  return BlogArticle.create(buildBlogArticle({ ...overrides, owner }));
 }
 
 /**

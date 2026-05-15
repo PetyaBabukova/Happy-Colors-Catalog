@@ -50,6 +50,7 @@ describe('Header', () => {
       'href',
       '/products/create'
     );
+    expect(screen.getByRole('link', { name: 'Блог' })).toHaveAttribute('href', '/blog');
     expect(screen.getByRole('link', { name: 'Създай хоум банер' })).toHaveAttribute(
       'href',
       '/home-banners/create'
@@ -57,6 +58,10 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Избери любими продукти' })).toHaveAttribute(
       'href',
       '/homepage-featured'
+    );
+    expect(screen.getByRole('link', { name: 'Създай блог статия' })).toHaveAttribute(
+      'href',
+      '/blog/create'
     );
   });
 

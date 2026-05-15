@@ -34,6 +34,10 @@ const nextConfig = {
         destination: `${backendBaseUrl}/home-banners/:path*`,
       },
       {
+        source: '/api/blog-articles/:path*',
+        destination: `${backendBaseUrl}/blog-articles/:path*`,
+      },
+      {
         source: '/api/categories/:path*',
         destination: `${backendBaseUrl}/categories/:path*`,
       },

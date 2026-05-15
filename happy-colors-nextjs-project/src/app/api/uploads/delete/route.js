@@ -8,6 +8,7 @@ import { verifyUploadDeleteToken } from '../../_lib/uploadDeleteToken';
 export const runtime = 'nodejs';
 
 const PRODUCTS_COLLECTION = 'products';
+const BLOG_ARTICLES_COLLECTION = 'blogarticles';
 
 function isAllowedObjectName(objectName) {
   if (!objectName || typeof objectName !== 'string') {
@@ -22,27 +23,39 @@ function isAllowedObjectName(objectName) {
 
   return (
     objectName.startsWith('products/videos/') ||
-    objectName.startsWith('products/posters/')
+    objectName.startsWith('products/posters/') ||
+    objectName.startsWith('blog/articles/hero/') ||
+    objectName.startsWith('blog/articles/thumbnails/')
   );
 }
 
-async function isAttachedToProduct(publicUrl) {
+async function isAttachedToPersistedContent(publicUrl) {
   const mongoose = await connectToMongo();
 
-  // Keep this raw collection lookup local to the rollback endpoint to avoid coupling
-  // the Next API route to the Express-side Mongoose model bundle.
-  const attachedProduct = await mongoose.connection.db.collection(PRODUCTS_COLLECTION).findOne({
-    $or: [
-      { imageUrl: publicUrl },
-      { imageUrls: publicUrl },
-      { 'videos.url': publicUrl },
-      { 'videos.posterUrl': publicUrl },
-    ],
-  }, {
-    projection: { _id: 1 },
-  });
+  // Keep these raw collection lookups local to avoid coupling this Next route
+  // to the Express-side Mongoose model bundle.
+  const [attachedProduct, attachedBlogArticle] = await Promise.all([
+    mongoose.connection.db.collection(PRODUCTS_COLLECTION).findOne({
+      $or: [
+        { imageUrl: publicUrl },
+        { imageUrls: publicUrl },
+        { 'videos.url': publicUrl },
+        { 'videos.posterUrl': publicUrl },
+      ],
+    }, {
+      projection: { _id: 1 },
+    }),
+    mongoose.connection.db.collection(BLOG_ARTICLES_COLLECTION).findOne({
+      $or: [
+        { heroImageUrl: publicUrl },
+        { thumbnailImageUrl: publicUrl },
+      ],
+    }, {
+      projection: { _id: 1 },
+    }),
+  ]);
 
-  return Boolean(attachedProduct);
+  return Boolean(attachedProduct || attachedBlogArticle);
 }
 
 export async function POST(request) {
@@ -57,7 +70,7 @@ export async function POST(request) {
 
     if (!bucketName) {
       return NextResponse.json(
-        { message: 'Липсва конфигурация на кофата (GCS_BUCKET_NAME).' },
+        { message: 'Липсва конфигурация на storage кофата (GCS_BUCKET_NAME).' },
         { status: 500 }
       );
     }
@@ -98,11 +111,11 @@ export async function POST(request) {
 
     const publicUrl = createPublicUrl(bucketName, objectName);
 
-    if (await isAttachedToProduct(publicUrl)) {
+    if (await isAttachedToPersistedContent(publicUrl)) {
       return NextResponse.json(
         {
           message:
-            'Този файл вече е записан към продукт и не може да се трие от rollback endpoint-а.',
+            'Този файл вече е записан към съдържание и не може да се изтрие от rollback endpoint-а.',
         },
         { status: 409 }
       );

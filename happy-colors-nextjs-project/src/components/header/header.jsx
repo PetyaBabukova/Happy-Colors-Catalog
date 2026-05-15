@@ -83,7 +83,7 @@ export default function Header() {
 
             <li><Link href="/aboutus">За Happy Colors</Link></li>
             <li><Link href="/faq">ЧЗВ</Link></li>
-            {/* <li><Link href="/blog">Блог</Link></li> */}
+            <li><Link href="/blog">Блог</Link></li>
             {/* <li><Link href="/partners">За партньори</Link></li> */}
             <li><Link href="/contacts">Контакти</Link></li>
           </ul>
@@ -118,6 +118,7 @@ export default function Header() {
         <li><Link href="/products/create">Създай продукт</Link></li>
         <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
         <li><Link href="/homepage-featured">Избери любими продукти</Link></li>
+        <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
       </ul>
