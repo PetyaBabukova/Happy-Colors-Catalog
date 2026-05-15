@@ -600,8 +600,16 @@ function serializeArticle(article) {
   return typeof article.toObject === 'function' ? article.toObject() : article;
 }
 
+function ensurePublishedState(article) {
+  article.status = 'published';
+
+  if (!article.publishedAt) {
+    article.publishedAt = article.createdAt || new Date();
+  }
+}
+
 export async function getPublicBlogArticles() {
-  return BlogArticle.find({ status: 'published', archivedAt: null })
+  return BlogArticle.find({ archivedAt: null })
     .select(PUBLIC_LIST_PROJECTION)
     .sort({ publishedAt: -1, createdAt: -1 })
     .lean();
@@ -620,7 +628,6 @@ export async function getPublicBlogArticleById(articleId) {
 
   const article = await BlogArticle.findOne({
     _id: articleId,
-    status: 'published',
     archivedAt: null,
   })
     .select(PUBLIC_DETAIL_PROJECTION)
@@ -675,6 +682,8 @@ export async function editBlogArticle(articleId, data, userId) {
   const picked = pickFields(data, EDIT_FIELDS);
   const nextData = normalizeArticleFields(picked, { requireAll: false });
 
+  ensurePublishedState(article);
+
   for (const [key, value] of Object.entries(nextData)) {
     article[key] = value;
   }
@@ -698,6 +707,7 @@ export async function archiveBlogArticle(articleId, userId) {
   assertUser(userId);
 
   const article = await findArticleOrThrow(articleId);
+  ensurePublishedState(article);
 
   if (!article.archivedAt) {
     article.archivedAt = new Date();
@@ -711,6 +721,7 @@ export async function restoreBlogArticle(articleId, userId) {
   assertUser(userId);
 
   const article = await findArticleOrThrow(articleId);
+  ensurePublishedState(article);
 
   if (article.archivedAt) {
     article.archivedAt = null;
