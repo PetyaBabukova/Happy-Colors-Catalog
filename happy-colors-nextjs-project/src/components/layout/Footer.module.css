@@ -1,0 +1,23 @@
+.footer {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 28rem) minmax(12rem, 1fr);
+  align-items: start;
+  gap: 2rem;
+}
+
+.credit {
+  justify-self: end;
+  text-align: right;
+}
+
+@media (max-width: 960px) {
+  .footer {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .credit {
+    justify-self: start;
+    text-align: left;
+  }
+}

@@ -61,6 +61,7 @@ beforeAll(async () => {
   process.env.CATALOG_MODE = 'false';
   process.env.CLIENT_URL = 'http://localhost:3000';
   process.env.GCS_BUCKET_NAME = 'test-bucket';
+  process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'test-newsletter-unsubscribe-secret';
 
   mongoServer = await MongoMemoryReplSet.create({
     replSet: { count: 1 },
@@ -88,4 +89,5 @@ afterAll(async () => {
   delete process.env.CATALOG_MODE;
   delete process.env.CLIENT_URL;
   delete process.env.GCS_BUCKET_NAME;
+  delete process.env.NEWSLETTER_UNSUBSCRIBE_SECRET;
 });

@@ -50,6 +50,10 @@ const nextConfig = {
         destination: `${backendBaseUrl}/contacts/:path*`,
       },
       {
+        source: '/api/newsletter/:path*',
+        destination: `${backendBaseUrl}/newsletter/:path*`,
+      },
+      {
         source: '/api/orders/:path*',
         destination: `${backendBaseUrl}/orders/:path*`,
       },
