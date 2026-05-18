@@ -1,4 +1,5 @@
 import CreateCategory from '@/components/categories/CreateCategory';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Създаване на категория',
@@ -10,8 +11,10 @@ export const metadata = {
 
 export default function CreateCategoryPage() {
   return (
-    <section style={{ padding: '1rem' }}>
-      <CreateCategory />
-    </section>
+    <RequireAuth message="Трябва да сте логнати, за да създадете категория.">
+      <section style={{ padding: '1rem' }}>
+        <CreateCategory />
+      </section>
+    </RequireAuth>
   );
 }

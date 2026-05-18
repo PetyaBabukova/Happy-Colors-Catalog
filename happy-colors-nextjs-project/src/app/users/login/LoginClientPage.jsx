@@ -6,10 +6,11 @@ import MessageBox from '@/components/ui/MessageBox';
 import { onLoginSubmit } from '@/managers/userManager';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { getSafeRedirectPath } from '@/utils/authRedirect';
 import useForm from '@/hooks/useForm';
 
 export default function LoginClientPage() {
-  const { setUser } = useAuth();
+  const { user, loading, setUser } = useAuth();
   const router = useRouter();
 
   const {
@@ -30,10 +31,15 @@ export default function LoginClientPage() {
   };
 
   useEffect(() => {
-    if (success) {
-      router.push('/products');
+    if (loading || !user) {
+      return;
     }
-  }, [success, router]);
+
+    // Intentionally read the real browser URL here instead of useSearchParams,
+    // so this client page does not need an App Router Suspense boundary.
+    const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+    router.replace(getSafeRedirectPath(redirectParam, '/products'));
+  }, [loading, router, user]);
 
   return (
     <fieldset className={styles.registerFormContainer}>

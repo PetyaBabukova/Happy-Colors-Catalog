@@ -1,4 +1,5 @@
 import HomepageFeaturedClient from './HomepageFeaturedClient';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Избери любими продукти',
@@ -9,5 +10,9 @@ export const metadata = {
 };
 
 export default function HomepageFeaturedPage() {
-  return <HomepageFeaturedClient />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да управлявате продуктите на началната страница.">
+      <HomepageFeaturedClient />
+    </RequireAuth>
+  );
 }

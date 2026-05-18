@@ -1,6 +1,7 @@
 // happy-colors-nextjs-project/src/app/products/[productId]/delete/page.js
 
 import DeleteProductClient from './DeleteProductClient';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Изтриване на продукт',
@@ -11,5 +12,9 @@ export const metadata = {
 };
 
 export default function DeleteProductPage({ params }) {
-  return <DeleteProductClient params={params} />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да изтриете продукт.">
+      <DeleteProductClient params={params} />
+    </RequireAuth>
+  );
 }

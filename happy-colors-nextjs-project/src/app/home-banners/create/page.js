@@ -1,4 +1,5 @@
 import CreateHomeBannerClient from './CreateHomeBannerClient';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Създай хоум банер',
@@ -9,5 +10,9 @@ export const metadata = {
 };
 
 export default function CreateHomeBannerPage() {
-  return <CreateHomeBannerClient />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да създадете homepage банер.">
+      <CreateHomeBannerClient />
+    </RequireAuth>
+  );
 }

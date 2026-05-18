@@ -1,4 +1,5 @@
-import React from 'react'
+import RequireAuth from '@/components/auth/RequireAuth';
+import AuthenticatedRedirect from '@/components/auth/AuthenticatedRedirect';
 
 export const metadata = {
   title: 'Потребители',
@@ -10,11 +11,11 @@ export const metadata = {
 
 export default function Users() {
   return (
-    <>
-  <from>
-    
-  </from>
-
-    </>
+    <RequireAuth message="Трябва да сте логнати, за да отворите тази страница.">
+      <AuthenticatedRedirect
+        to="/products"
+        message="Пренасочване към продуктите..."
+      />
+    </RequireAuth>
   )
 }
