@@ -3,7 +3,7 @@ import baseURL from '@/config';
 
 export const metadata = {
   title: 'Търсене',
-  description: 'Резултати от търсене в Happy Colors.',
+  description: 'Резултати от търсене в Happy Colors (Хепи Колорс).',
   robots: {
     index: false,
     follow: false,

@@ -45,8 +45,8 @@ export function buildProductSeoDescription(product) {
   const categoryName = product.category?.name;
 
   return categoryName
-    ? `${product.title} – ${categoryName.toLowerCase()} от Happy Colors. Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`
-    : `${product.title} от Happy Colors. Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`;
+    ? `${product.title} – ${categoryName.toLowerCase()} от Happy Colors (Хепи Колорс). Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`
+    : `${product.title} от Happy Colors (Хепи Колорс). Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`;
 }
 
 export function buildProductSeoTitle(product) {
@@ -120,7 +120,7 @@ export function buildProductMetadata(product, productId) {
       description,
       type: videos.length ? 'video.other' : 'website',
       url: `/products/${productId}`,
-      siteName: 'Happy Colors',
+      siteName: 'Happy Colors | Хепи Колорс',
       ...(previewImages.length
         ? {
             images: previewImages.map((url) => ({

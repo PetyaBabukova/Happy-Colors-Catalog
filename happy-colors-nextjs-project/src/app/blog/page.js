@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Блог',
-  description: 'Идеи, истории и вдъхновение за ръчно изработени подаръци, плетени играчки и уютна декорация от Happy Colors.',
+  description: 'Идеи, истории и вдъхновение за ръчно изработени подаръци, плетени играчки и уютна декорация от Happy Colors (Хепи Колорс).',
   alternates: {
     canonical: '/blog',
   },

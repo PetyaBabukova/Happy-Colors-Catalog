@@ -2,10 +2,10 @@ import styles from './about.module.css';
 
 export const metadata = {
   title: {
-    absolute: 'За Happy Colors | Плетени играчки и декорация за дома',
+    absolute: 'За Happy Colors | Хепи Колорс | Плетени играчки и декорация за дома',
   },
   description:
-    'Научи повече за Happy Colors и за ръчно изработените плетени играчки, аксесоари и декорация за дома, създадени с внимание към детайла.',
+    'Научи повече за Happy Colors (Хепи Колорс) и за ръчно изработените плетени играчки, аксесоари и декорация за дома, създадени с внимание към детайла.',
   alternates: {
     canonical: '/aboutus',
   },

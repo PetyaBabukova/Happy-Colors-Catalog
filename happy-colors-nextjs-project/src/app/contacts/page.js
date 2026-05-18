@@ -8,7 +8,7 @@ import { getProduct } from '@/lib/getProduct';
 export const metadata = {
   title: 'Контакти',
   description:
-    'Свържи се с Happy Colors за въпроси относно плетени играчки, аксесоари и декорация за дома.',
+    'Свържи се с Happy Colors (Хепи Колорс) за въпроси относно плетени играчки, аксесоари и декорация за дома.',
   alternates: {
     canonical: '/contacts',
   },

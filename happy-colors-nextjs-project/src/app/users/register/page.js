@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 export const metadata = {
   title: 'Регистрация',
   description:
-    'Създай профил в Happy Colors и се включи в нашата цветна общност.',
+    'Създай профил в Happy Colors (Хепи Колорс) и се включи в нашата цветна общност.',
   robots: {
     index: false,
     follow: false,

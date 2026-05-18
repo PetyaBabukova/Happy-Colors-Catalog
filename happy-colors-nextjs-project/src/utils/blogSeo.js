@@ -18,7 +18,7 @@ export function buildBlogSeoTitle(article) {
 }
 
 export function buildBlogSeoDescription(article) {
-  return article?.seoDescription || article?.excerpt || article?.contentText || 'Идеи, истории и вдъхновение от Happy Colors.';
+  return article?.seoDescription || article?.excerpt || article?.contentText || 'Идеи, истории и вдъхновение от Happy Colors (Хепи Колорс).';
 }
 
 export function buildBlogMetadata(article, articleId) {
@@ -37,7 +37,7 @@ export function buildBlogMetadata(article, articleId) {
       description,
       type: 'article',
       url: `/blog/${articleId}`,
-      siteName: 'Happy Colors',
+      siteName: 'Happy Colors | Хепи Колорс',
       ...(article?.publishedAt ? { publishedTime: article.publishedAt } : {}),
       ...(article?.updatedAt ? { modifiedTime: article.updatedAt } : {}),
       ...(imageUrl
@@ -75,10 +75,12 @@ export function buildBlogArticleJsonLd(article, articleId) {
     author: {
       '@type': 'Organization',
       name: 'Happy Colors',
+      alternateName: ['Хепи Колорс', 'Хепи Калърс'],
     },
     publisher: {
       '@type': 'Organization',
       name: 'Happy Colors',
+      alternateName: ['Хепи Колорс', 'Хепи Калърс'],
     },
   };
 }
