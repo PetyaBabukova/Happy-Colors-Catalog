@@ -6,7 +6,7 @@ import CartPage from '@/components/cart/CartPage';
 
 export const metadata = {
   title: 'Количка',
-  description: 'Количка с избраните продукти в Happy Colors.',
+  description: 'Количка с избраните продукти в Happy Colors (Хепи Колорс).',
   robots: {
     index: false,
     follow: false,
