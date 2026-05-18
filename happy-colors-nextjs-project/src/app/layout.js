@@ -1,7 +1,6 @@
 // src/app/layout.js
 
 import './globals.css';
-import styles from './page.module.css';
 import ClientLayout from './ClientLayout';
 import { Roboto } from 'next/font/google';
 import {
@@ -63,10 +62,6 @@ export default function RootLayout({ children }) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, '\\u003c') }}
         />
         <ClientLayout>{children}</ClientLayout>
-              <footer className={styles.footer}>
-				<p>© 2026 Happy Colors. Всички права запазени.</p>
-				<p><a href="https://webcreativeteam.com" target="_blank" rel="noopener noreferrer">Онлайн каталог от <b>webcreativeteam.com</b></a></p>
-			</footer>
       </body>
 
     </html>
