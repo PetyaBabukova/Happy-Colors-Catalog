@@ -3,6 +3,7 @@
 const PROD_SITE_URL = 'https://happycolors.eu';
 const LOCAL_URL = 'http://localhost:3000';
 const RENDER_PREVIEW_BRANCH = 'single-deploy-refactor';
+export const SITE_OG_IMAGE_PATH = '/og/happy-colors-og.png';
 
 function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '');

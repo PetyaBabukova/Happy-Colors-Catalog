@@ -1,4 +1,5 @@
 import EditBlogArticleClient from './EditBlogArticleClient';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Редактирай блог статия',
@@ -11,5 +12,9 @@ export const metadata = {
 export default async function EditBlogArticlePage({ params }) {
   const { articleId } = await params;
 
-  return <EditBlogArticleClient articleId={articleId} />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да редактирате блог статия.">
+      <EditBlogArticleClient articleId={articleId} />
+    </RequireAuth>
+  );
 }

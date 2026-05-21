@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import LoginClientPage from '@/app/users/login/LoginClientPage';
 import LogoutClient from '@/app/users/logout/LogoutClient';
 import RegisterForm from '@/app/users/register/RegisterForm';
+import { AuthContext } from '@/context/AuthContext';
 import { logoutUser, onLoginSubmit, onRegisterSubmit } from '@/managers/userManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 
@@ -13,6 +15,7 @@ vi.mock('@/managers/userManager', () => ({
 
 describe('auth UI components', () => {
   beforeEach(() => {
+    window.history.replaceState(null, '', '/');
     onLoginSubmit.mockImplementation(async (values, setSuccess, setError, setUser) => {
       setUser({ _id: 'user-1', email: values.email });
       setError('');
@@ -27,12 +30,33 @@ describe('auth UI components', () => {
     logoutUser.mockResolvedValue(undefined);
   });
 
+  function StatefulLoginHarness({ initialUser = null, setUserSpy = vi.fn() }) {
+    const [user, setLocalUser] = useState(initialUser);
+
+    const setUser = (nextUser) => {
+      setUserSpy(nextUser);
+      setLocalUser(nextUser);
+    };
+
+    return (
+      <AuthContext.Provider
+        value={{
+          user,
+          loading: false,
+          setUser,
+          refreshUser: vi.fn(),
+        }}
+      >
+        <LoginClientPage />
+      </AuthContext.Provider>
+    );
+  }
+
   it('submits login credentials, stores the returned user, and redirects on success', async () => {
     const setUser = vi.fn();
-    const mockRouterPush = vi.fn();
-    const { container } = render(<LoginClientPage />, {
-      authOverrides: { setUser },
-      mockRouterPush,
+    const mockRouterReplace = vi.fn();
+    const { container } = render(<StatefulLoginHarness setUserSpy={setUser} />, {
+      routerOverrides: { replace: mockRouterReplace },
     });
 
     fireEvent.change(container.querySelector('#email'), { target: { value: 'petya@example.com' } });
@@ -44,11 +68,36 @@ describe('auth UI components', () => {
         { email: 'petya@example.com', password: 'secret' },
         expect.any(Function),
         expect.any(Function),
-        setUser
+        expect.any(Function)
       )
     );
-    await waitFor(() => expect(mockRouterPush).toHaveBeenCalledWith('/products'));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/products'));
     expect(setUser).toHaveBeenCalledWith({ _id: 'user-1', email: 'petya@example.com' });
+  });
+
+  it('redirects to a safe requested route after login', async () => {
+    window.history.pushState(null, '', '/users/login?redirect=%2Fblog%2Fcreate');
+    const mockRouterReplace = vi.fn();
+    const { container } = render(<StatefulLoginHarness />, {
+      routerOverrides: { replace: mockRouterReplace },
+    });
+
+    fireEvent.change(container.querySelector('#email'), { target: { value: 'petya@example.com' } });
+    fireEvent.change(container.querySelector('#password'), { target: { value: 'secret' } });
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/blog/create'));
+  });
+
+  it('falls back when login receives an unsafe redirect target', async () => {
+    window.history.pushState(null, '', '/users/login?redirect=%5C%5Cevil.example');
+    const mockRouterReplace = vi.fn();
+
+    render(<StatefulLoginHarness initialUser={{ _id: 'user-1' }} />, {
+      routerOverrides: { replace: mockRouterReplace },
+    });
+
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/products'));
   });
 
   it('shows login errors from the manager without redirecting', async () => {

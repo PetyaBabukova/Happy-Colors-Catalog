@@ -29,7 +29,7 @@ export default function Header() {
   const { getTotalItems } = useCart();
 
   const cartItemCount = getTotalItems();
-  const userNavClassName = `${styles.userNav} ${user ? styles.userNavVisible : styles.userNavHidden}`;
+  const userNavClassName = `${styles.userNav} ${styles.userNavVisible}`;
   const handleRouteChange = useCallback(() => {
     setMobileMenuOpen(false);
   }, []);
@@ -114,6 +114,7 @@ export default function Header() {
         </nav>
       </header>
 
+      {user ? (
       <ul className={userNavClassName}>
         <li><Link href="/products/create">Създай продукт</Link></li>
         <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
@@ -121,7 +122,9 @@ export default function Header() {
         <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
+        <li><Link href="/newsletter/send">Изпрати къстъм мейл до абонатите</Link></li>
       </ul>
+      ) : null}
     </>
   );
 }

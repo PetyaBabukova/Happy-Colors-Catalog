@@ -84,7 +84,7 @@ describe('sendEmail', () => {
       socketTimeout: 10_000,
     });
     expect(sendMail).toHaveBeenCalledWith({
-      from: 'admin@example.com',
+      from: 'Happy Colors <admin@example.com>',
       to: 'admin@example.com',
       subject: 'New order',
       text: 'Order details',
@@ -106,6 +106,31 @@ describe('sendEmail', () => {
       2,
       expect.objectContaining({ to: 'owner@example.com', subject: 'Admin copy' })
     );
+  });
+
+  it('passes optional HTML and headers to nodemailer', async () => {
+    const { sendEmail } = await importSendEmail();
+    const headers = {
+      'List-Unsubscribe': '<https://example.com/unsubscribe>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    };
+
+    await sendEmail({
+      to: 'customer@example.com',
+      subject: 'Новини от Happy Colors',
+      text: 'Виж повече',
+      html: '<p>Виж повече</p>',
+      headers,
+    });
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: 'Happy Colors <admin@example.com>',
+      to: 'customer@example.com',
+      subject: 'Новини от Happy Colors',
+      text: 'Виж повече',
+      html: '<p>Виж повече</p>',
+      headers,
+    });
   });
 
   it('recreates the transporter when credentials change', async () => {
@@ -140,8 +165,13 @@ describe('sendEmail', () => {
     expect(createTransport).toHaveBeenCalledTimes(2);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Email send attempt failed:',
-      expect.objectContaining({ attempt: 1, code: 'ETIMEDOUT' })
+      expect.objectContaining({
+        attempt: 1,
+        code: 'ETIMEDOUT',
+        to: 'c***@example.com',
+      })
     );
+    expect(JSON.stringify(consoleErrorSpy.mock.calls)).not.toContain('customer@example.com');
   });
 
   it('does not retry non-transient email failures', async () => {

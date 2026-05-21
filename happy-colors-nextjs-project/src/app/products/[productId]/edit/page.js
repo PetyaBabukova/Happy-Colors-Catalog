@@ -1,6 +1,7 @@
 // happy-colors-nextjs-project/src/app/products/[productId]/edit/page.js
 
 import EditProductClient from './EditProductClient';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Редактиране на продукт',
@@ -11,5 +12,9 @@ export const metadata = {
 };
 
 export default function EditProductPage({ params }) {
-  return <EditProductClient params={params} />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да редактирате продукт.">
+      <EditProductClient params={params} />
+    </RequireAuth>
+  );
 }

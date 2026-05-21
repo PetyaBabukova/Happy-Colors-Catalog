@@ -211,6 +211,18 @@
   color: white;
 }
 
+.newsletterActionLink {
+  border-color: var(--dark-orange);
+  background: var(--dark-orange);
+  color: white;
+}
+
+.newsletterActionLink:hover {
+  background: var(--dark-green);
+  border-color: var(--dark-green);
+  color: white;
+}
+
 .articleActionError {
   margin-top: 0.5rem;
   color: var(--dark-orange);

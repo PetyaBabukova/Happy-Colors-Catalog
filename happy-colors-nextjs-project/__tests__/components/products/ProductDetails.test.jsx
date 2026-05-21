@@ -137,6 +137,27 @@ describe('ProductDetails', () => {
     expect(guestRender.container.querySelector('a[href="/products/product-1/delete"]')).not.toBeInTheDocument();
   });
 
+  it('shows newsletter send action only for authenticated users', () => {
+    const authenticatedRender = render(<ProductDetails product={product} />, {
+      user: { _id: 'user-2' },
+    });
+
+    const newsletterLink = authenticatedRender.container.querySelector(
+      'a[href="/newsletter/send?source=product&id=product-1"]'
+    );
+
+    expect(newsletterLink).toBeInTheDocument();
+    expect(newsletterLink.className).toContain('newsletterActionBtn');
+
+    authenticatedRender.unmount();
+
+    const guestRender = render(<ProductDetails product={product} />);
+
+    expect(
+      guestRender.container.querySelector('a[href="/newsletter/send?source=product&id=product-1"]')
+    ).not.toBeInTheDocument();
+  });
+
   it('renders the active video slide and advances when it ends', () => {
     mockSlideshow({ currentIndex: 2 });
 

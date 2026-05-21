@@ -1,4 +1,5 @@
 import CategoriesClientPage from './CategoriesClientPage';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Управление на категории',
@@ -10,5 +11,9 @@ export const metadata = {
 };
 
 export default function CategoriesPage() {
-  return <CategoriesClientPage />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да управлявате категориите.">
+      <CategoriesClientPage />
+    </RequireAuth>
+  );
 }

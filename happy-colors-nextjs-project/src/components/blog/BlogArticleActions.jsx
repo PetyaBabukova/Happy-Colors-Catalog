@@ -42,6 +42,12 @@ export default function BlogArticleActions({ articleId }) {
         <Link href={`/blog/${articleId}/edit`} className={styles.articleActionLink}>
           Редактирай
         </Link>
+        <Link
+          href={`/newsletter/send?source=blog&id=${articleId}`}
+          className={`${styles.articleActionLink} ${styles.newsletterActionLink}`}
+        >
+          Изпрати новини
+        </Link>
         <button type="button" onClick={handleDelete} disabled={Boolean(busyAction)}>
           {busyAction === 'delete' ? 'Изтриване...' : 'Изтрий'}
         </button>

@@ -1,4 +1,4 @@
-import { currentSiteUrl } from '@/config/siteSeo';
+import { currentSiteUrl, SITE_OG_IMAGE_PATH } from '@/config/siteSeo';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 
 function absoluteUrl(url) {
@@ -108,6 +108,9 @@ export function buildProductMetadata(product, productId) {
   const videos = normalizeProductVideosForSeo(product.videos);
   const posterUrls = videos.map((video) => absoluteUrl(video.posterUrl));
   const previewImages = [...imageUrls, ...posterUrls];
+  const metadataImages = previewImages.length
+    ? previewImages
+    : [absoluteUrl(SITE_OG_IMAGE_PATH)];
 
   return {
     title,
@@ -121,14 +124,10 @@ export function buildProductMetadata(product, productId) {
       type: videos.length ? 'video.other' : 'website',
       url: `/products/${productId}`,
       siteName: 'Happy Colors | Хепи Колорс',
-      ...(previewImages.length
-        ? {
-            images: previewImages.map((url) => ({
-              url,
-              alt: product.title,
-            })),
-          }
-        : {}),
+      images: metadataImages.map((url) => ({
+        url,
+        alt: product.title || 'Happy Colors',
+      })),
       ...(videos.length
         ? {
             videos: videos.map((video) => ({
@@ -143,7 +142,7 @@ export function buildProductMetadata(product, productId) {
       card: 'summary_large_image',
       title,
       description,
-      ...(previewImages.length ? { images: [previewImages[0]] } : {}),
+      images: [metadataImages[0]],
     },
   };
 }

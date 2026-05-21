@@ -1,6 +1,7 @@
 // happy-colors-nextjs-project/src/app/products/create/page.js
 
 import CreateProductClient from './CreateProductClient';
+import RequireAuth from '@/components/auth/RequireAuth';
 
 export const metadata = {
   title: 'Създаване на продукт',
@@ -11,5 +12,9 @@ export const metadata = {
 };
 
 export default function CreateProductPage() {
-  return <CreateProductClient />;
+  return (
+    <RequireAuth message="Трябва да сте логнати, за да създадете продукт.">
+      <CreateProductClient />
+    </RequireAuth>
+  );
 }
