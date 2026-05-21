@@ -63,13 +63,19 @@ describe('Header', () => {
       'href',
       '/blog/create'
     );
+    expect(screen.getByRole('link', { name: 'Изпрати къстъм мейл до абонатите' })).toHaveAttribute(
+      'href',
+      '/newsletter/send'
+    );
   });
 
   it('hides owner navigation and greeting for anonymous users', () => {
     const { container } = render(<Header />);
 
     expect(screen.queryByText(/Petya/)).not.toBeInTheDocument();
-    expect(container.querySelector('ul[class*="userNav"]').className).toContain('userNavHidden');
+    expect(container.querySelector('ul[class*="userNav"]')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /РЎСЉР·РґР°Р№ РїСЂРѕРґСѓРєС‚/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /РР·РїСЂР°С‚Рё РєСЉСЃС‚СЉРј РјРµР№Р»/ })).not.toBeInTheDocument();
   });
 
   it('hides the cart link in catalog mode', () => {

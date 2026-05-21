@@ -20,6 +20,8 @@
 - The confirmation modal must show the current active subscriber count from `GET /newsletter/send/status`.
 - Custom newsletter CTA is fixed to `/products`.
 - Product/blog CTA and image are re-derived server-side from `sourceId`.
+- Site-relative email image, CTA, and unsubscribe URLs use `NEWSLETTER_PUBLIC_SITE_URL` first, then `NEXT_PUBLIC_SITE_URL`, then the production Happy Colors default. Absolute Mongo/GCS image URLs are preserved.
+- Newsletter test and broadcast POST routes enforce a trusted `Origin`/`Referer` guard in addition to auth, JSON validation, and rate limits.
 - Real subscriber emails include per-recipient unsubscribe links and `List-Unsubscribe` headers.
 - No segmentation, campaign history, tracking pixels, queues, or external newsletter platform in V1.
 
@@ -103,9 +105,9 @@ happy-colors-nextjs-project/__tests__/unit/config/siteSeo.test.js
 - Add or identify a public PNG/JPG site OG fallback asset.
 - Add an exported frontend constant for the fallback path, for example `SITE_OG_IMAGE_PATH = "/og/happy-colors-og.png"`.
 - Add a backend constant with the same path in the newsletter send/template layer; do not import frontend modules from the server.
-- Backend absolute URLs should be built from `CLIENT_URL` with the same trimming behavior used by the existing unsubscribe URL helper.
+- Backend email URLs should be built from the public site URL, not local `CLIENT_URL`, so production emails never contain `localhost` links. Preserve already-absolute image URLs from source records.
 - Product metadata should prefer the primary product image and fallback to the site OG asset.
-- Newsletter email builders should later use the same site OG fallback when source images are absent.
+- Newsletter email builders currently use `/logo_64pxH.svg` as the configured default newsletter image when source images are absent; this can be swapped for a raster asset later without accepting client-provided image URLs.
 
 ### Acceptance
 
@@ -148,7 +150,7 @@ server/__tests__/unit/services/newsletterEmailTemplate.test.js
   - visible unsubscribe link;
   - plain text fallback;
   - `<meta charset="UTF-8">`;
-- `List-Unsubscribe` and `List-Unsubscribe-Post` headers.
+- `List-Unsubscribe` and `List-Unsubscribe-Post` headers, with the header URL pointing to `/api/newsletter/unsubscribe/one-click?token=...` and the visible footer URL pointing to `/newsletter/unsubscribe?token=...`.
 - Test emails omit real unsubscribe headers and use a clearly labeled test footer.
 - Add `NEWSLETTER_TEST_RECIPIENTS` to `.env.test.example` here so later endpoint tests have the expected configuration documented.
 
@@ -241,14 +243,15 @@ Do not accept client-provided `imageUrl`, `ctaUrl`, recipient lists, unsubscribe
 - Reuse or extract the existing blog TipTap `contentJson` validation where possible, including size/depth/type limits.
 - Sanitize newsletter HTML with rules appropriate for email; strip inline styles unless explicitly safe.
 - Derive `contentText` server-side when needed.
-- Build absolute image, CTA, and unsubscribe URLs from the backend using `CLIENT_URL`; do not rely on frontend URL helpers.
-- For custom sends, derive CTA `/products` and the site OG image.
+- Build absolute image, CTA, and unsubscribe URLs from the backend using `NEWSLETTER_PUBLIC_SITE_URL` / `NEXT_PUBLIC_SITE_URL` / the production default; do not rely on frontend URL helpers or local `CLIENT_URL`.
+- For custom sends, derive CTA `/products` and the configured default newsletter image, currently `/logo_64pxH.svg`.
 - `GET /status` returns `{ activeSubscribers }` only.
 - Test send validates `NEWSLETTER_TEST_RECIPIENTS` and returns `422` if missing/invalid.
 - Test send sends to configured test recipients only and returns `{ message, recipients }`, where `recipients` is a number count, not an email array.
+- Test and broadcast send reject untrusted browser origins before sending any email.
 - Broadcast send queries active subscribers at broadcast start.
 - Broadcast send sends only to `status: "active"` subscribers.
-- Broadcast send generates a unique unsubscribe URL per subscriber.
+- Broadcast send generates a unique visible unsubscribe URL and one-click `List-Unsubscribe` API URL per subscriber.
 - Broadcast send imports and reuses the existing `createUnsubscribeToken` helper from `newsletterService.js`, so `NEWSLETTER_UNSUBSCRIBE_SECRET` is required for real sends.
 - Add a simple per-process concurrent broadcast guard. If a broadcast is already running, return `409` with a clear message instead of sending duplicate emails.
 - Broadcast response returns counts only: `{ message, sent, failed, activeSubscribers }`.
@@ -272,12 +275,16 @@ Do not accept client-provided `imageUrl`, `ctaUrl`, recipient lists, unsubscribe
 - A second simultaneous broadcast receives `409` and sends no duplicate emails.
 - Partial failures produce a private owner report email.
 - API responses never expose subscriber emails, subscriber records, or unsubscribe tokens.
+- Authenticated send mutations from untrusted origins receive `403` and do not send email.
+- In production, newsletter send mutations require a trusted `Origin` or `Referer`.
+- Trusted-origin tests cover allowed site origin, rejected foreign origin, and production missing-origin behavior.
 - No V1 subscriber listing/search/export/download endpoint is added.
 - Representative future-looking subscriber-list paths such as `/newsletter/subscribers`, `/newsletter/send/subscribers`, and `/newsletter/export` return `401` or `404` and do not query subscribers.
 - Rate limits are isolated from public subscribe/contact limits:
   - test send: 10/hour per authenticated user/IP;
   - broadcast: 3/hour per authenticated user/IP.
-- Integration tests cover at least one rate-limit rejection and prove it does not consume public subscribe/contact quotas.
+- Authenticated newsletter send limits are keyed by the logged-in user, so changing `X-Forwarded-For` does not bypass the cap.
+- Integration tests cover both test-send and broadcast rate-limit rejection and prove they do not consume public subscribe/contact quotas.
 
 ---
 
@@ -305,7 +312,7 @@ happy-colors-nextjs-project/__tests__/components/newsletter/NewsletterSendClient
 - Initialize custom newsletters with:
   - empty subject;
   - empty editor content;
-  - site OG image summary;
+  - default newsletter image summary;
   - CTA `/products`;
   - label `Виж повече`.
 - Manager methods:
@@ -359,7 +366,7 @@ server/__tests__/integration/newsletterSend.test.js
 - Prefill uses:
   - product title;
   - full product description;
-  - first normalized product image or site OG fallback;
+  - first normalized product image or configured default newsletter image fallback;
   - CTA `/products/<productId>`;
   - label `Виж повече`.
 - The authenticated user can edit subject/content before test/broadcast.
@@ -412,7 +419,7 @@ happy-colors-nextjs-project/__tests__/components/blog/BlogArticleActions.test.js
   - article title;
   - first non-empty paragraph from sanitized article HTML;
   - existing excerpt/contentText fallback only when no paragraph exists;
-- thumbnail image or site OG fallback;
+- thumbnail image or configured default newsletter image fallback;
 - CTA `/blog/<articleId>`;
 - label `Виж повече`.
 - Keep blog OG fallback tests aligned with the design document.
@@ -497,6 +504,7 @@ git -c safe.directory="E:/web_projects/Happy-Colors/Happy-Colors-Repo" diff | cl
 - `NEWSLETTER_UNSUBSCRIBE_SECRET` remains configured.
 - Site OG fallback asset exists in production build.
 - Registration remains disabled in production.
+- `NEWSLETTER_PUBLIC_SITE_URL` is configured as `https://happycolors.eu` in production.
 - No subscriber list endpoint exists.
 - Test email is verified manually before first real broadcast if the owner chooses to do so.
 - Send-to-all confirmation displays the correct active subscriber count.

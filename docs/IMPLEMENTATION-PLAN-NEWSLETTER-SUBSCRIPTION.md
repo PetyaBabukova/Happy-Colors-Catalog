@@ -215,7 +215,7 @@ Welcome email rules:
 
 - Use existing `sendEmail`.
 - Send only after new subscription, reactivation, or retry when `welcomeEmailSentAt` is null.
-- Include a frontend unsubscribe URL generated from `CLIENT_URL` and `createUnsubscribeToken`.
+- Include a frontend unsubscribe URL generated from `NEWSLETTER_PUBLIC_SITE_URL` / the public site fallback and `createUnsubscribeToken`; do not rely on local `CLIENT_URL` for email links.
 - Do not send welcome email for honeypot submissions.
 - Do not send welcome email for already active subscribers with non-null `welcomeEmailSentAt`.
 - Set `welcomeEmailSentAt` only after successful delivery.

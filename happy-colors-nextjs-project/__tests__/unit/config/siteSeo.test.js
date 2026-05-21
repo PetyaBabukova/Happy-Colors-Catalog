@@ -16,6 +16,7 @@ describe('siteSeo', () => {
 
     const siteSeo = await import('../../../src/config/siteSeo.js');
 
+    expect(siteSeo.SITE_OG_IMAGE_PATH).toBe('/og/happy-colors-og.png');
     expect(siteSeo.SITE_ENV).toBe('production');
     expect(siteSeo.currentSiteUrl).toBe('https://happycolors.eu');
     expect(siteSeo.shouldIndexSite).toBe(true);

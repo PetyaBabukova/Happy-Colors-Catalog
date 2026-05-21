@@ -1,6 +1,7 @@
 import express from 'express';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
+  createUnsubscribePageUrl,
   subscribeToNewsletter,
   unsubscribeFromNewsletter,
 } from '../services/newsletterService.js';
@@ -52,6 +53,23 @@ router.post('/subscribe', subscribeLimiter, requireJson, async (req, res) => {
   } catch (error) {
     return sendError(res, error);
   }
+});
+
+router.post('/unsubscribe/one-click', unsubscribeLimiter, async (req, res) => {
+  try {
+    const token = req.query?.token || req.body?.token;
+    const result = await unsubscribeFromNewsletter({ token });
+
+    return res.status(200).type('text/plain').send(result.message);
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.get('/unsubscribe/one-click', unsubscribeLimiter, (req, res) => {
+  const token = String(req.query?.token || '').trim();
+
+  return res.redirect(302, createUnsubscribePageUrl(token));
 });
 
 router.post('/unsubscribe', unsubscribeLimiter, requireJson, async (req, res) => {

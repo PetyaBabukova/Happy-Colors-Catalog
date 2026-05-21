@@ -171,7 +171,7 @@ Error examples:
 Public email unsubscribe links should point to the frontend, for example:
 
 ```txt
-${CLIENT_URL}/newsletter/unsubscribe?token=...
+${NEWSLETTER_PUBLIC_SITE_URL}/newsletter/unsubscribe?token=...
 ```
 
 Email clients and security scanners may prefetch links from email bodies. For that reason, opening the link must not perform the unsubscribe mutation directly.

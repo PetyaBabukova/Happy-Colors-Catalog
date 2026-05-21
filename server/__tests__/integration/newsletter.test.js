@@ -48,6 +48,7 @@ describe('newsletter integration', () => {
       text: expect.stringContaining('Вие се абонирахте за новини от Happy Colors.'),
     });
     expect(sendEmail.mock.calls[0][0].text).toContain('/newsletter/unsubscribe?token=');
+    expect(sendEmail.mock.calls[0][0].text).toContain('https://happycolors.eu/newsletter/unsubscribe?token=');
   });
 
   it('rejects invalid subscribe payloads before creating subscribers', async () => {
@@ -292,6 +293,36 @@ describe('newsletter integration', () => {
       .set('x-forwarded-for', '203.0.113.30')
       .send({ token: 'not-a-valid-token' })
       .expect(200);
+  });
+
+  it('supports direct one-click unsubscribe POST requests from email clients', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({ email: 'one-click@example.com' });
+    const token = createUnsubscribeToken(subscriber);
+
+    await request(app)
+      .post(`/newsletter/unsubscribe/one-click?token=${encodeURIComponent(token)}`)
+      .set('x-forwarded-for', '203.0.113.32')
+      .type('form')
+      .send({ 'List-Unsubscribe': 'One-Click' })
+      .expect(200);
+
+    const unsubscribed = await NewsletterSubscriber.findById(subscriber._id);
+    expect(unsubscribed.status).toBe('unsubscribed');
+    expect(unsubscribed.unsubscribedAt).toBeInstanceOf(Date);
+  });
+
+  it('redirects one-click unsubscribe GET requests to the public confirmation page', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({ email: 'one-click-get@example.com' });
+    const token = createUnsubscribeToken(subscriber);
+
+    const res = await request(app)
+      .get(`/newsletter/unsubscribe/one-click?token=${encodeURIComponent(token)}`)
+      .set('x-forwarded-for', '203.0.113.34')
+      .expect(302);
+
+    expect(res.headers.location).toBe(`https://happycolors.eu/newsletter/unsubscribe?token=${encodeURIComponent(token)}`);
   });
 
   it('rate limits unsubscribe attempts separately', async () => {

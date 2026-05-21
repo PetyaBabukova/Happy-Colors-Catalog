@@ -1,4 +1,4 @@
-import { currentSiteUrl } from '@/config/siteSeo';
+import { SITE_OG_IMAGE_PATH, currentSiteUrl } from '@/config/siteSeo';
 import { stringifyJsonLd } from '@/utils/productSeo';
 
 function absoluteUrl(url) {
@@ -24,7 +24,7 @@ export function buildBlogSeoDescription(article) {
 export function buildBlogMetadata(article, articleId) {
   const title = buildBlogSeoTitle(article);
   const description = buildBlogSeoDescription(article);
-  const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl);
+  const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
 
   return {
     title,
@@ -61,7 +61,7 @@ export function buildBlogMetadata(article, articleId) {
 }
 
 export function buildBlogArticleJsonLd(article, articleId) {
-  const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl);
+  const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
 
   return {
     '@context': 'https://schema.org',

@@ -62,6 +62,9 @@ beforeAll(async () => {
   process.env.CLIENT_URL = 'http://localhost:3000';
   process.env.GCS_BUCKET_NAME = 'test-bucket';
   process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'test-newsletter-unsubscribe-secret';
+  process.env.NEWSLETTER_TEST_RECIPIENTS = 'test-owner@example.com,test-copy@example.com';
+  process.env.NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
+  process.env.NEWSLETTER_DEFAULT_IMAGE_URL = 'https://cdn.example.com/default-newsletter.webp';
 
   mongoServer = await MongoMemoryReplSet.create({
     replSet: { count: 1 },
@@ -90,4 +93,7 @@ afterAll(async () => {
   delete process.env.CLIENT_URL;
   delete process.env.GCS_BUCKET_NAME;
   delete process.env.NEWSLETTER_UNSUBSCRIBE_SECRET;
+  delete process.env.NEWSLETTER_TEST_RECIPIENTS;
+  delete process.env.NEWSLETTER_PUBLIC_SITE_URL;
+  delete process.env.NEWSLETTER_DEFAULT_IMAGE_URL;
 });

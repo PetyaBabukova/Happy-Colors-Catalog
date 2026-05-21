@@ -19,11 +19,13 @@ export function createRateLimiter({
   windowMs = 15 * 60 * 1000,
   max = 10,
   message = 'Твърде много заявки. Моля, опитайте отново по-късно.',
+  keyGenerator,
 } = {}) {
   return function rateLimitMiddleware(req, res, next) {
     const now = Date.now();
     const clientIp = getClientIp(req);
-    const key = `${keyPrefix}:${clientIp}`;
+    const keyValue = typeof keyGenerator === 'function' ? keyGenerator(req, clientIp) : clientIp;
+    const key = `${keyPrefix}:${keyValue || clientIp}`;
 
     const existing = stores.get(key);
 

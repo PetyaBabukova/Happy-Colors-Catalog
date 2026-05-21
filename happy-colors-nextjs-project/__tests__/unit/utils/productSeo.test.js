@@ -143,14 +143,19 @@ describe('productSeo', () => {
     ]);
   });
 
-  it('builds website metadata without preview images when no media exists', async () => {
+  it('builds website metadata with the site OG fallback when no media exists', async () => {
     const { buildProductMetadata } = await import('../../../src/utils/productSeo.js');
     const metadata = buildProductMetadata({ title: 'No Media Product' }, 'no-media');
 
     expect(metadata.openGraph.type).toBe('website');
-    expect(metadata.openGraph).not.toHaveProperty('images');
+    expect(metadata.openGraph.images).toEqual([
+      {
+        url: 'http://test.local/og/happy-colors-og.png',
+        alt: 'No Media Product',
+      },
+    ]);
     expect(metadata.openGraph).not.toHaveProperty('videos');
-    expect(metadata.twitter).not.toHaveProperty('images');
+    expect(metadata.twitter.images).toEqual(['http://test.local/og/happy-colors-og.png']);
   });
 
   it('escapes unsafe JSON-LD characters', async () => {

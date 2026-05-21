@@ -19,6 +19,29 @@ function getCredentials() {
   return { fromEmail, pass };
 }
 
+function formatSender(fromEmail) {
+  return `Happy Colors <${fromEmail}>`;
+}
+
+function maskEmail(value) {
+  const email = String(value || '').trim();
+  const [localPart, domain] = email.split('@');
+
+  if (!localPart || !domain) {
+    return email ? '[redacted-recipient]' : '';
+  }
+
+  return `${localPart.slice(0, 1)}***@${domain}`;
+}
+
+function maskRecipients(value) {
+  if (Array.isArray(value)) {
+    return value.map(maskEmail);
+  }
+
+  return maskEmail(value);
+}
+
 function createTransporter(fromEmail, pass) {
   return nodemailer.createTransport({
     service: 'gmail',
@@ -67,7 +90,7 @@ async function sendWithRetry(mailOptions) {
       lastError = error;
       console.error('Email send attempt failed:', {
         attempt,
-        to: mailOptions.to,
+        to: maskRecipients(mailOptions.to),
         subject: mailOptions.subject,
         code: error?.code || 'UNKNOWN',
         message: error?.message || 'Unknown email error',
@@ -88,11 +111,11 @@ function isEmailDeliveryDisabled() {
 }
 
 /**
- * sendEmail({ to?, subject, text })
+ * sendEmail({ to?, subject, text, html, headers })
  * - Ако "to" липсва -> праща към CONTACT_EMAIL (admin)
  * - Ако "to" е подаден -> праща към него
  */
-export async function sendEmail({ to, subject, text }) {
+export async function sendEmail({ to, subject, text, html, headers }) {
   if (isEmailDeliveryDisabled()) {
     return {
       messageId: 'email-delivery-disabled',
@@ -104,10 +127,12 @@ export async function sendEmail({ to, subject, text }) {
 
   const { fromEmail } = getTransporter();
   const mailOptions = {
-    from: fromEmail,
+    from: formatSender(fromEmail),
     to: to || fromEmail,
     subject,
-    text,
+    ...(text !== undefined ? { text } : {}),
+    ...(html !== undefined ? { html } : {}),
+    ...(headers ? { headers } : {}),
   };
   return sendWithRetry(mailOptions);
 }

@@ -1,0 +1,793 @@
+import request from 'supertest';
+import { describe, expect, it, vi } from 'vitest';
+import { sendEmail } from '../../helpers/sendEmail.js';
+import NewsletterSubscriber from '../../models/NewsletterSubscriber.js';
+import { createExpressApp } from '../../server.js';
+import { authCookie, createBlogArticle, createProduct, createUser } from './factories.js';
+
+const validContentJson = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'Hello subscribers.' }],
+    },
+  ],
+};
+
+function newsletterPayload(overrides = {}) {
+  return {
+    subject: 'Newsletter update',
+    contentHtml: '<p>Hello subscribers.</p>',
+    contentJson: validContentJson,
+    contentText: 'Hello subscribers.',
+    sourceType: 'custom',
+    ...overrides,
+  };
+}
+
+async function createSubscriber(overrides = {}) {
+  return NewsletterSubscriber.create({
+    email: 'subscriber@example.com',
+    status: 'active',
+    consentGivenAt: new Date(),
+    welcomeEmailSentAt: new Date(),
+    ...overrides,
+  });
+}
+
+async function waitUntil(predicate) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error('Timed out waiting for test condition.');
+}
+
+describe('newsletter send integration', () => {
+  it('requires authentication before status, test, and broadcast work', async () => {
+    const app = createExpressApp();
+
+    await request(app).get('/newsletter/send/status').expect(401);
+    await request(app).post('/newsletter/send/test').send(newsletterPayload()).expect(401);
+    await request(app).post('/newsletter/send').send(newsletterPayload()).expect(401);
+
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(await NewsletterSubscriber.countDocuments()).toBe(0);
+  });
+
+  it('returns active subscriber count only from the authenticated status endpoint', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'active@example.com' });
+    await createSubscriber({ email: 'unsubscribed@example.com', status: 'unsubscribed' });
+
+    const res = await request(app)
+      .get('/newsletter/send/status')
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toEqual({ activeSubscribers: 1 });
+    expect(JSON.stringify(res.body)).not.toContain('active@example.com');
+  });
+
+  it('sends test emails to configured recipients without subscriber data', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    const res = await request(app)
+      .post('/newsletter/send/test')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+
+    expect(res.body).toEqual({
+      message: 'Test email sent.',
+      recipients: 2,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(2);
+    expect(sendEmail).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        to: 'test-owner@example.com',
+        subject: 'Newsletter update',
+        html: expect.stringContaining('Това е тестов имейл.'),
+        headers: {},
+      })
+    );
+    expect(JSON.stringify(res.body)).not.toContain('test-owner@example.com');
+  });
+
+  it('rejects test send when test recipients are not configured', async () => {
+    const previousRecipients = process.env.NEWSLETTER_TEST_RECIPIENTS;
+    process.env.NEWSLETTER_TEST_RECIPIENTS = '';
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    try {
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .send(newsletterPayload())
+        .expect(422);
+    } finally {
+      process.env.NEWSLETTER_TEST_RECIPIENTS = previousRecipients;
+    }
+
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('broadcasts to active subscribers only and keeps subscriber data out of the response', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'first@example.com' });
+    await createSubscriber({ email: 'second@example.com' });
+    await createSubscriber({ email: 'skipped@example.com', status: 'unsubscribed' });
+
+    const res = await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+
+    expect(res.body).toEqual({
+      message: 'Newsletter send finished.',
+      sent: 2,
+      failed: 0,
+      activeSubscribers: 2,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(2);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'first@example.com',
+        html: expect.stringContaining('https://happycolors.eu/newsletter/unsubscribe?token='),
+        headers: expect.objectContaining({
+          'List-Unsubscribe': expect.stringContaining('https://happycolors.eu/api/newsletter/unsubscribe/one-click?token='),
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        }),
+      })
+    );
+    expect(sendEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: 'skipped@example.com' }));
+    expect(JSON.stringify(res.body)).not.toContain('first@example.com');
+    expect(JSON.stringify(res.body)).not.toContain('token=');
+  });
+
+  it('returns a conflict while another broadcast is in progress', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'slow@example.com' });
+    let releaseFirstSend;
+
+    sendEmail.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirstSend = () => resolve({ messageId: 'slow-send-finished' });
+        })
+    );
+
+    const firstRequest = request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+    firstRequest.catch(() => {});
+
+    await waitUntil(() => Boolean(releaseFirstSend));
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload({ subject: 'Second send' }))
+      .expect(409);
+
+    releaseFirstSend();
+    await firstRequest;
+  });
+
+  it('falls back to text extracted from sanitized HTML when contentText is empty', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'html-only@example.com' });
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(
+        newsletterPayload({
+          contentHtml:
+            '<p>Body from sanitized HTML.</p><a href="http://example.com/path">HTTP link</a><a href="/products">Relative link</a><a href="//evil.example/path">Protocol link</a><a href="https://happycolors.eu/products">HTTPS link</a><a href="mailto:hello@happycolors.eu">Mail link</a>',
+          contentText: '',
+        })
+      )
+      .expect(200);
+
+    const sentEmail = sendEmail.mock.calls.find(([options]) => options.to === 'html-only@example.com')?.[0];
+
+    expect(sentEmail).toEqual(
+      expect.objectContaining({
+        text: expect.stringContaining('Body from sanitized HTML.'),
+      })
+    );
+    expect(sentEmail.html).not.toContain('http://example.com/path');
+    expect(sentEmail.html).not.toContain('href="/products"');
+    expect(sentEmail.html).not.toContain('//evil.example/path');
+    expect(sentEmail.html).toContain('https://happycolors.eu/products');
+    expect(sentEmail.html).toContain('mailto:hello@happycolors.eu');
+  });
+
+  it('returns a clear zero-subscriber response without sending', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    const res = await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+
+    expect(res.body).toEqual({
+      message: 'No active subscribers.',
+      sent: 0,
+      failed: 0,
+      activeSubscribers: 0,
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('uses a configured public image URL for custom newsletters', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'custom-image@example.com' });
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'custom-image@example.com',
+        html: expect.stringContaining('https://cdn.example.com/default-newsletter.webp'),
+        text: expect.stringContaining('Виж повече: https://happycolors.eu/products'),
+      })
+    );
+  });
+
+  it('falls back to the default newsletter logo path when the public newsletter image is not configured', async () => {
+    const previousImageUrl = process.env.NEWSLETTER_DEFAULT_IMAGE_URL;
+    process.env.NEWSLETTER_DEFAULT_IMAGE_URL = '';
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'site-og@example.com' });
+
+    try {
+      await request(app)
+        .post('/newsletter/send')
+        .set('Cookie', authCookie(owner))
+        .send(newsletterPayload())
+        .expect(200);
+    } finally {
+      process.env.NEWSLETTER_DEFAULT_IMAGE_URL = previousImageUrl;
+    }
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'site-og@example.com',
+        html: expect.stringContaining('https://happycolors.eu/logo_64pxH.svg'),
+      })
+    );
+  });
+
+  it('rejects authenticated newsletter mutations from untrusted browser origins before sending', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'csrf-target@example.com' });
+
+    await request(app)
+      .post('/newsletter/send/test')
+      .set('Cookie', authCookie(owner))
+      .set('Referer', 'https://evil.example/newsletter/send')
+      .send(newsletterPayload())
+      .expect(403);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .set('Referer', 'https://evil.example/newsletter/send')
+      .send(newsletterPayload())
+      .expect(403);
+
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('allows authenticated newsletter mutations from the configured public site origin', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    const res = await request(app)
+      .post('/newsletter/send/test')
+      .set('Cookie', authCookie(owner))
+      .set('Origin', 'https://happycolors.eu')
+      .send(newsletterPayload())
+      .expect(200);
+
+    expect(res.body).toEqual({
+      message: 'Test email sent.',
+      recipients: 2,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires a trusted origin for newsletter mutations in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    try {
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .send(newsletterPayload())
+        .expect(403);
+
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .set('Referer', 'http://localhost:3000/newsletter/send')
+        .send(newsletterPayload())
+        .expect(403);
+
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .set('Referer', 'https://happycolors.eu/newsletter/send')
+        .send(newsletterPayload())
+        .expect(200);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it('requires a trusted origin when NODE_ENV is unset outside local development', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousClientUrl = process.env.CLIENT_URL;
+    delete process.env.NODE_ENV;
+    process.env.CLIENT_URL = 'https://happycolors.eu';
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    try {
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .send(newsletterPayload())
+        .expect(403);
+
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .set('Origin', 'https://happycolors.eu')
+        .send(newsletterPayload())
+        .expect(200);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      process.env.CLIENT_URL = previousClientUrl;
+    }
+  });
+
+  it('emails the owner a private failure report for partial broadcast failures', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'bad@example.com' });
+    await createSubscriber({ email: 'good@example.com' });
+    sendEmail
+      .mockRejectedValueOnce(new Error('Mailbox unavailable'))
+      .mockResolvedValueOnce({ messageId: 'subscriber-ok' })
+      .mockResolvedValueOnce({ messageId: 'report-ok' });
+
+    const res = await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+
+    expect(res.body).toEqual({
+      message: 'Newsletter send finished with failures.',
+      sent: 1,
+      failed: 1,
+      activeSubscribers: 2,
+    });
+    expect(sendEmail).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        subject: 'Happy Colors newsletter delivery failures',
+        text: expect.stringContaining('bad@example.com - Mailbox unavailable'),
+      })
+    );
+    expect(JSON.stringify(res.body)).not.toContain('bad@example.com');
+  });
+
+  it('rejects invalid payloads before sending', async () => {
+    const app = createExpressApp();
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(await createUser()))
+      .set('x-forwarded-for', '203.0.113.10')
+      .send(newsletterPayload({ email: 'owner@example.com', password: 'should-not-be-accepted' }))
+      .expect(400);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(await createUser()))
+      .set('x-forwarded-for', '203.0.113.11')
+      .send(newsletterPayload({ subject: 'x'.repeat(161) }))
+      .expect(400);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(await createUser()))
+      .set('x-forwarded-for', '203.0.113.12')
+      .send(newsletterPayload({ imageUrl: 'https://evil.example/image.png' }))
+      .expect(400);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(await createUser()))
+      .set('x-forwarded-for', '203.0.113.13')
+      .send(newsletterPayload({ sourceType: 'admin' }))
+      .expect(400);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(await createUser()))
+      .set('x-forwarded-for', '203.0.113.14')
+      .send(newsletterPayload({ sourceType: 'product', sourceId: 'not-a-mongo-id' }))
+      .expect(400);
+
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('accepts nullable contentJson while still validating newsletter text content', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'nullable-json@example.com' });
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload({ contentJson: null }))
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'nullable-json@example.com',
+        text: expect.stringContaining('Hello subscribers.'),
+      })
+    );
+  });
+
+  it('requires JSON content for send mutations', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .set('Content-Type', 'text/plain')
+      .send('subject=Hello')
+      .expect(415);
+  });
+
+  it('does not expose subscriber listing routes in V1', async () => {
+    const app = createExpressApp();
+
+    await request(app).get('/newsletter/subscribers').expect(404);
+    await request(app).get('/newsletter/send/subscribers').expect(404);
+    await request(app).get('/newsletter/export').expect(404);
+  });
+
+  it('requires auth for product prefill before returning product data', async () => {
+    const app = createExpressApp();
+    const product = await createProduct({ title: 'Private product title' });
+
+    await request(app)
+      .get(`/newsletter/send/prefill/product/${product._id}`)
+      .expect(401);
+  });
+
+  it('rejects invalid product prefill ids before loading product records', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    await request(app)
+      .get('/newsletter/send/prefill/product/not-a-mongo-id')
+      .set('Cookie', authCookie(owner))
+      .expect(400);
+  });
+
+  it('returns product prefill without subscriber data', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const product = await createProduct({
+      title: 'Lavender Candle',
+      description: 'A relaxing handmade candle.',
+      imageUrls: ['https://cdn.example.com/lavender.webp'],
+    });
+
+    const res = await request(app)
+      .get(`/newsletter/send/prefill/product/${product._id}`)
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      sourceType: 'product',
+      sourceId: String(product._id),
+      subject: 'Lavender Candle',
+      contentHtml: '<p>A relaxing handmade candle.</p>',
+      contentText: 'A relaxing handmade candle.',
+      imageUrl: 'https://cdn.example.com/lavender.webp',
+      ctaUrl: `/products/${product._id}`,
+      ctaLabel: 'Виж повече',
+    });
+    expect(JSON.stringify(res.body)).not.toContain('subscriber@example.com');
+    expect(JSON.stringify(res.body)).not.toContain('token=');
+  });
+
+  it('re-derives product CTA and image for product broadcasts', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const product = await createProduct({
+      title: 'Product Newsletter',
+      imageUrls: ['https://cdn.example.com/product-newsletter.webp'],
+    });
+    await createSubscriber({ email: 'product-subscriber@example.com' });
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(
+        newsletterPayload({
+          sourceType: 'product',
+          sourceId: String(product._id),
+        })
+      )
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'product-subscriber@example.com',
+        html: expect.stringContaining(`https://happycolors.eu/products/${product._id}`),
+      })
+    );
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining('https://cdn.example.com/product-newsletter.webp'),
+      })
+    );
+  });
+
+  it('returns 404 for missing product sources in prefill and send', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const missingId = '665000000000000000000001';
+
+    await request(app)
+      .get(`/newsletter/send/prefill/product/${missingId}`)
+      .set('Cookie', authCookie(owner))
+      .expect(404);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload({ sourceType: 'product', sourceId: missingId }))
+      .expect(404);
+  });
+
+  it('requires auth for blog prefill before returning article data', async () => {
+    const app = createExpressApp();
+    const article = await createBlogArticle({ title: 'Private article title' });
+
+    await request(app)
+      .get(`/newsletter/send/prefill/blog/${article._id}`)
+      .expect(401);
+  });
+
+  it('rejects invalid blog prefill ids before loading article records', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+
+    await request(app)
+      .get('/newsletter/send/prefill/blog/not-a-mongo-id')
+      .set('Cookie', authCookie(owner))
+      .expect(400);
+  });
+
+  it('returns blog prefill using the first paragraph and thumbnail image', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const article = await createBlogArticle({
+      title: 'Colorful story',
+      contentHtml: '<p>First paragraph for subscribers.</p><p>Second paragraph.</p>',
+      contentText: 'First paragraph for subscribers. Second paragraph.',
+      thumbnailImageUrl: 'https://cdn.example.com/blog-thumb.webp',
+    });
+
+    const res = await request(app)
+      .get(`/newsletter/send/prefill/blog/${article._id}`)
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      sourceType: 'blog',
+      sourceId: String(article._id),
+      subject: 'Colorful story',
+      contentHtml: '<p>First paragraph for subscribers.</p>',
+      contentText: 'First paragraph for subscribers.',
+      imageUrl: 'https://cdn.example.com/blog-thumb.webp',
+      ctaUrl: `/blog/${article._id}`,
+      ctaLabel: 'Виж повече',
+    });
+  });
+
+  it('skips empty leading paragraphs when building blog prefill', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const article = await createBlogArticle({
+      title: 'Intro after empty paragraph',
+      contentHtml: '<p><br></p><p>Real intro for subscribers.</p><p>Second paragraph.</p>',
+      contentText: 'Real intro for subscribers. Second paragraph.',
+    });
+
+    const res = await request(app)
+      .get(`/newsletter/send/prefill/blog/${article._id}`)
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      contentHtml: '<p>Real intro for subscribers.</p>',
+      contentText: 'Real intro for subscribers.',
+    });
+  });
+
+  it('re-derives blog CTA and image for blog broadcasts', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const article = await createBlogArticle({
+      title: 'Blog Newsletter',
+      thumbnailImageUrl: 'https://cdn.example.com/blog-newsletter.webp',
+    });
+    await createSubscriber({ email: 'blog-subscriber@example.com' });
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(
+        newsletterPayload({
+          sourceType: 'blog',
+          sourceId: String(article._id),
+        })
+      )
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'blog-subscriber@example.com',
+        html: expect.stringContaining(`https://happycolors.eu/blog/${article._id}`),
+      })
+    );
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining('https://cdn.example.com/blog-newsletter.webp'),
+      })
+    );
+  });
+
+  it('returns 404 for missing blog sources in prefill and send', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const missingId = '665000000000000000000002';
+
+    await request(app)
+      .get(`/newsletter/send/prefill/blog/${missingId}`)
+      .set('Cookie', authCookie(owner))
+      .expect(404);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload({ sourceType: 'blog', sourceId: missingId }))
+      .expect(404);
+  });
+
+  it('rate limits test sends separately from public subscribe', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const ip = '203.0.113.55';
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app)
+        .post('/newsletter/send/test')
+        .set('Cookie', authCookie(owner))
+        .set('x-forwarded-for', ip)
+        .send(newsletterPayload({ subject: `Test ${index}` }))
+        .expect(200);
+    }
+
+    await request(app)
+      .post('/newsletter/send/test')
+      .set('Cookie', authCookie(owner))
+      .set('x-forwarded-for', ip)
+      .send(newsletterPayload({ subject: 'Limited' }))
+      .expect(429);
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', ip)
+      .send({ email: 'new-subscriber@example.com', consent: true, website: '' })
+      .expect(200);
+  });
+
+  it('rate limits broadcasts separately from public subscribe', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const ip = '203.0.113.56';
+    await createSubscriber({ email: 'rate-limited-broadcast@example.com' });
+
+    for (let index = 0; index < 3; index += 1) {
+      await request(app)
+        .post('/newsletter/send')
+        .set('Cookie', authCookie(owner))
+        .set('x-forwarded-for', ip)
+        .send(newsletterPayload({ subject: `Broadcast ${index}` }))
+        .expect(200);
+    }
+
+    expect(sendEmail).toHaveBeenCalledTimes(3);
+
+    const rateLimited = await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .set('x-forwarded-for', ip)
+      .send(newsletterPayload({ subject: 'Limited broadcast' }))
+      .expect(429);
+
+    expect(rateLimited.headers['retry-after']).toBeTruthy();
+    expect(sendEmail).toHaveBeenCalledTimes(3);
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', ip)
+      .send({ email: 'after-broadcast-limit@example.com', consent: true, website: '' })
+      .expect(200);
+  });
+
+  it('does not let authenticated users bypass broadcast limits by changing x-forwarded-for', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    await createSubscriber({ email: 'spoofed-ip-broadcast@example.com' });
+
+    for (let index = 0; index < 3; index += 1) {
+      await request(app)
+        .post('/newsletter/send')
+        .set('Cookie', authCookie(owner))
+        .set('x-forwarded-for', `203.0.113.${60 + index}`)
+        .send(newsletterPayload({ subject: `Broadcast ${index}` }))
+        .expect(200);
+    }
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .set('x-forwarded-for', '203.0.113.99')
+      .send(newsletterPayload({ subject: 'Spoofed IP should still be limited' }))
+      .expect(429);
+
+    expect(sendEmail).toHaveBeenCalledTimes(3);
+  });
+});

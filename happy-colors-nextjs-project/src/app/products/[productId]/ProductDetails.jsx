@@ -429,6 +429,15 @@ export default function ProductDetails({ product }) {
 									</Link>
 								</div>
 							)}
+
+							{user && (
+								<Link
+									href={`/newsletter/send?source=product&id=${product._id}`}
+									className={`${styles.actionBtn} ${styles.newsletterActionBtn}`}
+								>
+									Изпрати до абонати
+								</Link>
+							)}
 						</div>
 					</>
 				)}

@@ -108,6 +108,16 @@
   color: white;
 }
 
+.newsletterActionBtn {
+  border-color: var(--dark-orange);
+  background-color: var(--dark-orange);
+}
+
+.newsletterActionBtn:hover {
+  border-color: var(--dark-green);
+  background-color: var(--dark-green);
+}
+
 .productDetailsImagesContainer {
   flex: 0 1 40%;
   display: flex;

@@ -26,7 +26,7 @@ The implementation should stay small enough for the current stage of the busines
   - `p.babukova@gmail.com`
   - `s.babukov@gmail.com`
 - Every send-to-all action must show a confirmation modal.
-- Custom newsletter image uses a raster site OG image in V1.
+- Custom newsletter image uses `/logo_64pxH.svg` in the first implementation; it can be replaced with a raster newsletter/OG image in a later polish task.
 - Custom newsletter CTA link points to `/products`.
 - CTA text is always `Виж повече`.
 - Product newsletter content uses the full product description.
@@ -181,7 +181,7 @@ Fields:
 
 - Subject.
 - Rich text content using the reused blog editor.
-- Read-only/default image preview: raster site OG image.
+- Read-only/default image preview: `/logo_64pxH.svg` for the first implementation.
 - Link preview: `/products`.
 - CTA text preview: `Виж повече`.
 - Optional test send button.
@@ -327,9 +327,11 @@ HTML template requirements:
 - Inline critical styles or keep styles simple enough for major email clients.
 - Do not depend on external CSS.
 - Use absolute URLs for images and links.
+- Build site-relative email URLs from `NEWSLETTER_PUBLIC_SITE_URL` first, then `NEXT_PUBLIC_SITE_URL`, then the production Happy Colors default. Do not let newsletter emails fall back to local `CLIENT_URL` values such as `localhost`.
+- Preserve absolute source image URLs from MongoDB, for example GCS URLs.
 - Include `alt` text for the image.
 - Include a visible unsubscribe link in the footer.
-- For real subscriber emails, include `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers with the per-subscriber unsubscribe URL.
+- For real subscriber emails, include `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers. The header URL must point to the backend one-click endpoint exposed through `/api/newsletter/unsubscribe/one-click?token=...`; the visible footer link remains the public confirmation page at `/newsletter/unsubscribe?token=...`.
 - Omit `List-Unsubscribe` headers for test emails because they do not have a real subscriber unsubscribe URL.
 - Escape all interpolated plain strings.
 - Only insert rich HTML after sanitization.
@@ -344,12 +346,12 @@ Plain text fallback requirements:
 
 Image rules:
 
-- custom: configured raster site OG image;
-- product: first product image, fallback to configured raster site OG image;
-- blog: thumbnail image, fallback to configured raster site OG image.
+- custom: configured default newsletter image, currently `/logo_64pxH.svg`;
+- product: first product image, fallback to the configured default newsletter image;
+- blog: thumbnail image, fallback to the configured default newsletter image.
 - The API should not accept arbitrary external image URLs from the client in V1.
 - Product/blog images should be derived server-side from `sourceId`.
-- Custom image should be the configured site OG asset.
+- Custom image should be the configured default newsletter image.
 
 `imageUrl` is an internal template value after backend validation/derivation. It should not be trusted as a free client-provided field.
 
@@ -577,7 +579,7 @@ Backend must validate:
 - `contentText` required or derived server-side;
 - client-provided `imageUrl` is not accepted in V1 send payloads;
 - product/blog image URLs are derived server-side from source data;
-- custom image URL is the configured raster site OG asset;
+- custom image URL is the configured default newsletter image;
 - client-provided `ctaUrl` is not accepted in V1 send payloads;
 - `ctaLabel` fixed to `Виж повече` in V1;
 - `sourceType` in `custom`, `product`, `blog`;
@@ -589,7 +591,7 @@ Backend must validate:
 Use existing or extracted blog sanitization rules:
 
 - allow paragraphs, headings, lists, bold, italic, underline, and safe links;
-- allow only `https:` and `mailto:` links;
+- allow only absolute `https:` and `mailto:` links; strip `http:`, relative, and protocol-relative links;
 - add `rel="noopener noreferrer"` and `target="_blank"` for external links;
 - strip script/event attributes/styles not explicitly allowed.
 
@@ -641,16 +643,18 @@ Current `sendEmail` logs `mailOptions.to` on failure. Before newsletter broadcas
 
 ### Request Forgery and Session Safety
 
-The send endpoints are high-impact authenticated mutations. V1 must rely on the existing session and CORS model and avoid introducing public mutation surfaces:
+The send endpoints are high-impact authenticated mutations. V1 must rely on the existing session, CORS model, and a server-side trusted-origin guard to avoid introducing public or cross-site mutation surfaces:
 
 - use `POST` for test and broadcast sends;
 - require `Content-Type: application/json` for send endpoints;
+- require a trusted `Origin` or `Referer` on newsletter send mutations in production;
+- reject authenticated send mutations from origins outside the configured site allowlist before any email is sent;
 - rely on the existing CORS allowlist with credentials so arbitrary sites cannot call the API from a browser;
 - keep auth cookies `httpOnly` and `secure` in production;
 - do not add GET endpoints that send emails;
 - do not add GET endpoints that list subscribers in V1;
 - keep the confirmation modal before the broadcast request is submitted;
-- if more users are added, registration is opened, or cross-origin auth changes, revisit roles and CSRF protection as a separate security task.
+- if more users are added, registration is opened, or cross-origin auth changes, revisit role-based authorization and a broader CSRF strategy for all admin mutations as a separate security task.
 
 ### Unsubscribe
 
@@ -887,13 +891,18 @@ Keep public subscription logic in `newsletterService.js` and authenticated sendi
 - Email template includes image, CTA, content, and unsubscribe URL.
 - Email template includes `<meta charset="UTF-8">`.
 - Real subscriber email template output includes `List-Unsubscribe` headers; test email output omits them.
+- One-click unsubscribe endpoint accepts direct email-client POST requests and unsubscribes valid tokens without requiring JSON.
 - Authenticated newsletter validation rejects unknown fields and unsafe URLs.
+- Newsletter rich-text sanitization strips `http:`, relative, and protocol-relative links while preserving `https:` and `mailto:` links.
 - Authenticated newsletter validation rejects client-provided arbitrary image URLs.
 - Product/blog send validation ignores client-provided CTA/image data and re-derives CTA URL and image URL from `sourceId`.
 - Product/blog send validation returns `404` when `sourceId` does not exist.
 - Sanitization removes unsafe HTML.
 - Newsletter sanitization strips inline styles unless explicitly needed for safe email rendering.
 - Product/blog prefill builders return expected content and trusted image URLs.
+- Blog prefill skips empty leading paragraphs and uses the first non-empty paragraph.
+- Broadcast rate limiting is covered separately from test-send and public subscribe rate limits.
+- Authenticated newsletter send rate limits cannot be bypassed by changing `X-Forwarded-For`.
 - Blog prefill extracts the first non-empty paragraph from sanitized multi-paragraph HTML.
 - failure report builder includes failed recipient emails and reasons for the private owner email.
 - failure report builder does not include unsubscribe tokens or full HTML payloads.
@@ -1018,8 +1027,9 @@ Mitigation:
 - clients cannot submit arbitrary recipient lists;
 - product/blog CTA and image values are re-derived server-side from trusted source records;
 - CORS remains restricted to configured site origins with credentials;
+- newsletter send POST routes enforce a trusted `Origin`/`Referer` guard in addition to auth, JSON content-type validation, and rate limiting;
 - no GET route sends email;
-- if the authentication or deployment model changes, revisit CSRF protection and role-based authorization before enabling the new model.
+- if the authentication or deployment model changes, revisit broader CSRF protection and role-based authorization before enabling the new model.
 
 ### Subscriber List Exposure
 

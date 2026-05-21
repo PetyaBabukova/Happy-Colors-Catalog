@@ -63,4 +63,32 @@ describe('blogSeo', () => {
     ]);
     expect(stringifyJsonLd(jsonLd)).toContain('\\u003cscript');
   });
+
+  it('uses the site Open Graph image when an article image is missing', () => {
+    const metadata = buildBlogMetadata(
+      {
+        ...article,
+        heroImageUrl: '',
+        thumbnailImageUrl: '',
+      },
+      article._id
+    );
+    const jsonLd = buildBlogArticleJsonLd(
+      {
+        ...article,
+        heroImageUrl: '',
+        thumbnailImageUrl: '',
+      },
+      article._id
+    );
+
+    expect(metadata.openGraph.images).toEqual([
+      {
+        url: 'http://localhost:3000/og/happy-colors-og.png',
+        alt: 'Цветно изображение',
+      },
+    ]);
+    expect(metadata.twitter.images).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
+    expect(jsonLd.image).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
+  });
 });

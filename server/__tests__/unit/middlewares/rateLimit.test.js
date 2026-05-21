@@ -39,4 +39,19 @@ describe('createRateLimiter', () => {
 
     expect(next).toHaveBeenCalledTimes(2);
   });
+
+  it('uses a custom key generator when provided', () => {
+    const limiter = createRateLimiter({
+      keyPrefix: 'unit-rate-limit-user',
+      windowMs: 60_000,
+      max: 1,
+      keyGenerator: (req) => `user:${req.user._id}`,
+    });
+    const next = buildNext();
+
+    limiter(buildReq({ headers: { 'x-forwarded-for': '198.51.100.1' }, user: { _id: 'owner-1' } }), buildRes(), next);
+    limiter(buildReq({ headers: { 'x-forwarded-for': '198.51.100.2' }, user: { _id: 'owner-1' } }), buildRes(), next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
 });

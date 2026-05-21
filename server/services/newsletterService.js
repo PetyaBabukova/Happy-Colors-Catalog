@@ -5,6 +5,7 @@ import NewsletterSubscriber from '../models/NewsletterSubscriber.js';
 
 const MAX_EMAIL_LENGTH = 254;
 const ALLOWED_SUBSCRIBE_FIELDS = new Set(['email', 'consent', 'website']);
+const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
 const GENERIC_SUBSCRIBE_MESSAGE = 'Успешно се абонирахте.';
 const DUPLICATE_SUBSCRIBE_MESSAGE = 'Вече имате абонамент за тази страница.';
 const GENERIC_UNSUBSCRIBE_MESSAGE = 'Успешно се отписахте.';
@@ -144,11 +145,23 @@ export function createUnsubscribeToken(subscriber) {
   return `${payload}.${signature}`;
 }
 
-function createUnsubscribeUrl(subscriber) {
-  const baseClientUrl = String(process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '');
-  const token = createUnsubscribeToken(subscriber);
+function buildPublicSiteUrl(pathOrUrl) {
+  const publicSiteUrl = String(
+    process.env.NEWSLETTER_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.CLIENT_URL ||
+      DEFAULT_NEWSLETTER_PUBLIC_SITE_URL
+  ).replace(/\/+$/, '');
 
-  return `${baseClientUrl}/newsletter/unsubscribe?token=${encodeURIComponent(token)}`;
+  return new URL(pathOrUrl, `${publicSiteUrl}/`).toString();
+}
+
+export function createUnsubscribePageUrl(token) {
+  return `${buildPublicSiteUrl('/newsletter/unsubscribe')}?token=${encodeURIComponent(token)}`;
+}
+
+function createUnsubscribeUrl(subscriber) {
+  return createUnsubscribePageUrl(createUnsubscribeToken(subscriber));
 }
 
 async function sendWelcomeEmail(subscriber) {
