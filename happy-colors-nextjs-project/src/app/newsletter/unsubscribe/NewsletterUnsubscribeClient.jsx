@@ -2,10 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { unsubscribeFromNewsletter } from '@/managers/newsletterManager';
 import styles from './newsletterUnsubscribe.module.css';
 
+const SUCCESS_REDIRECT_DELAY_MS = 2500;
+
 export default function NewsletterUnsubscribeClient({ token }) {
+  const router = useRouter();
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,6 +29,9 @@ export default function NewsletterUnsubscribeClient({ token }) {
       const result = await unsubscribeFromNewsletter(token);
       setMessage(result?.message || 'Успешно се отписахте.');
       setMessageType('success');
+      window.setTimeout(() => {
+        router.replace('/products');
+      }, SUCCESS_REDIRECT_DELAY_MS);
     } catch (error) {
       setMessage(error?.message || 'Не успяхме да ви отпишем.');
       setMessageType('error');
