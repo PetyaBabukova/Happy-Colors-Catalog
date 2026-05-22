@@ -113,7 +113,9 @@ describe('productsManager', () => {
     const triggerCategoriesReload = vi.fn();
     const router = { push: vi.fn() };
 
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1' } })).mockResolvedValueOnce(jsonResponse());
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1', publicationStatus: 'published' } }))
+      .mockResolvedValueOnce(jsonResponse());
 
     await onCreateProductSubmit(
       buildFormValues({ availability: '' }),
@@ -156,6 +158,31 @@ describe('productsManager', () => {
     expect(setInvalidFields).toHaveBeenCalledWith([]);
   });
 
+  it('redirects newly submitted artist products to the detail page with a pending-review notice', async () => {
+    const setSuccess = vi.fn();
+    const setError = vi.fn();
+    const setInvalidFields = vi.fn();
+    const triggerCategoriesReload = vi.fn();
+    const router = { push: vi.fn() };
+
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-2', publicationStatus: 'pending_review' } }))
+      .mockResolvedValueOnce(jsonResponse());
+
+    await onCreateProductSubmit(
+      buildFormValues(),
+      setSuccess,
+      setError,
+      setInvalidFields,
+      { _id: 'owner-1' },
+      router,
+      triggerCategoriesReload
+    );
+
+    expect(router.push).toHaveBeenCalledWith('/products/product-2?created=review-pending');
+    expect(setSuccess).toHaveBeenCalledWith(true);
+  });
+
   it('maps create product field errors to invalid fields without navigating', async () => {
     const setSuccess = vi.fn();
     const setError = vi.fn();
@@ -191,7 +218,9 @@ describe('productsManager', () => {
     const setInvalidFields = vi.fn();
     const router = { push: vi.fn(), refresh: vi.fn() };
 
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1' } })).mockResolvedValueOnce(jsonResponse());
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1', publicationStatus: 'published' } }))
+      .mockResolvedValueOnce(jsonResponse());
 
     await onEditProductSubmit(
       buildFormValues({ category: 'cat-2', imageUrls: null, imageUrl: 'https://cdn.test/only.webp', videos: null }),

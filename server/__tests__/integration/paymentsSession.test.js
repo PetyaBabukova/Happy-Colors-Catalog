@@ -222,6 +222,7 @@ describe('card payment session integration', () => {
 
   it.each([
     ['missing database product', '507f1f77bcf86cd799439011', 404],
+    ['non-published product', async () => createProduct({ publicationStatus: 'draft' }), 404],
     ['blank product title', async () => createProduct({ title: '   ' }), 400],
     ['invalid product price', async () => createProduct({ price: 0 }), 400],
     ['price that rounds to zero cents', async () => createProduct({ price: 0.001 }), 400],

@@ -7,7 +7,7 @@ import {
   authCookie,
   buildBlogArticle,
   createBlogArticle,
-  createUser,
+  createFullAdmin,
 } from './factories.js';
 
 function articleFields(overrides = {}) {
@@ -21,7 +21,7 @@ function articleFields(overrides = {}) {
 describe('blog articles integration', () => {
   it('lists non-archived articles publicly newest-first', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const legacyDraft = buildBlogArticle({
       owner,
       title: 'Legacy draft should be public after draft removal',
@@ -75,7 +75,7 @@ describe('blog articles integration', () => {
 
   it('returns public detail only for non-archived articles', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const published = await createBlogArticle(articleFields({ owner, title: 'Public article' }));
     const legacyDraftInsert = await BlogArticle.collection.insertOne(
       buildBlogArticle({
@@ -107,7 +107,7 @@ describe('blog articles integration', () => {
 
   it('protects admin list and detail routes without letting /admin fall through to :articleId', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
     const article = await createBlogArticle({ owner, title: 'Article in admin' });
     const published = await createBlogArticle(articleFields({ owner, title: 'Published in admin' }));
@@ -136,7 +136,7 @@ describe('blog articles integration', () => {
 
   it('creates an article for an authenticated trusted operator and sanitizes/mass-assigns safely', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const payload = {
       ...buildBlogArticle({ owner, status: 'draft' }),
       owner: 'client-owner-is-ignored',
@@ -170,7 +170,7 @@ describe('blog articles integration', () => {
 
   it('creates published articles when status is omitted', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/blog-articles')
@@ -184,7 +184,7 @@ describe('blog articles integration', () => {
 
   it('rejects invalid create payloads and image URLs', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
 
     await request(app)
@@ -237,7 +237,7 @@ describe('blog articles integration', () => {
 
   it('edits articles without allowing server-owned fields or direct status changes', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
     const article = await createBlogArticle(
       articleFields({
@@ -267,7 +267,7 @@ describe('blog articles integration', () => {
         title: 'Updated title',
         contentHtml: '<p>Updated body</p>',
         excerpt: 'client excerpt',
-        owner: String((await createUser({ email: 'other@example.com' }))._id),
+        owner: String((await createFullAdmin({ email: 'other@example.com' }))._id),
         publishedAt: '2000-01-01T00:00:00.000Z',
         archivedAt: '2000-01-01T00:00:00.000Z',
         newsletterReady: true,
@@ -288,7 +288,7 @@ describe('blog articles integration', () => {
 
   it('rate limits blog article mutation routes through the shared bucket', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
     const article = await createBlogArticle({ owner });
 
@@ -307,7 +307,7 @@ describe('blog articles integration', () => {
 
   it('archives idempotently and restores without changing status', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
     const article = await createBlogArticle(articleFields({ owner }));
 
@@ -352,7 +352,7 @@ describe('blog articles integration', () => {
 
   it('cleans up replaced blog images only after saving and only when unreferenced', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
     const oldHero = 'https://storage.googleapis.com/test-bucket/blog/articles/hero/old.webp';
     const oldThumbnail = 'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/old.webp';

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
-import { requireApiAuth } from '../../_lib/auth';
+import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
 
 export async function POST(request) {
   try {
-    const auth = requireApiAuth(request);
+    const auth = requireApiFullAdmin(await requireApiAuth(request));
 
     if (!auth.ok) {
       return NextResponse.json({ message: auth.message }, { status: auth.status });

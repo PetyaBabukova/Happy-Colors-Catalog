@@ -29,6 +29,9 @@ export default function Header() {
   const { getTotalItems } = useCart();
 
   const cartItemCount = getTotalItems();
+  const isFullAdmin = user?.role === 'full_admin';
+  const canCreateProduct =
+    isFullAdmin || (user?.role === 'artist' && user?.artistStatus !== 'suspended');
   const userNavClassName = `${styles.userNav} ${styles.userNavVisible}`;
   const handleRouteChange = useCallback(() => {
     setMobileMenuOpen(false);
@@ -114,15 +117,22 @@ export default function Header() {
         </nav>
       </header>
 
-      {user ? (
+      {canCreateProduct ? (
       <ul className={userNavClassName}>
-        <li><Link href="/products/create">Създай продукт</Link></li>
+        {canCreateProduct && (
+          <li><Link href="/products/create">Създай продукт</Link></li>
+        )}
+        {isFullAdmin && (
+          <>
         <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
         <li><Link href="/homepage-featured">Избери любими продукти</Link></li>
         <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
-        <li><Link href="/newsletter/send">Изпрати къстъм мейл до абонатите</Link></li>
+        <li><Link href="/users/admin">Потребители</Link></li>
+        <li><Link href="/newsletter/send">Newsletter</Link></li>
+          </>
+        )}
       </ul>
       ) : null}
     </>

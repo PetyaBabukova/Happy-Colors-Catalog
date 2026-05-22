@@ -12,11 +12,16 @@ async function loadRoute() {
 
 describe('/api/revalidate/blog', () => {
   beforeEach(() => {
-    authResult = { ok: true, user: { _id: 'owner-1' } };
+    authResult = { ok: true, user: { _id: 'owner-1', role: 'full_admin' } };
     requireApiAuth.mockImplementation(() => authResult);
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth,
+      requireApiFullAdmin: vi.fn((auth) =>
+        auth.ok && auth.user?.role !== 'full_admin'
+          ? { ok: false, status: 403, message: 'Forbidden.' }
+          : auth
+      ),
     }));
     vi.doMock('next/cache', () => ({
       revalidatePath,

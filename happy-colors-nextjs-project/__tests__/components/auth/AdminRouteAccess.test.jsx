@@ -91,6 +91,12 @@ const adminRoutes = [
     pageFile: 'src/app/homepage-featured/page.js',
     content: 'admin-content:homepage-featured',
   },
+  {
+    name: '/users/admin',
+    path: '/users/admin',
+    pageFile: 'src/app/users/admin/page.js',
+    content: 'admin-content:users-admin',
+  },
 ];
 
 function routeElement(route) {

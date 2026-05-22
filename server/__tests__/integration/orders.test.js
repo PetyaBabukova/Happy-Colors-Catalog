@@ -80,6 +80,18 @@ describe('orders integration', () => {
       .expect(404);
   });
 
+  it('rejects non-published products in direct orders', async () => {
+    const app = createExpressApp();
+    const draftProduct = await createProduct({ publicationStatus: 'draft' });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app)
+      .post('/orders')
+      .set('x-forwarded-for', '203.0.113.27')
+      .send(buildOrder({ product: draftProduct }))
+      .expect(404);
+  });
+
   it('rejects invalid shipping, quantity, and HTML payloads', async () => {
     const app = createExpressApp();
     const product = await createProduct();

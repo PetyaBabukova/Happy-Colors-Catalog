@@ -89,13 +89,28 @@ describe('auth UI components', () => {
     await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/blog/create'));
   });
 
-  it('falls back when login receives an unsafe redirect target', async () => {
-    window.history.pushState(null, '', '/users/login?redirect=%5C%5Cevil.example');
+  it('keeps the login form open for an existing session until submit', () => {
     const mockRouterReplace = vi.fn();
 
     render(<StatefulLoginHarness initialUser={{ _id: 'user-1' }} />, {
       routerOverrides: { replace: mockRouterReplace },
     });
+
+    expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  it('falls back when login receives an unsafe redirect target', async () => {
+    window.history.pushState(null, '', '/users/login?redirect=%5C%5Cevil.example');
+    const mockRouterReplace = vi.fn();
+
+    const { container } = render(<StatefulLoginHarness />, {
+      routerOverrides: { replace: mockRouterReplace },
+    });
+
+    fireEvent.change(container.querySelector('#email'), { target: { value: 'petya@example.com' } });
+    fireEvent.change(container.querySelector('#password'), { target: { value: 'secret' } });
+    fireEvent.submit(container.querySelector('form'));
 
     await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/products'));
   });

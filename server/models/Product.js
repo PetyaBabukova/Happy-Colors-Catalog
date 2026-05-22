@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PRODUCT_PUBLICATION_STATUS_VALUES, PRODUCT_PUBLICATION_STATUSES } from '../utils/productPublication.js';
 
 const productVideoSchema = new mongoose.Schema(
   {
@@ -94,10 +95,34 @@ const productSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, "Owner is required!"],
     },
+    publicationStatus: {
+      type: String,
+      enum: PRODUCT_PUBLICATION_STATUS_VALUES,
+      default: PRODUCT_PUBLICATION_STATUSES.DRAFT,
+      required: true,
+      index: true,
+    },
+    reviewNote: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 1000,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
 productSchema.index({ isHomepageFeatured: 1, homepageFeaturedOrder: 1, _id: 1 });
+productSchema.index({ publicationStatus: 1, updatedAt: 1 });
+productSchema.index({ owner: 1, publicationStatus: 1, updatedAt: -1 });
 
 export default mongoose.models.Product || mongoose.model('Product', productSchema);

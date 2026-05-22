@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import { deleteImageFromGCS } from '../helpers/gcsImageHelper.js';
+import { canManageProductMedia } from '../utils/productPermissions.js';
 
 function createError(message, statusCode) {
   const error = new Error(message);
@@ -7,14 +8,22 @@ function createError(message, statusCode) {
   return error;
 }
 
-export async function deleteProductImage(productId, imageUrl, userId) {
+function canDeleteMedia(product, user) {
+  if (typeof user === 'string') {
+    return product.owner.toString() === user;
+  }
+
+  return canManageProductMedia(product, user);
+}
+
+export async function deleteProductImage(productId, imageUrl, user) {
   const product = await Product.findById(productId);
 
   if (!product) {
     throw createError('Продуктът не беше намерен.', 404);
   }
 
-  if (product.owner.toString() !== userId) {
+  if (!canDeleteMedia(product, user)) {
     throw createError('Нямате права да редактирате този продукт.', 403);
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import styles from './login.module.css';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import MessageBox from '@/components/ui/MessageBox';
 import { onLoginSubmit } from '@/managers/userManager';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,7 @@ import useForm from '@/hooks/useForm';
 export default function LoginClientPage() {
   const { user, loading, setUser } = useAuth();
   const router = useRouter();
+  const [shouldRedirectAfterLogin, setShouldRedirectAfterLogin] = useState(false);
 
   const {
     formValues,
@@ -27,11 +28,21 @@ export default function LoginClientPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await onLoginSubmit(formValues, setSuccess, setError, setUser);
+    let loginSucceeded = false;
+    const trackSuccess = (value) => {
+      loginSucceeded = Boolean(value);
+      setSuccess(value);
+    };
+
+    await onLoginSubmit(formValues, trackSuccess, setError, setUser);
+
+    if (loginSucceeded) {
+      setShouldRedirectAfterLogin(true);
+    }
   };
 
   useEffect(() => {
-    if (loading || !user) {
+    if (loading || !user || !shouldRedirectAfterLogin) {
       return;
     }
 
@@ -39,7 +50,7 @@ export default function LoginClientPage() {
     // so this client page does not need an App Router Suspense boundary.
     const redirectParam = new URLSearchParams(window.location.search).get('redirect');
     router.replace(getSafeRedirectPath(redirectParam, '/products'));
-  }, [loading, router, user]);
+  }, [loading, router, shouldRedirectAfterLogin, user]);
 
   return (
     <fieldset className={styles.registerFormContainer}>

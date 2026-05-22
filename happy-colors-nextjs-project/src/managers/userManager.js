@@ -64,9 +64,11 @@ export const onLoginSubmit = async (formValues, setSuccess, setError, setUser) =
 
     if (typeof setUser === 'function') {
       setUser({
-        username: result.username,
         _id: result._id,
+        username: result.username,
         email: result.email,
+        role: result.role,
+        artistStatus: result.artistStatus,
       });
     }
 

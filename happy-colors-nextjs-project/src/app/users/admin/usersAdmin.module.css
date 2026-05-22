@@ -1,0 +1,263 @@
+.wrapper {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  color: var(--dark-green);
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.header h1 {
+  margin: 0;
+  text-align: left;
+  font-size: 2rem;
+}
+
+.refreshButton,
+.saveButton,
+.detailsButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.refreshButton,
+.detailsButton {
+  background-color: white;
+  color: var(--dark-green);
+  border: 1px solid var(--light-green);
+}
+
+.refreshButton:hover,
+.detailsButton:hover {
+  border-color: var(--dark-orange);
+}
+
+.message,
+.error {
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.message {
+  background: var(--lighter-green);
+  border: 1px solid var(--light-green);
+}
+
+.error {
+  background: var(--lighter-orange);
+  border: 1px solid var(--dark-orange);
+  color: #8a2d22;
+}
+
+.reviewPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--light-green);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.reviewPanel h2 {
+  margin: 0;
+  text-align: left;
+  font-size: 1.25rem;
+}
+
+.reviewPanel p {
+  margin: 0.25rem 0 0;
+}
+
+.reviewPanelActions,
+.productActions,
+.reviewActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.reviewPanelActions a,
+.productActions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.approveButton,
+.rejectButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.approveButton {
+  background-color: var(--dark-green);
+  color: white;
+}
+
+.rejectButton {
+  background-color: var(--dark-orange);
+  color: white;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--light-green);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.usersTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.usersTable th,
+.usersTable td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--light-green-transparent);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.usersTable th {
+  background: var(--lighter-green);
+  font-size: 0.95rem;
+}
+
+.userName {
+  font-weight: 700;
+}
+
+.userEmail {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.select {
+  width: 100%;
+  min-width: 8.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--light-green);
+  border-radius: 6px;
+  background: white;
+}
+
+.select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.selfNote {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.dossier {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--light-green);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.dossierHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dossierHeader h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  text-align: left;
+}
+
+.productList {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0;
+}
+
+.productItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid var(--light-green-transparent);
+  border-radius: 6px;
+}
+
+.productTitle {
+  font-weight: 700;
+}
+
+.productMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--light-green-transparent);
+}
+
+.emptyState {
+  padding: 1rem;
+  border: 1px dashed var(--light-green);
+  border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+  .wrapper {
+    width: min(100%, calc(100% - 1rem));
+  }
+
+  .header,
+  .dossierHeader,
+  .reviewPanel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .productItem {
+    grid-template-columns: 1fr;
+  }
+}

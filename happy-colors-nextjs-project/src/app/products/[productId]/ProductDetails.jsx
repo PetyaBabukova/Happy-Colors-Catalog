@@ -13,6 +13,7 @@ import Image from 'next/image';
 import useImageSlideshow from '@/hooks/useImageSlideshow';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
+import MessageBox from '@/components/ui/MessageBox';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -90,6 +91,7 @@ export default function ProductDetails({ product }) {
 		return [mediaSlides[mediaSlides.length - 1], ...mediaSlides, mediaSlides[0]];
 	}, [mediaSlides]);
 	const [activeTab, setActiveTab] = useState('description');
+	const [createdReviewNotice, setCreatedReviewNotice] = useState(false);
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragOffset, setDragOffset] = useState(0);
 	const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -128,6 +130,16 @@ export default function ProductDetails({ product }) {
 		return () => {
 			mediaQuery.removeEventListener?.('change', handleChange);
 		};
+	}, []);
+
+	useEffect(() => {
+		if (typeof window === 'undefined') {
+			return;
+		}
+
+		setCreatedReviewNotice(
+			new URLSearchParams(window.location.search).get('created') === 'review-pending'
+		);
 	}, []);
 
 	useEffect(() => {
@@ -327,6 +339,18 @@ export default function ProductDetails({ product }) {
 	return (
 		<section className={styles.productDetails}>
 			<div className={styles.productDescriptionContainer}>
+				{createdReviewNotice && (
+					<MessageBox
+						type="success"
+						message="Продуктът ви е успешно създаден. Ще бъде публикуван след одобрение от администратор."
+					/>
+				)}
+				{product.publicationStatus === 'pending_review' && !createdReviewNotice && (
+					<MessageBox
+						type="success"
+						message="Този продукт очаква одобрение от администратор."
+					/>
+				)}
 				<h1>{product.title}</h1>
 
 				{/* TODO: Рейтинг звездички — ще се активират при имплементация на ревю система

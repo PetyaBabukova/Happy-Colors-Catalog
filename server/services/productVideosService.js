@@ -1,8 +1,17 @@
 import Product from '../models/Product.js';
 import { deleteImageFromGCS } from '../helpers/gcsImageHelper.js';
 import { normalizeStoredVideos } from '../helpers/productVideoHelper.js';
+import { canManageProductMedia } from '../utils/productPermissions.js';
 
-export async function deleteProductVideo(productId, videoUrl, userId) {
+function canDeleteMedia(product, user) {
+  if (typeof user === 'string') {
+    return product.owner.toString() === user;
+  }
+
+  return canManageProductMedia(product, user);
+}
+
+export async function deleteProductVideo(productId, videoUrl, user) {
   if (!String(videoUrl || '').trim()) {
     const error = new Error('Липсва video URL за изтриване.');
     error.statusCode = 400;
@@ -17,7 +26,7 @@ export async function deleteProductVideo(productId, videoUrl, userId) {
     throw error;
   }
 
-  if (product.owner.toString() !== userId) {
+  if (!canDeleteMedia(product, user)) {
     const error = new Error('Нямате права да редактирате този продукт.');
     error.statusCode = 403;
     throw error;

@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireFullAdmin } from '../middlewares/auth.js';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
   archiveBlogArticle,
@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/admin', requireAuth, async (req, res) => {
+router.get('/admin', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const articles = await getAdminBlogArticles(req.user?._id);
 
@@ -60,7 +60,7 @@ router.get('/admin', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/admin/:articleId', requireAuth, async (req, res) => {
+router.get('/admin/:articleId', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const article = await getAdminBlogArticleById(req.params.articleId, req.user?._id);
 
@@ -82,7 +82,7 @@ router.get('/:articleId', async (req, res) => {
 
 // TODO: V1 treats authenticated users as trusted blog operators. Replace this
 // with an explicit admin role check if public registration becomes available.
-router.post('/', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
+router.post('/', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const article = await createBlogArticle(req.body, req.user?._id);
 
@@ -92,7 +92,7 @@ router.post('/', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
   }
 });
 
-router.put('/:articleId', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
+router.put('/:articleId', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const article = await editBlogArticle(req.params.articleId, req.body, req.user?._id);
 
@@ -102,7 +102,7 @@ router.put('/:articleId', blogArticlesMutationLimiter, requireAuth, async (req, 
   }
 });
 
-router.patch('/:articleId/archive', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
+router.patch('/:articleId/archive', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const article = await archiveBlogArticle(req.params.articleId, req.user?._id);
 
@@ -112,7 +112,7 @@ router.patch('/:articleId/archive', blogArticlesMutationLimiter, requireAuth, as
   }
 });
 
-router.patch('/:articleId/restore', blogArticlesMutationLimiter, requireAuth, async (req, res) => {
+router.patch('/:articleId/restore', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const article = await restoreBlogArticle(req.params.articleId, req.user?._id);
 

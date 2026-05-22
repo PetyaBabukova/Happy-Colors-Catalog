@@ -9,13 +9,13 @@ import {
   createCategory,
   createHomeBanner,
   createProduct,
-  createUser,
+  createFullAdmin,
 } from './factories.js';
 
 describe('home banners integration', () => {
   it('lists active banners sorted by sort order and creation date', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createHomeBanner({
       owner,
       title: 'Inactive',
@@ -53,7 +53,7 @@ describe('home banners integration', () => {
 
   it('returns 404 for invalid banner id formats', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
 
     await request(app).get('/home-banners/not-a-valid-id').set('Cookie', cookie).expect(404);
@@ -67,7 +67,7 @@ describe('home banners integration', () => {
 
   it('creates a banner for an authenticated trusted operator', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const payload = buildHomeBanner({ owner, title: 'Animals banner' });
     payload.owner = 'body-owner-is-ignored';
 
@@ -87,7 +87,7 @@ describe('home banners integration', () => {
 
   it('does not persist injected fields from create payloads', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/home-banners')
@@ -107,7 +107,7 @@ describe('home banners integration', () => {
 
   it('rejects unsafe CTA hrefs and image URLs', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
 
     await request(app)
@@ -130,7 +130,7 @@ describe('home banners integration', () => {
 
   it('returns a friendly validation error for overly long descriptions', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/home-banners')
@@ -143,8 +143,8 @@ describe('home banners integration', () => {
 
   it('allows authenticated trusted operators to read and edit any banner', async () => {
     const app = createExpressApp();
-    const creator = await createUser({ email: 'creator@example.com' });
-    const otherOperator = await createUser({ email: 'operator@example.com' });
+    const creator = await createFullAdmin({ email: 'creator@example.com' });
+    const otherOperator = await createFullAdmin({ email: 'operator@example.com' });
     const banner = await createHomeBanner({ owner: creator, title: 'Original title' });
 
     const readRes = await request(app)
@@ -169,7 +169,7 @@ describe('home banners integration', () => {
 
   it('deletes the old image on edit when it is not referenced elsewhere', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const oldImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/old.webp';
     const newImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/new.webp';
     const banner = await createHomeBanner({ owner, imageUrl: oldImageUrl });
@@ -185,7 +185,7 @@ describe('home banners integration', () => {
 
   it('does not delete an old image on edit when a product still references it', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/shared.webp';
     const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
@@ -207,7 +207,7 @@ describe('home banners integration', () => {
 
   it('does not delete an old image on edit when a product video still references it', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedVideoUrl = 'https://storage.googleapis.com/test-bucket/home-banners/shared-video.mp4';
     const banner = await createHomeBanner({ owner, imageUrl: sharedVideoUrl });
@@ -235,7 +235,7 @@ describe('home banners integration', () => {
 
   it('deletes a banner and cleans up its image when unreferenced', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const imageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/delete-me.webp';
     const banner = await createHomeBanner({ owner, imageUrl });
 
@@ -247,7 +247,7 @@ describe('home banners integration', () => {
 
   it('deletes a banner but keeps a shared image in storage', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/shared-delete.webp';
     const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
     await createHomeBanner({
@@ -263,7 +263,7 @@ describe('home banners integration', () => {
 
   it('deletes a banner but keeps an image still used by a product', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/product-shared.webp';
     const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readJson } from '../_helpers.js';
 
-const authUser = { _id: 'user-1' };
+const authUser = { _id: 'user-1', role: 'full_admin' };
 const save = vi.fn();
 const fileRef = vi.fn(() => ({ save }));
 const bucket = vi.fn(() => ({ file: fileRef }));
@@ -59,6 +59,16 @@ describe('/api/uploads/proxy', () => {
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth: vi.fn(() => authResult),
+      requireApiFullAdmin: vi.fn((auth) =>
+        auth.ok && auth.user?.role !== 'full_admin'
+          ? { ok: false, status: 403, message: 'Forbidden.' }
+          : auth
+      ),
+      requireApiActiveArtistOrFullAdmin: vi.fn((auth) =>
+        auth.ok && auth.user?.role !== 'full_admin' && !(auth.user?.role === 'artist' && auth.user?.artistStatus === 'active')
+          ? { ok: false, status: 403, message: 'Forbidden.' }
+          : auth
+      ),
     }));
     vi.doMock('../../../src/app/api/_lib/gcs.js', () => ({
       buildStorageObjectName,

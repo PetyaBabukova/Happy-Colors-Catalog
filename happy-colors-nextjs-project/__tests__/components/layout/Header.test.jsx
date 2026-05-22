@@ -17,20 +17,26 @@ vi.mock('@/utils/catalogMode', () => ({
   },
 }));
 
+function getUserNavLinks(container) {
+  return [...container.querySelectorAll('ul[class*="userNav"] a')].map((link) =>
+    link.getAttribute('href')
+  );
+}
+
 describe('Header', () => {
   beforeEach(() => {
     catalogModeState.value = false;
     useProducts.mockReturnValue({
       visibleCategories: [
         { _id: 'cat-1', name: 'Candles' },
-        { _id: 'cat-2', name: 'Декор' },
+        { _id: 'cat-2', name: 'Decor' },
       ],
     });
   });
 
-  it('renders category links, cart count, and owner navigation for authenticated users', () => {
+  it('renders category links, cart count, and full admin navigation', () => {
     const { container } = render(<Header />, {
-      user: { username: 'Petya' },
+      user: { username: 'Petya', role: 'full_admin', artistStatus: null },
       cartItems: [
         { _id: 'product-1', price: 10, quantity: 2 },
         { _id: 'product-2', price: 5, quantity: 1 },
@@ -39,34 +45,44 @@ describe('Header', () => {
 
     expect(screen.getByRole('link', { name: /logo/i })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Candles' })).toHaveAttribute('href', '/products?category=Candles');
-    expect(screen.getByRole('link', { name: 'Декор' })).toHaveAttribute(
-      'href',
-      `/products?category=${encodeURIComponent('Декор')}`
-    );
+    expect(screen.getByRole('link', { name: 'Decor' })).toHaveAttribute('href', '/products?category=Decor');
     expect(screen.getByText(/Petya/)).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(container.querySelector('ul[class*="userNav"]').className).toContain('userNavVisible');
-    expect(screen.getByRole('link', { name: /Създай продукт/ })).toHaveAttribute(
-      'href',
-      '/products/create'
-    );
-    expect(screen.getByRole('link', { name: 'Блог' })).toHaveAttribute('href', '/blog');
-    expect(screen.getByRole('link', { name: 'Създай хоум банер' })).toHaveAttribute(
-      'href',
-      '/home-banners/create'
-    );
-    expect(screen.getByRole('link', { name: 'Избери любими продукти' })).toHaveAttribute(
-      'href',
-      '/homepage-featured'
-    );
-    expect(screen.getByRole('link', { name: 'Създай блог статия' })).toHaveAttribute(
-      'href',
-      '/blog/create'
-    );
-    expect(screen.getByRole('link', { name: 'Изпрати къстъм мейл до абонатите' })).toHaveAttribute(
-      'href',
-      '/newsletter/send'
-    );
+    expect(getUserNavLinks(container)).toEqual([
+      '/products/create',
+      '/home-banners/create',
+      '/homepage-featured',
+      '/blog/create',
+      '/categories/create',
+      '/categories',
+      '/users/admin',
+      '/newsletter/send',
+    ]);
+  });
+
+  it('shows only product creation to artists and no management links to customers', () => {
+    const artistRender = render(<Header />, {
+      user: { username: 'Artist', role: 'artist', artistStatus: 'pending' },
+    });
+
+    expect(getUserNavLinks(artistRender.container)).toEqual(['/products/create']);
+
+    artistRender.unmount();
+
+    const customerRender = render(<Header />, {
+      user: { username: 'Customer', role: 'customer', artistStatus: null },
+    });
+
+    expect(customerRender.container.querySelector('ul[class*="userNav"]')).not.toBeInTheDocument();
+  });
+
+  it('hides product creation from suspended artists', () => {
+    const suspendedRender = render(<Header />, {
+      user: { username: 'Suspended', role: 'artist', artistStatus: 'suspended' },
+    });
+
+    expect(suspendedRender.container.querySelector('ul[class*="userNav"]')).not.toBeInTheDocument();
   });
 
   it('hides owner navigation and greeting for anonymous users', () => {
@@ -74,8 +90,8 @@ describe('Header', () => {
 
     expect(screen.queryByText(/Petya/)).not.toBeInTheDocument();
     expect(container.querySelector('ul[class*="userNav"]')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /РЎСЉР·РґР°Р№ РїСЂРѕРґСѓРєС‚/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /РР·РїСЂР°С‚Рё РєСЉСЃС‚СЉРј РјРµР№Р»/ })).not.toBeInTheDocument();
+    expect(container.querySelector('a[href="/products/create"]')).not.toBeInTheDocument();
+    expect(container.querySelector('a[href="/newsletter/send"]')).not.toBeInTheDocument();
   });
 
   it('hides the cart link in catalog mode', () => {
@@ -85,7 +101,7 @@ describe('Header', () => {
       cartItems: [{ _id: 'product-1', price: 10, quantity: 2 }],
     });
 
-    expect(screen.queryByRole('link', { name: /Количка/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /cart/i })).not.toBeInTheDocument();
   });
 
   it('opens the mobile menu from the hamburger button', () => {
@@ -94,7 +110,7 @@ describe('Header', () => {
 
     expect(navList.className).not.toContain('showMenu');
 
-    fireEvent.click(screen.getByRole('button', { name: /Отвори/ }));
+    fireEvent.click(container.querySelector('button[class*="hamburgerBtn"]'));
 
     expect(navList.className).toContain('showMenu');
   });

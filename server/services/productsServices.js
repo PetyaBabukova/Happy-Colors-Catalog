@@ -1,6 +1,8 @@
 import Product from '../models/Product.js';
 import HomeBanner from '../models/HomeBanner.js';
+import User from '../models/User.js';
 import mongoose from 'mongoose';
+import { sendEmail } from '../helpers/sendEmail.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
 import {
   isAllowedPosterStorageUrl,
@@ -13,6 +15,22 @@ import {
   MAX_VIDEOS_PER_PRODUCT,
 } from '../config/productLimits.js';
 import { HOMEPAGE_FEATURED_PRODUCTS_LIMIT } from '../config/homepageFeaturedProducts.js';
+import { isFullAdmin, USER_ROLES } from '../utils/userRoles.js';
+import {
+  buildPublicProductFilter,
+  isPublicProduct,
+  normalizeReviewNote,
+  PRODUCT_PUBLICATION_STATUSES,
+} from '../utils/productPublication.js';
+import {
+  canCreateProduct,
+  canHardDeleteProduct,
+  canManageProduct,
+  canReviewProduct,
+  canSubmitProductForReview,
+  canViewProduct,
+  canWithdrawProductReview,
+} from '../utils/productPermissions.js';
 
 const ALLOWED_PRODUCT_FIELDS = new Set([
   'title',
@@ -41,6 +59,21 @@ function createForbiddenError(message) {
   const error = new Error(message);
   error.statusCode = 403;
   return error;
+}
+
+function buildClientUrl(path) {
+  const baseUrl = String(process.env.CLIENT_URL || '').replace(/\/$/, '');
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
+function toEmailLine(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function assertProductStatus(product, allowedStatuses, message) {
+  if (!allowedStatuses.includes(product.publicationStatus)) {
+    throw createValidationError(message);
+  }
 }
 
 function normalizeProductId(value) {
@@ -233,14 +266,59 @@ async function assertVideoAssetsNotAttachedToOtherProduct(videos, currentProduct
   }
 }
 
-function buildCreateProductData(data, ownerId) {
+function buildCreateProductData(data, user) {
   const sanitizedFields = pickAllowedProductFields(data);
 
   return {
     ...normalizeImageFields(sanitizedFields),
     videos: validateAndNormalizeVideos(sanitizedFields.videos),
-    owner: ownerId,
+    owner: user._id,
+    publicationStatus: isFullAdmin(user)
+      ? PRODUCT_PUBLICATION_STATUSES.PUBLISHED
+      : PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
   };
+}
+
+async function notifyFullAdminsForProductReview(product, artist) {
+  if (isFullAdmin(artist) || product.publicationStatus !== PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW) {
+    return { sent: false, recipients: 0 };
+  }
+
+  const admins = await User.find({ role: USER_ROLES.FULL_ADMIN }, { email: 1 }).lean();
+  const adminEmails = [...new Set(admins.map((admin) => admin.email).filter(Boolean))];
+
+  if (adminEmails.length === 0) {
+    return { sent: false, recipients: 0 };
+  }
+
+  const productId = String(product._id);
+  const reviewUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}`);
+  const approveUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}&reviewAction=approve`);
+  const postponeUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}&reviewAction=postpone`);
+  const rejectUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}&reviewAction=reject`);
+
+  try {
+    await sendEmail({
+      to: adminEmails,
+      subject: `Product pending approval: ${toEmailLine(product.title)}`,
+      text: [
+        `Artist: ${toEmailLine(artist.username)} <${artist.email}>`,
+        `Product: ${toEmailLine(product.title)}`,
+        '',
+        'A new artist product is waiting for admin review.',
+        '',
+        `Review: ${reviewUrl}`,
+        `Approve: ${approveUrl}`,
+        `Postpone: ${postponeUrl}`,
+        `Reject: ${rejectUrl}`,
+      ].join('\n'),
+    });
+
+    return { sent: true, recipients: adminEmails.length };
+  } catch (error) {
+    console.error('Failed to send product review notification:', error?.message || error);
+    return { sent: false, recipients: adminEmails.length, error: true };
+  }
 }
 
 function buildEditProductData(data) {
@@ -321,6 +399,7 @@ async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = 
         if (uniqueAssetUrls.includes(imageUrl)) {
           referencedAssetUrls.add(imageUrl);
         }
+
       }
 
       for (const video of normalizeStoredVideos(product.videos)) {
@@ -343,7 +422,7 @@ async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = 
 }
 
 export async function getAllProducts(categoryName) {
-  const products = await Product.find()
+  const products = await Product.find(buildPublicProductFilter())
     .populate('category', 'name')
     .lean();
 
@@ -358,6 +437,7 @@ export async function getAllProducts(categoryName) {
 
 export async function getHomepageFeaturedProducts() {
   const products = await Product.find({
+    ...buildPublicProductFilter(),
     isHomepageFeatured: true,
     availability: { $ne: 'unavailable' },
   })
@@ -414,8 +494,13 @@ export async function updateHomepageFeaturedProducts(productIds) {
           (product) => product.availability === 'unavailable'
         );
 
+        const nonPublicProduct = selectedProducts.find((product) => !isPublicProduct(product));
+
         if (unavailableProduct) {
           throw createValidationError('Неналичен продукт не може да бъде избран за началната страница.');
+        }
+        if (nonPublicProduct) {
+          throw createValidationError('Only published products can be selected for the homepage.');
         }
       }
 
@@ -449,37 +534,102 @@ export async function updateHomepageFeaturedProducts(productIds) {
   return getHomepageFeaturedProducts();
 }
 
-export async function createProduct(data, ownerId) {
-  const productData = buildCreateProductData(data, ownerId);
+export async function createProduct(data, user) {
+  if (!canCreateProduct(user)) {
+    throw createForbiddenError('РќСЏРјР°С‚Рµ РїСЂР°РІР° РґР° СЃСЉР·РґР°РІР°С‚Рµ РїСЂРѕРґСѓРєС‚.');
+  }
+
+  const productData = buildCreateProductData(data, user);
 
   await assertVideoAssetsNotAttachedToOtherProduct(productData.videos);
 
   const product = new Product(productData);
   const savedProduct = await product.save();
+  await notifyFullAdminsForProductReview(savedProduct, user);
 
   return normalizeProductMedia(savedProduct.toObject());
 }
 
-export async function getProductById(productId) {
+export async function getProductById(productId, viewer = null) {
   const product = await Product.findById(productId)
     .populate('category', 'name')
     .lean();
 
-  if (!product) {
+  if (!canViewProduct(product, viewer)) {
     return null;
   }
 
   return normalizeProductMedia(product);
 }
 
-export async function editProduct(productId, productData, userId) {
+export async function getManagedProductById(productId, user) {
+  const product = await Product.findById(productId)
+    .populate('category', 'name')
+    .lean();
+
+  if (!canViewProduct(product, user)) {
+    return null;
+  }
+
+  return normalizeProductMedia(product);
+}
+
+export async function getMyProducts(user, { page = 1, limit = 50 } = {}) {
+  const safePage = Math.max(Number(page) || 1, 1);
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+
+  if (isFullAdmin(user)) {
+    const products = await Product.find()
+      .sort({ updatedAt: -1, _id: -1 })
+      .skip((safePage - 1) * safeLimit)
+      .limit(safeLimit)
+      .populate('category', 'name')
+      .lean();
+
+    return products.map(normalizeProductMedia);
+  }
+
+  if (!canCreateProduct(user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  const products = await Product.find({ owner: user._id })
+    .sort({ updatedAt: -1, _id: -1 })
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
+    .populate('category', 'name')
+    .lean();
+
+  return products.map(normalizeProductMedia);
+}
+
+export async function getProductReviewQueue(user, { page = 1, limit = 50 } = {}) {
+  if (!canReviewProduct(user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  const safePage = Math.max(Number(page) || 1, 1);
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const products = await Product.find({
+    publicationStatus: PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+  })
+    .sort({ updatedAt: 1, _id: 1 })
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
+    .populate('category', 'name')
+    .lean();
+
+  return products.map(normalizeProductMedia);
+}
+
+export async function editProduct(productId, productData, user) {
   const product = await Product.findById(productId);
 
   if (!product) {
     throw createNotFoundError('Продуктът не съществува.');
   }
 
-  if (product.owner.toString() !== userId) {
+  if (!canManageProduct(product, user)) {
     throw createForbiddenError('Нямате права да редактирате този продукт.');
   }
 
@@ -521,20 +671,31 @@ export async function editProduct(productId, productData, userId) {
     product.videos = sanitizedProductData.videos;
   }
 
+  if (isFullAdmin(user)) {
+    if (product.publicationStatus !== PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+      product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PUBLISHED;
+      product.reviewedBy = user._id;
+      product.reviewedAt = new Date();
+      product.reviewNote = undefined;
+    }
+  } else if (product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED) {
+    product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DRAFT;
+  }
+
   await product.save();
   await deleteAssetsFromStorage(videoAssetsToDelete, { excludeProductId: product._id });
 
   return normalizeProductMedia(product.toObject());
 }
 
-export async function deleteProduct(productId, userId) {
+export async function deleteProduct(productId, user) {
   const product = await Product.findById(productId);
 
   if (!product) {
     throw createNotFoundError('Продуктът не беше намерен');
   }
 
-  if (product.owner.toString() !== userId) {
+  if (!canHardDeleteProduct(product, user)) {
     throw createForbiddenError('Нямате права да изтриете този продукт.');
   }
 
@@ -551,4 +712,115 @@ export async function deleteProduct(productId, userId) {
   await deleteAssetsFromStorage([...imageUrlsToDelete, ...videoAssetUrls], { excludeProductId: product._id });
 
   return { message: 'Продуктът беше изтрит успешно.' };
+}
+
+export async function submitProductForReview(productId, user) {
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    throw createNotFoundError('Product does not exist.');
+  }
+
+  if (!canSubmitProductForReview(product, user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW;
+  await product.save();
+
+  return normalizeProductMedia(product.toObject());
+}
+
+export async function withdrawProductReview(productId, user) {
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    throw createNotFoundError('Product does not exist.');
+  }
+
+  if (!canWithdrawProductReview(product, user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DRAFT;
+  await product.save();
+
+  return normalizeProductMedia(product.toObject());
+}
+
+async function setReviewedProductStatus(productId, user, nextStatus, reviewNote = '') {
+  if (!canReviewProduct(user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    throw createNotFoundError('Product does not exist.');
+  }
+
+  if (
+    [
+      PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
+      PRODUCT_PUBLICATION_STATUSES.REJECTED,
+    ].includes(nextStatus)
+  ) {
+    assertProductStatus(
+      product,
+      [PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW],
+      'Only products pending review can be approved or rejected.'
+    );
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.ARCHIVED) {
+    assertProductStatus(
+      product,
+      [
+        PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
+        PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+      ],
+      'Only published products or products pending review can be archived.'
+    );
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT) {
+    assertProductStatus(
+      product,
+      [PRODUCT_PUBLICATION_STATUSES.ARCHIVED],
+      'Only archived products can be restored to draft.'
+    );
+  }
+
+  product.publicationStatus = nextStatus;
+  product.reviewedBy = user._id;
+  product.reviewedAt = new Date();
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED) {
+    product.reviewNote = normalizeReviewNote(reviewNote, { required: true });
+  }
+
+  await product.save();
+
+  return normalizeProductMedia(product.toObject());
+}
+
+export function approveProduct(productId, user) {
+  return setReviewedProductStatus(productId, user, PRODUCT_PUBLICATION_STATUSES.PUBLISHED);
+}
+
+export function rejectProduct(productId, user, reviewNote) {
+  return setReviewedProductStatus(
+    productId,
+    user,
+    PRODUCT_PUBLICATION_STATUSES.REJECTED,
+    reviewNote
+  );
+}
+
+export function archiveProduct(productId, user) {
+  return setReviewedProductStatus(productId, user, PRODUCT_PUBLICATION_STATUSES.ARCHIVED);
+}
+
+export function restoreProduct(productId, user) {
+  return setReviewedProductStatus(productId, user, PRODUCT_PUBLICATION_STATUSES.DRAFT);
 }

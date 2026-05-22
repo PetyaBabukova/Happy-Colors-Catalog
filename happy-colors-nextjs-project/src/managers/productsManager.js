@@ -73,7 +73,11 @@ export async function onCreateProductSubmit(
     triggerCategoriesReload();
     await invalidateProductCaches(result._id);
 
-    router.push(`/products/${result._id}`);
+    router.push(
+      result.publicationStatus === 'published'
+        ? `/products/${result._id}`
+        : `/products/${result._id}?created=review-pending`
+    );
   } catch (err) {
     setSuccess(false);
     setError(err.message || 'Възникна грешка при създаване на продукта.');
