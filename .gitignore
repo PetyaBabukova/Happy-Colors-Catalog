@@ -24,6 +24,10 @@ coverage/
 **/coverage/
 *.lcov
 
+# Local agent instructions and planning docs
+AGENTS.md
+docs/
+
 # Playwright test artifacts
 test-results/
 playwright-report/
