@@ -95,6 +95,14 @@ function buildReplacementPatch(kind, uploadResult) {
   };
 }
 
+function getCategoryValue(category) {
+  if (!category || typeof category !== 'object') {
+    return category || '';
+  }
+
+  return category._id || category.id || '';
+}
+
 export default function ProductForm({ initialValues, onSubmit, legendText, successMessage }) {
   const router = useRouter();
   const { categories } = useProducts();
@@ -147,13 +155,12 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
         : [];
 
     setFormValues({
-      ...initialValues,
       title: initialValues.title || '',
       description: initialValues.description || '',
       price: initialValues.price || '',
       imageUrls: normalizedImageUrls,
       imageUrl: normalizedImageUrls[0] || initialValues.imageUrl || '',
-      category: initialValues.category?._id || initialValues.category || '',
+      category: getCategoryValue(initialValues.category),
       videos: normalizeVideos(initialValues.videos),
       availability: initialValues.availability || 'available',
     });

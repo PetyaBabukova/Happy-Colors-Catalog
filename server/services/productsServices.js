@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { sendEmail } from '../helpers/sendEmail.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
+import { revalidateProductSurfaces } from '../helpers/revalidateProducts.js';
 import {
   isAllowedPosterStorageUrl,
   isAllowedVideoStorageUrl,
@@ -21,12 +22,13 @@ import {
   isPublicProduct,
   normalizeReviewNote,
   PRODUCT_PUBLICATION_STATUSES,
+  PRODUCT_REVIEW_STATUSES,
 } from '../utils/productPublication.js';
 import {
   canCreateProduct,
-  canHardDeleteProduct,
   canManageProduct,
   canReviewProduct,
+  canSoftDeleteProduct,
   canSubmitProductForReview,
   canViewProduct,
   canWithdrawProductReview,
@@ -103,6 +105,49 @@ function normalizeProductMedia(product) {
     ...normalizedImages,
     videos: normalizeStoredVideos(normalizedImages.videos),
   };
+}
+
+function hasDraftContent(product) {
+  return Boolean(product?.draftContent && typeof product.draftContent === 'object');
+}
+
+function normalizeDraftContent(product) {
+  if (!hasDraftContent(product)) {
+    return null;
+  }
+
+  return normalizeProductMedia({
+    ...product.draftContent,
+    _id: product._id,
+    owner: product.owner,
+    publicationStatus: product.publicationStatus,
+    reviewStatus: product.reviewStatus,
+    reviewNote: product.reviewNote,
+    draftRevision: product.draftRevision,
+    draftUpdatedAt: product.draftUpdatedAt,
+    draftSubmittedAt: product.draftSubmittedAt,
+    draftSubmittedBy: product.draftSubmittedBy,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+    isHomepageFeatured: product.isHomepageFeatured,
+    homepageFeaturedOrder: product.homepageFeaturedOrder,
+  });
+}
+
+function shouldExposeDraftContent(product, viewer) {
+  if (!hasDraftContent(product)) {
+    return false;
+  }
+
+  return canManageProduct(product, viewer) || canReviewProduct(viewer);
+}
+
+function normalizeProductForViewer(product, viewer = null) {
+  if (shouldExposeDraftContent(product, viewer)) {
+    return normalizeDraftContent(product);
+  }
+
+  return normalizeProductMedia(product);
 }
 
 function pickAllowedProductFields(source = {}) {
@@ -276,11 +321,18 @@ function buildCreateProductData(data, user) {
     publicationStatus: isFullAdmin(user)
       ? PRODUCT_PUBLICATION_STATUSES.PUBLISHED
       : PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+    reviewStatus: isFullAdmin(user)
+      ? PRODUCT_REVIEW_STATUSES.NONE
+      : PRODUCT_REVIEW_STATUSES.PENDING_REVIEW,
   };
 }
 
 async function notifyFullAdminsForProductReview(product, artist) {
-  if (isFullAdmin(artist) || product.publicationStatus !== PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW) {
+  const isPendingReview =
+    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW ||
+    product.reviewStatus === PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+
+  if (isFullAdmin(artist) || !isPendingReview) {
     return { sent: false, recipients: 0 };
   }
 
@@ -531,6 +583,8 @@ export async function updateHomepageFeaturedProducts(productIds) {
     await session.endSession();
   }
 
+  await revalidateProductSurfaces();
+
   return getHomepageFeaturedProducts();
 }
 
@@ -546,6 +600,9 @@ export async function createProduct(data, user) {
   const product = new Product(productData);
   const savedProduct = await product.save();
   await notifyFullAdminsForProductReview(savedProduct, user);
+  if (savedProduct.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    await revalidateProductSurfaces({ productId: savedProduct._id });
+  }
 
   return normalizeProductMedia(savedProduct.toObject());
 }
@@ -559,7 +616,7 @@ export async function getProductById(productId, viewer = null) {
     return null;
   }
 
-  return normalizeProductMedia(product);
+  return normalizeProductForViewer(product, viewer);
 }
 
 export async function getManagedProductById(productId, user) {
@@ -577,9 +634,12 @@ export async function getManagedProductById(productId, user) {
 export async function getMyProducts(user, { page = 1, limit = 50 } = {}) {
   const safePage = Math.max(Number(page) || 1, 1);
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const activeProductFilter = {
+    publicationStatus: { $ne: PRODUCT_PUBLICATION_STATUSES.DELETED },
+  };
 
   if (isFullAdmin(user)) {
-    const products = await Product.find()
+    const products = await Product.find(activeProductFilter)
       .sort({ updatedAt: -1, _id: -1 })
       .skip((safePage - 1) * safeLimit)
       .limit(safeLimit)
@@ -593,7 +653,7 @@ export async function getMyProducts(user, { page = 1, limit = 50 } = {}) {
     throw createForbiddenError('Forbidden');
   }
 
-  const products = await Product.find({ owner: user._id })
+  const products = await Product.find({ owner: user._id, ...activeProductFilter })
     .sort({ updatedAt: -1, _id: -1 })
     .skip((safePage - 1) * safeLimit)
     .limit(safeLimit)
@@ -611,7 +671,11 @@ export async function getProductReviewQueue(user, { page = 1, limit = 50 } = {})
   const safePage = Math.max(Number(page) || 1, 1);
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
   const products = await Product.find({
-    publicationStatus: PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+    $or: [
+      { publicationStatus: PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW },
+      { reviewStatus: PRODUCT_REVIEW_STATUSES.PENDING_REVIEW },
+    ],
+    publicationStatus: { $ne: PRODUCT_PUBLICATION_STATUSES.DELETED },
   })
     .sort({ updatedAt: 1, _id: 1 })
     .skip((safePage - 1) * safeLimit)
@@ -619,7 +683,7 @@ export async function getProductReviewQueue(user, { page = 1, limit = 50 } = {})
     .populate('category', 'name')
     .lean();
 
-  return products.map(normalizeProductMedia);
+  return products.map((product) => normalizeProductForViewer(product, user));
 }
 
 export async function editProduct(productId, productData, user) {
@@ -640,6 +704,19 @@ export async function editProduct(productId, productData, user) {
       : [];
   const currentVideos = normalizeStoredVideos(product.videos);
   const sanitizedProductData = buildEditProductData(productData);
+  const wasPublic = isPublicProduct(product);
+  const isAdminEdit = isFullAdmin(user);
+  const isArtistEditingPublishedProduct =
+    !isAdminEdit && product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED;
+  const editSource = isArtistEditingPublishedProduct && hasDraftContent(product)
+    ? product.draftContent
+    : product;
+  const sourceImageUrls = Array.isArray(editSource.imageUrls)
+    ? editSource.imageUrls.filter(Boolean)
+    : editSource.imageUrl
+      ? [editSource.imageUrl]
+      : [];
+  const sourceVideos = normalizeStoredVideos(editSource.videos);
 
   if (Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')) {
     await assertVideoAssetsNotAttachedToOtherProduct(sanitizedProductData.videos, product._id);
@@ -650,7 +727,33 @@ export async function editProduct(productId, productData, user) {
     : sanitizedProductData.imageUrl
       ? [sanitizedProductData.imageUrl]
       : [];
-  const mergedImageUrls = [...new Set([...currentImageUrls, ...incomingImageUrls])];
+  const mergedImageUrls = [...new Set([...sourceImageUrls, ...incomingImageUrls])];
+
+  if (isArtistEditingPublishedProduct) {
+    product.draftContent = {
+      title: sanitizedProductData.title ?? editSource.title,
+      description: sanitizedProductData.description ?? editSource.description,
+      price: sanitizedProductData.price ?? editSource.price,
+      category: sanitizedProductData.category ?? editSource.category,
+      availability: sanitizedProductData.availability || editSource.availability || 'available',
+      imageUrls: mergedImageUrls,
+      imageUrl: mergedImageUrls[0] || '',
+      videos: Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')
+        ? sanitizedProductData.videos
+        : sourceVideos,
+    };
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+    product.reviewNote = '';
+    product.draftRevision = (product.draftRevision || 0) + 1;
+    product.draftUpdatedAt = new Date();
+    product.draftSubmittedAt = new Date();
+    product.draftSubmittedBy = user._id;
+
+    await product.save();
+    await notifyFullAdminsForProductReview(product, user);
+
+    return normalizeProductForViewer(product.toObject(), user);
+  }
 
   for (const [key, value] of Object.entries(sanitizedProductData)) {
     if (key === 'imageUrl' || key === 'imageUrls' || key === 'videos') {
@@ -671,21 +774,33 @@ export async function editProduct(productId, productData, user) {
     product.videos = sanitizedProductData.videos;
   }
 
-  if (isFullAdmin(user)) {
+  if (isAdminEdit) {
     if (product.publicationStatus !== PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
       product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PUBLISHED;
       product.reviewedBy = user._id;
       product.reviewedAt = new Date();
       product.reviewNote = undefined;
     }
-  } else if (product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED) {
-    product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DRAFT;
+  } else {
+    product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW;
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+    product.reviewNote = '';
+    product.draftRevision = (product.draftRevision || 0) + 1;
+    product.draftUpdatedAt = new Date();
+    product.draftSubmittedAt = new Date();
+    product.draftSubmittedBy = user._id;
   }
 
   await product.save();
   await deleteAssetsFromStorage(videoAssetsToDelete, { excludeProductId: product._id });
+  if (!isAdminEdit) {
+    await notifyFullAdminsForProductReview(product, user);
+  }
+  if (wasPublic || product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    await revalidateProductSurfaces({ productId: product._id });
+  }
 
-  return normalizeProductMedia(product.toObject());
+  return normalizeProductForViewer(product.toObject(), user);
 }
 
 export async function deleteProduct(productId, user) {
@@ -695,21 +810,21 @@ export async function deleteProduct(productId, user) {
     throw createNotFoundError('Продуктът не беше намерен');
   }
 
-  if (!canHardDeleteProduct(product, user)) {
+  if (!canSoftDeleteProduct(product, user)) {
     throw createForbiddenError('Нямате права да изтриете този продукт.');
   }
 
-  const imageUrlsToDelete =
-    Array.isArray(product.imageUrls) && product.imageUrls.length > 0
-      ? product.imageUrls.filter(Boolean)
-      : product.imageUrl
-        ? [product.imageUrl]
-        : [];
-  const videosToDelete = normalizeStoredVideos(product.videos);
-  const videoAssetUrls = videosToDelete.flatMap((video) => [video.url, video.posterUrl]);
+  const wasPublic = isPublicProduct(product);
+  product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DELETED;
+  product.deletedAt = new Date();
+  product.deletedBy = user._id;
+  product.isHomepageFeatured = false;
+  product.homepageFeaturedOrder = 0;
+  await product.save();
 
-  await Product.findByIdAndDelete(productId);
-  await deleteAssetsFromStorage([...imageUrlsToDelete, ...videoAssetUrls], { excludeProductId: product._id });
+  if (wasPublic) {
+    await revalidateProductSurfaces({ productId: product._id });
+  }
 
   return { message: 'Продуктът беше изтрит успешно.' };
 }
@@ -726,7 +841,11 @@ export async function submitProductForReview(productId, user) {
   }
 
   product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW;
+  product.reviewStatus = PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+  product.draftSubmittedAt = new Date();
+  product.draftSubmittedBy = user._id;
   await product.save();
+  await notifyFullAdminsForProductReview(product, user);
 
   return normalizeProductMedia(product.toObject());
 }
@@ -743,6 +862,7 @@ export async function withdrawProductReview(productId, user) {
   }
 
   product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DRAFT;
+  product.reviewStatus = PRODUCT_REVIEW_STATUSES.DRAFT;
   await product.save();
 
   return normalizeProductMedia(product.toObject());
@@ -765,11 +885,13 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
       PRODUCT_PUBLICATION_STATUSES.REJECTED,
     ].includes(nextStatus)
   ) {
-    assertProductStatus(
-      product,
-      [PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW],
-      'Only products pending review can be approved or rejected.'
-    );
+    const isPendingReview =
+      product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW ||
+      product.reviewStatus === PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+
+    if (!isPendingReview) {
+      throw createValidationError('Only products pending review can be approved or rejected.');
+    }
   }
 
   if (nextStatus === PRODUCT_PUBLICATION_STATUSES.ARCHIVED) {
@@ -786,20 +908,68 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
   if (nextStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT) {
     assertProductStatus(
       product,
-      [PRODUCT_PUBLICATION_STATUSES.ARCHIVED],
-      'Only archived products can be restored to draft.'
+      [
+        PRODUCT_PUBLICATION_STATUSES.ARCHIVED,
+        PRODUCT_PUBLICATION_STATUSES.DELETED,
+      ],
+      'Only archived or deleted products can be restored to draft.'
     );
   }
 
-  product.publicationStatus = nextStatus;
+  const wasPublic = isPublicProduct(product);
   product.reviewedBy = user._id;
   product.reviewedAt = new Date();
 
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED && hasDraftContent(product)) {
+    const draftContent = product.draftContent;
+
+    product.title = draftContent.title;
+    product.description = draftContent.description;
+    product.price = draftContent.price;
+    product.category = draftContent.category;
+    product.availability = draftContent.availability || 'available';
+    product.imageUrl = draftContent.imageUrl || '';
+    product.imageUrls = Array.isArray(draftContent.imageUrls) ? draftContent.imageUrls.filter(Boolean) : [];
+    product.videos = normalizeStoredVideos(draftContent.videos);
+    product.draftContent = null;
+  }
+
+  if (
+    nextStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED &&
+    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED
+  ) {
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.REJECTED;
+  } else {
+    product.publicationStatus = nextStatus;
+  }
+
   if (nextStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED) {
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.REJECTED;
     product.reviewNote = normalizeReviewNote(reviewNote, { required: true });
+  } else if (nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.NONE;
+    product.reviewNote = '';
+    product.draftContent = null;
+    product.draftSubmittedAt = null;
+    product.draftSubmittedBy = null;
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.ARCHIVED) {
+    product.isHomepageFeatured = false;
+    product.homepageFeaturedOrder = 0;
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT) {
+    product.deletedAt = null;
+    product.deletedBy = null;
+    product.isHomepageFeatured = false;
+    product.homepageFeaturedOrder = 0;
   }
 
   await product.save();
+  if (wasPublic || nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    await revalidateProductSurfaces({ productId: product._id });
+  }
 
   return normalizeProductMedia(product.toObject());
 }

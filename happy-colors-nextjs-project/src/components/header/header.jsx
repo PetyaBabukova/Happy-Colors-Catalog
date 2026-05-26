@@ -9,6 +9,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
+import { fetchAdminUsers } from '@/managers/usersAdminManager';
 
 function HeaderRouteWatcher({ onRouteChange }) {
   const pathname = usePathname();
@@ -27,6 +28,7 @@ export default function Header() {
   const { user } = useAuth();
   const { visibleCategories } = useProducts();
   const { getTotalItems } = useCart();
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
 
   const cartItemCount = getTotalItems();
   const isFullAdmin = user?.role === 'full_admin';
@@ -36,6 +38,36 @@ export default function Header() {
   const handleRouteChange = useCallback(() => {
     setMobileMenuOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (!isFullAdmin) {
+      setPendingReviewCount(0);
+      return undefined;
+    }
+
+    let isCurrent = true;
+
+    fetchAdminUsers()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const total = Array.isArray(items)
+          ? items.reduce((sum, item) => sum + (Number(item.pendingReviewCount) || 0), 0)
+          : 0;
+        setPendingReviewCount(total);
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setPendingReviewCount(0);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [isFullAdmin]);
 
   return (
     <>
@@ -129,7 +161,14 @@ export default function Header() {
         <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
-        <li><Link href="/users/admin">Потребители</Link></li>
+        <li>
+          <Link
+            href="/users/admin"
+            className={pendingReviewCount > 0 ? styles.pendingAdminLink : undefined}
+          >
+            Потребители
+          </Link>
+        </li>
         <li><Link href="/newsletter/send">Newsletter</Link></li>
           </>
         )}

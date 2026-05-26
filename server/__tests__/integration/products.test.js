@@ -257,11 +257,23 @@ describe('products integration', () => {
     const app = createExpressApp();
     const owner = await createActiveArtist();
     const category = await createCategory();
-    const product = await createProduct({ owner, category, publicationStatus: 'draft' });
+    const product = await createProduct({ owner, category, publicationStatus: 'published' });
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id)).resolves.toBeNull();
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      publicationStatus: 'deleted',
+      isHomepageFeatured: false,
+      homepageFeaturedOrder: 0,
+    });
+    await request(app).get(`/products/${product._id}`).expect(404);
+
+    const mineRes = await request(app)
+      .get('/products/mine')
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(mineRes.body.map((item) => item._id)).not.toContain(String(product._id));
   });
 
   it('removes deleted featured products from the homepage featured list', async () => {
@@ -305,7 +317,9 @@ describe('products integration', () => {
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id)).resolves.toBeNull();
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      publicationStatus: 'deleted',
+    });
     expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
   });
 
@@ -330,7 +344,9 @@ describe('products integration', () => {
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id)).resolves.toBeNull();
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      publicationStatus: 'deleted',
+    });
     expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
   });
 
@@ -367,7 +383,9 @@ describe('products integration', () => {
       .expect(200);
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(admin)).expect(204);
-    await expect(Product.findById(product._id)).resolves.toBeNull();
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      publicationStatus: 'deleted',
+    });
   });
 
   it('supports artist review submission and full-admin approval', async () => {
@@ -405,18 +423,23 @@ describe('products integration', () => {
     await request(app).get(`/products/${product._id}`).expect(200);
   });
 
-  it('stores review notes and blocks artist edits while pending or published', async () => {
+  it('lets artists revise pending products and keeps the latest revision pending review', async () => {
     const app = createExpressApp();
     const artist = await createActiveArtist({ email: 'blocked-artist@example.com' });
     const admin = await createFullAdmin({ email: 'reject-admin@example.com' });
     const category = await createCategory();
     const product = await createProduct({ owner: artist, category, publicationStatus: 'pending_review' });
 
-    await request(app)
+    const pendingEditRes = await request(app)
       .put(`/products/${product._id}`)
       .set('Cookie', authCookie(artist))
-      .send({ title: 'Not while pending' })
-      .expect(403);
+      .send({ title: 'Artist revised while pending' })
+      .expect(200);
+
+    expect(pendingEditRes.body).toMatchObject({
+      title: 'Artist revised while pending',
+      publicationStatus: 'pending_review',
+    });
 
     const rejectRes = await request(app)
       .patch(`/products/${product._id}/reject`)
@@ -437,8 +460,72 @@ describe('products integration', () => {
 
     expect(editRes.body).toMatchObject({
       title: 'Artist revised',
-      publicationStatus: 'draft',
-      reviewNote: 'Please add one clearer photo.',
+      publicationStatus: 'pending_review',
+      reviewNote: '',
+    });
+  });
+
+  it('stores artist edits to published products as pending draft content until admin approval', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'published-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'published-review-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: artist,
+      category,
+      publicationStatus: 'published',
+      title: 'Approved public title',
+    });
+
+    const editRes = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(artist))
+      .send({ title: 'Pending artist revision' })
+      .expect(200);
+
+    expect(editRes.body).toMatchObject({
+      title: 'Pending artist revision',
+      publicationStatus: 'published',
+      reviewStatus: 'pending_review',
+    });
+
+    const publicRes = await request(app).get(`/products/${product._id}`).expect(200);
+    expect(publicRes.body).toMatchObject({
+      title: 'Approved public title',
+      publicationStatus: 'published',
+    });
+
+    const reviewQueueRes = await request(app)
+      .get('/products/review-queue')
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+    expect(reviewQueueRes.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: String(product._id),
+          title: 'Pending artist revision',
+          reviewStatus: 'pending_review',
+        }),
+      ])
+    );
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: [admin.email],
+        subject: expect.stringContaining('Product pending approval'),
+        text: expect.stringContaining(`/users/admin?reviewProduct=${product._id}`),
+      })
+    );
+
+    const approveRes = await request(app)
+      .patch(`/products/${product._id}/approve`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(approveRes.body).toMatchObject({
+      title: 'Pending artist revision',
+      publicationStatus: 'published',
+      reviewStatus: 'none',
     });
   });
 

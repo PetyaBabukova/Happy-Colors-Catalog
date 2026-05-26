@@ -14,6 +14,7 @@ import useImageSlideshow from '@/hooks/useImageSlideshow';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import MessageBox from '@/components/ui/MessageBox';
+import { approveAdminProduct, rejectAdminProduct } from '@/managers/usersAdminManager';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -71,7 +72,9 @@ function buildMediaSlides(imageUrls, videos) {
 export default function ProductDetails({ product }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
-	const canEdit = isOwner(product, user);
+	const isFullAdmin = user?.role === 'full_admin';
+	const canEdit = isFullAdmin || isOwner(product, user);
+	const isPendingReview = product?.publicationStatus === 'pending_review' || product?.reviewStatus === 'pending_review';
 	const router = useRouter();
 	const gestureRef = useRef(null);
 	const videoRefs = useRef(new Map());
@@ -92,6 +95,8 @@ export default function ProductDetails({ product }) {
 	}, [mediaSlides]);
 	const [activeTab, setActiveTab] = useState('description');
 	const [createdReviewNotice, setCreatedReviewNotice] = useState(false);
+	const [reviewActionLoading, setReviewActionLoading] = useState('');
+	const [reviewActionError, setReviewActionError] = useState('');
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragOffset, setDragOffset] = useState(0);
 	const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -291,6 +296,41 @@ export default function ProductDetails({ product }) {
 		router.push(`/contacts?productId=${product._id}`);
 	};
 
+	const handleApproveProduct = async () => {
+		setReviewActionLoading('approve');
+		setReviewActionError('');
+
+		try {
+			await approveAdminProduct(product._id);
+			router.refresh();
+		} catch (error) {
+			setReviewActionError(error.message || 'Неуспешно одобряване на продукта.');
+		} finally {
+			setReviewActionLoading('');
+		}
+	};
+
+	const handleRejectProduct = async () => {
+		const reviewNote = window.prompt('Причина за отказа:');
+
+		if (!reviewNote || reviewNote.trim() === '') {
+			setReviewActionError('Моля въведете причина за отказа.');
+			return;
+		}
+
+		setReviewActionLoading('reject');
+		setReviewActionError('');
+
+		try {
+			await rejectAdminProduct(product._id, reviewNote);
+			router.refresh();
+		} catch (error) {
+			setReviewActionError(error.message || 'Неуспешен отказ на продукта.');
+		} finally {
+			setReviewActionLoading('');
+		}
+	};
+
 	const handlePointerDown = (event) => {
 		if (!hasMultiple || event.target.closest('button, video')) {
 			return;
@@ -350,6 +390,15 @@ export default function ProductDetails({ product }) {
 						type="success"
 						message="Този продукт очаква одобрение от администратор."
 					/>
+				)}
+				{isPendingReview && isFullAdmin && (
+					<MessageBox
+						type="success"
+						message="Този продукт чака одобрение. Прегледайте публикацията и изберете действие."
+					/>
+				)}
+				{reviewActionError && (
+					<MessageBox type="error" message={reviewActionError} />
 				)}
 				<h1>{product.title}</h1>
 
@@ -451,6 +500,27 @@ export default function ProductDetails({ product }) {
 									<Link href={`/products/${product._id}/delete`} className={styles.actionBtn}>
 										Изтрий
 									</Link>
+								</div>
+							)}
+
+							{isFullAdmin && isPendingReview && (
+								<div className={styles.ownerActions}>
+									<button
+										type="button"
+										onClick={handleApproveProduct}
+										className={styles.actionBtn}
+										disabled={reviewActionLoading !== ''}
+									>
+										{reviewActionLoading === 'approve' ? 'Одобряване...' : 'Одобри'}
+									</button>
+									<button
+										type="button"
+										onClick={handleRejectProduct}
+										className={styles.actionBtn}
+										disabled={reviewActionLoading !== ''}
+									>
+										{reviewActionLoading === 'reject' ? 'Отказ...' : 'Откажи'}
+									</button>
 								</div>
 							)}
 

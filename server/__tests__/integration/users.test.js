@@ -1,6 +1,5 @@
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { sendEmail } from '../../helpers/sendEmail.js';
 import { createExpressApp } from '../../server.js';
 import {
   authCookie,
@@ -106,6 +105,11 @@ describe('users integration', () => {
     const artist = await createActiveArtist({ email: 'listed-artist@example.com' });
     await createProduct({ owner: artist, title: 'Listed product one' });
     await createProduct({ owner: artist, title: 'Listed product two' });
+    await createProduct({
+      owner: artist,
+      title: 'Deleted product',
+      publicationStatus: 'deleted',
+    });
 
     const res = await request(app)
       .get('/users/admin')
@@ -132,6 +136,11 @@ describe('users integration', () => {
       title: 'Dossier candle',
       publicationStatus: 'pending_review',
     });
+    await createProduct({
+      owner: artist,
+      title: 'Deleted dossier candle',
+      publicationStatus: 'deleted',
+    });
 
     const res = await request(app)
       .get(`/users/admin/${artist._id}`)
@@ -148,42 +157,54 @@ describe('users integration', () => {
         _id: String(product._id),
         title: 'Dossier candle',
         publicationStatus: 'pending_review',
-        url: `https://happycolors.example/products/${product._id}/edit`,
+        url: `https://happycolors.example/products/${product._id}`,
       }),
     ]);
+    expect(res.body.products.map((item) => item.title)).not.toContain('Deleted dossier candle');
     expect(res.body.user.password).toBeUndefined();
   });
 
-  it('lets full admins change roles and sends a suspended artist product reminder', async () => {
-    vi.stubEnv('CLIENT_URL', 'https://happycolors.example');
+  it('lets full admins change roles and activates artist users', async () => {
     const app = createExpressApp();
     const admin = await createFullAdmin({ email: 'admin-update@example.com' });
-    const artist = await createActiveArtist({ email: 'artist-update@example.com' });
-    const product = await createProduct({ owner: artist, title: 'Artist product' });
+    const customer = await createUser({ email: 'artist-update@example.com' });
 
     const res = await request(app)
-      .patch(`/users/admin/${artist._id}`)
+      .patch(`/users/admin/${customer._id}`)
       .set('Cookie', authCookie(admin))
-      .send({ role: 'artist', artistStatus: 'suspended' })
+      .send({ role: 'artist' })
       .expect(200);
 
     expect(res.body).toMatchObject({
       user: {
-        email: artist.email,
+        email: customer.email,
         role: 'artist',
-        artistStatus: 'suspended',
+        artistStatus: 'active',
       },
-      reminder: {
-        sent: true,
-        productCount: 1,
-      },
+      reminder: null,
     });
-    expect(sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        subject: expect.stringContaining('Suspended artist'),
-        text: expect.stringContaining(`https://happycolors.example/products/${product._id}/edit`),
-      })
-    );
+  });
+
+  it('preserves existing artist status when the role is unchanged', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-preserve@example.com' });
+    const artist = await createUser({
+      email: 'suspended-preserve@example.com',
+      role: 'artist',
+      artistStatus: 'suspended',
+    });
+
+    const res = await request(app)
+      .patch(`/users/admin/${artist._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'artist' })
+      .expect(200);
+
+    expect(res.body.user).toMatchObject({
+      email: artist.email,
+      role: 'artist',
+      artistStatus: 'suspended',
+    });
   });
 
   it('rejects invalid role updates and self-demotion', async () => {
@@ -198,10 +219,22 @@ describe('users integration', () => {
       .expect(400);
 
     await request(app)
-      .patch(`/users/admin/${artist._id}`)
+      .patch(`/users/admin/${admin._id}`)
       .set('Cookie', authCookie(admin))
-      .send({ role: 'artist', artistStatus: 'blocked' })
+      .send({ role: 'customer' })
       .expect(400);
+  });
+
+  it('prevents removing the last full admin role', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'sole-admin@example.com' });
+    const otherAdmin = await createFullAdmin({ email: 'other-admin@example.com' });
+
+    await request(app)
+      .patch(`/users/admin/${otherAdmin._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'customer' })
+      .expect(200);
 
     await request(app)
       .patch(`/users/admin/${admin._id}`)
@@ -220,7 +253,7 @@ describe('users integration', () => {
     await request(app)
       .patch(`/users/admin/${artist._id}`)
       .set('Cookie', authCookie(admin))
-      .send({ role: 'artist', artistStatus: 'suspended' })
+      .send({ role: 'customer' })
       .expect(403);
   });
 });

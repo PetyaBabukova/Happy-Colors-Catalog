@@ -4,10 +4,22 @@ export const PRODUCT_PUBLICATION_STATUSES = Object.freeze({
   PUBLISHED: 'published',
   REJECTED: 'rejected',
   ARCHIVED: 'archived',
+  DELETED: 'deleted',
 });
 
 export const PRODUCT_PUBLICATION_STATUS_VALUES = Object.freeze(
   Object.values(PRODUCT_PUBLICATION_STATUSES)
+);
+
+export const PRODUCT_REVIEW_STATUSES = Object.freeze({
+  NONE: 'none',
+  DRAFT: 'draft',
+  PENDING_REVIEW: 'pending_review',
+  REJECTED: 'rejected',
+});
+
+export const PRODUCT_REVIEW_STATUS_VALUES = Object.freeze(
+  Object.values(PRODUCT_REVIEW_STATUSES)
 );
 
 export const PRODUCT_REVIEW_NOTE_MAX_LENGTH = 1000;

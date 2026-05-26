@@ -3,21 +3,6 @@
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 
-async function invalidateProductCaches(productId) {
-  try {
-    await fetch('/api/revalidate/products', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ productId }),
-    });
-  } catch (error) {
-    console.error('Неуспешно обновяване на product cache-а:', error);
-  }
-}
-
 export async function onCreateProductSubmit(
   formValues,
   setSuccess,
@@ -71,8 +56,6 @@ export async function onCreateProductSubmit(
     setInvalidFields([]);
 
     triggerCategoriesReload();
-    await invalidateProductCaches(result._id);
-
     router.push(
       result.publicationStatus === 'published'
         ? `/products/${result._id}`
@@ -136,7 +119,6 @@ export async function onEditProductSubmit(
     setSuccess(true);
     setError('');
     setInvalidFields([]);
-    await invalidateProductCaches(productId);
     router.push(`/products/${productId}`);
     router.refresh();
   } catch (err) {
@@ -160,10 +142,7 @@ export async function getProducts(categoryName) {
     }
 
     const res = await fetch(url, {
-      next: {
-        revalidate: 60,
-        tags: ['products'],
-      },
+      cache: 'no-store',
     });
 
     if (!res.ok) {
@@ -227,8 +206,6 @@ export async function updateHomepageFeaturedProducts(productIds) {
       result
     );
   }
-
-  await invalidateProductCaches();
 
   return Array.isArray(result) ? result : [];
 }

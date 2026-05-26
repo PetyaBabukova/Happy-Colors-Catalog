@@ -3,12 +3,21 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 
 import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
 
+function hasValidRevalidateSecret(request) {
+  const secret = String(process.env.PRODUCT_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET || '').trim();
+  const provided = String(request.headers.get('x-revalidate-secret') || '').trim();
+
+  return Boolean(secret && provided && provided === secret);
+}
+
 export async function POST(request) {
   try {
-    const auth = requireApiFullAdmin(await requireApiAuth(request));
+    if (!hasValidRevalidateSecret(request)) {
+      const auth = requireApiFullAdmin(await requireApiAuth(request));
 
-    if (!auth.ok) {
-      return NextResponse.json({ message: auth.message }, { status: auth.status });
+      if (!auth.ok) {
+        return NextResponse.json({ message: auth.message }, { status: auth.status });
+      }
     }
 
     const body = await request.json().catch(() => ({}));

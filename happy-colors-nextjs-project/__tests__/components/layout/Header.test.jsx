@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Header from '@/components/header/header';
 import { useProducts } from '@/context/ProductContext';
+import { fetchAdminUsers } from '@/managers/usersAdminManager';
 import { fireEvent, render, screen } from '../test-utils.jsx';
 
 const catalogModeState = vi.hoisted(() => ({
@@ -9,6 +10,10 @@ const catalogModeState = vi.hoisted(() => ({
 
 vi.mock('@/context/ProductContext', () => ({
   useProducts: vi.fn(),
+}));
+
+vi.mock('@/managers/usersAdminManager', () => ({
+  fetchAdminUsers: vi.fn(),
 }));
 
 vi.mock('@/utils/catalogMode', () => ({
@@ -32,6 +37,7 @@ describe('Header', () => {
         { _id: 'cat-2', name: 'Decor' },
       ],
     });
+    fetchAdminUsers.mockResolvedValue([]);
   });
 
   it('renders category links, cart count, and full admin navigation', () => {
@@ -75,6 +81,20 @@ describe('Header', () => {
     });
 
     expect(customerRender.container.querySelector('ul[class*="userNav"]')).not.toBeInTheDocument();
+  });
+
+  it('highlights the users admin link when products are waiting for review', async () => {
+    fetchAdminUsers.mockResolvedValueOnce([
+      { _id: 'user-1', pendingReviewCount: 2 },
+      { _id: 'user-2', pendingReviewCount: 0 },
+    ]);
+
+    render(<Header />, {
+      user: { username: 'Petya', role: 'full_admin', artistStatus: null },
+    });
+
+    const usersLink = await screen.findByRole('link', { name: 'Потребители' });
+    expect(usersLink.className).toContain('pendingAdminLink');
   });
 
   it('hides product creation from suspended artists', () => {

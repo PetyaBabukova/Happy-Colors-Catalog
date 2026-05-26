@@ -42,17 +42,13 @@ export function canManageProduct(product, user) {
     return false;
   }
 
-  return [
-    PRODUCT_PUBLICATION_STATUSES.DRAFT,
-    PRODUCT_PUBLICATION_STATUSES.REJECTED,
+  return ![
+    PRODUCT_PUBLICATION_STATUSES.ARCHIVED,
+    PRODUCT_PUBLICATION_STATUSES.DELETED,
   ].includes(product.publicationStatus);
 }
 
 export function canManageProductMedia(product, user) {
-  return canManageProduct(product, user);
-}
-
-export function canHardDeleteProduct(product, user) {
   if (!product) {
     return false;
   }
@@ -64,7 +60,35 @@ export function canHardDeleteProduct(product, user) {
   return (
     canArtistManageProducts(user) &&
     isProductOwner(product, user) &&
-    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT
+    [
+      PRODUCT_PUBLICATION_STATUSES.DRAFT,
+      PRODUCT_PUBLICATION_STATUSES.REJECTED,
+      PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+    ].includes(product.publicationStatus)
+  );
+}
+
+export function canHardDeleteProduct(product, user) {
+  return canSoftDeleteProduct(product, user);
+}
+
+export function canSoftDeleteProduct(product, user) {
+  if (!product) {
+    return false;
+  }
+
+  if (product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.DELETED) {
+    return false;
+  }
+
+  if (isFullAdmin(user)) {
+    return true;
+  }
+
+  return (
+    canArtistManageProducts(user) &&
+    isProductOwner(product, user) &&
+    product.publicationStatus !== PRODUCT_PUBLICATION_STATUSES.ARCHIVED
   );
 }
 
@@ -75,6 +99,8 @@ export function canSubmitProductForReview(product, user) {
     [
       PRODUCT_PUBLICATION_STATUSES.DRAFT,
       PRODUCT_PUBLICATION_STATUSES.REJECTED,
+      PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+      PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
     ].includes(product?.publicationStatus)
   );
 }

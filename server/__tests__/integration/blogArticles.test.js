@@ -6,6 +6,7 @@ import { createExpressApp } from '../../server.js';
 import {
   authCookie,
   buildBlogArticle,
+  createActiveArtist,
   createBlogArticle,
   createFullAdmin,
 } from './factories.js';
@@ -166,6 +167,17 @@ describe('blog articles integration', () => {
     expect(res.body.contentHtml).not.toContain('script');
     expect(res.body.contentHtml).not.toContain('onerror');
     expect(res.body.contentHtml).not.toContain('position');
+  });
+
+  it('rejects blog article creation for artists', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'blog-artist@example.com' });
+
+    await request(app)
+      .post('/blog-articles')
+      .set('Cookie', authCookie(artist))
+      .send(buildBlogArticle({ owner: artist }))
+      .expect(403);
   });
 
   it('creates published articles when status is omitted', async () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpers.js';
 
 const revalidatePath = vi.fn();
@@ -11,7 +11,12 @@ async function loadRoute() {
 }
 
 describe('/api/revalidate/products', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
+    vi.clearAllMocks();
     authResult = { ok: true, user: { _id: 'owner-1', role: 'full_admin' } };
     requireApiAuth.mockImplementation(() => authResult);
 
@@ -41,6 +46,22 @@ describe('/api/revalidate/products', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
+    expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
+  });
+
+  it('accepts server-owned revalidation with the shared secret', async () => {
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', 'server-secret');
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest(
+        { productId: 'product-1' },
+        { headers: { get: (name) => (name === 'x-revalidate-secret' ? 'server-secret' : null) } }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(requireApiAuth).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
   });
 

@@ -101,6 +101,48 @@ describe('ProductForm', () => {
     );
   });
 
+  it('submits edit forms without validating optional backend metadata fields', async () => {
+    const onSubmit = vi.fn();
+    const { container } = render(
+      <ProductForm
+        initialValues={buildInitialValues({
+          category: { id: 'cat-1', name: 'Candles' },
+          publicationStatus: 'published',
+          reviewNote: '',
+          reviewedAt: null,
+          reviewedBy: null,
+          deletedAt: null,
+          deletedBy: null,
+        })}
+        onSubmit={onSubmit}
+        legendText="Edit product"
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector('input[name="title"]')).toHaveValue('Lavender Candle'));
+    expect(container.querySelector('select[name="category"]')).toHaveValue('cat-1');
+
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'cat-1' }),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Object)
+    );
+    expect(onSubmit.mock.calls[0][0]).not.toEqual(
+      expect.objectContaining({
+        reviewNote: '',
+        reviewedAt: null,
+        reviewedBy: null,
+        deletedAt: null,
+        deletedBy: null,
+      })
+    );
+    expect(screen.queryByText(/Моля попълнете всички задължителни полета/)).not.toBeInTheDocument();
+  });
+
   it('rejects non-image uploads before calling the upload manager', async () => {
     const { container } = render(<ProductForm initialValues={buildInitialValues()} onSubmit={vi.fn()} legendText="Edit" />);
     const imageInput = container.querySelector('input[name="imageUrls"]');

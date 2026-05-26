@@ -5,6 +5,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AuthenticatedRedirect from '@/components/auth/AuthenticatedRedirect';
 import RequireAuth from '@/components/auth/RequireAuth';
+import RequireFullAdmin from '@/components/auth/RequireFullAdmin';
 import { render, screen, waitFor } from '../test-utils.jsx';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -123,6 +124,40 @@ describe('admin route access', () => {
     const source = fs.readFileSync(path.join(projectRoot, route.pageFile), 'utf8');
 
     expect(source).toContain('RequireAuth');
+  });
+
+  it('locks /blog/create to full admin users on the frontend', () => {
+    const source = fs.readFileSync(path.join(projectRoot, 'src/app/blog/create/page.js'), 'utf8');
+
+    expect(source).toContain('RequireFullAdmin');
+
+    const artistRender = render(
+      <RequireAuth>
+        <RequireFullAdmin>
+          <div>admin-content:blog-create</div>
+        </RequireFullAdmin>
+      </RequireAuth>,
+      {
+        user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' },
+      }
+    );
+
+    expect(screen.queryByText('admin-content:blog-create')).not.toBeInTheDocument();
+    expect(screen.getByText(/full admin/)).toBeInTheDocument();
+    artistRender.unmount();
+
+    render(
+      <RequireAuth>
+        <RequireFullAdmin>
+          <div>admin-content:blog-create</div>
+        </RequireFullAdmin>
+      </RequireAuth>,
+      {
+        user: { _id: 'admin-1', role: 'full_admin' },
+      }
+    );
+
+    expect(screen.getByText('admin-content:blog-create')).toBeInTheDocument();
   });
 
   it.each(adminRoutes)('redirects guests away from $name', (route) => {

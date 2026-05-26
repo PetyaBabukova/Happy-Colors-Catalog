@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle, ExternalLink, FolderOpen, RefreshCw, Save, ShieldAlert, XCircle } from 'lucide-react';
+import { CheckCircle, ExternalLink, FolderOpen, Save, ShieldAlert, XCircle } from 'lucide-react';
 import MessageBox from '@/components/ui/MessageBox';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -18,12 +18,6 @@ const ROLE_OPTIONS = [
   { value: 'customer', label: 'Клиент' },
   { value: 'artist', label: 'Артист' },
   { value: 'full_admin', label: 'Full admin' },
-];
-
-const ARTIST_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Изчаква' },
-  { value: 'active', label: 'Активен' },
-  { value: 'suspended', label: 'Спрян' },
 ];
 
 function formatDate(value) {
@@ -47,12 +41,11 @@ function formatDate(value) {
 function buildDraft(user) {
   return {
     role: user.role || 'customer',
-    artistStatus: user.artistStatus || 'pending',
   };
 }
 
-function getStatusLabel(status) {
-  return ARTIST_STATUS_OPTIONS.find((option) => option.value === status)?.label || status;
+function isPendingReviewProduct(product) {
+  return product?.publicationStatus === 'pending_review' || product?.reviewStatus === 'pending_review';
 }
 
 export default function UsersAdminClientPage() {
@@ -151,15 +144,10 @@ export default function UsersAdminClientPage() {
   function updateDraft(userId, patch) {
     setDrafts((prev) => {
       const current = prev[userId] || buildDraft(usersById.get(userId) || {});
-      const next = { ...current, ...patch };
-
-      if (patch.role && patch.role !== 'artist') {
-        next.artistStatus = 'pending';
-      }
 
       return {
         ...prev,
-        [userId]: next,
+        [userId]: { ...current, ...patch },
       };
     });
   }
@@ -173,7 +161,6 @@ export default function UsersAdminClientPage() {
     try {
       const result = await updateAdminUser(targetUser._id, {
         role: draft.role,
-        artistStatus: draft.role === 'artist' ? draft.artistStatus : undefined,
       });
 
       setUsers((prev) =>
@@ -274,7 +261,7 @@ export default function UsersAdminClientPage() {
   }
 
   function renderReviewActions(product) {
-    if (product.publicationStatus !== 'pending_review') {
+    if (!isPendingReviewProduct(product)) {
       return null;
     }
 
@@ -326,11 +313,8 @@ export default function UsersAdminClientPage() {
       <div className={styles.header}>
         <div>
           <h1>Потребители</h1>
-          <p>Роли, артист статуси и досиета с продуктова история.</p>
+          <p>Роли и досиета с продуктова история.</p>
         </div>
-        <button className={styles.refreshButton} type="button" onClick={loadUsers} disabled={loading}>
-          <RefreshCw size={18} aria-hidden="true" /> Обнови
-        </button>
       </div>
 
       {message ? <div className={styles.message}>{message}</div> : null}
@@ -345,7 +329,12 @@ export default function UsersAdminClientPage() {
             </p>
           </div>
           <div className={styles.reviewPanelActions}>
-            <a href={`/products/${reviewProduct._id}/edit`} target="_blank" rel="noreferrer">
+            <a
+              href={`/products/${reviewProduct._id}`}
+              target="_blank"
+              rel="noreferrer"
+              className={isPendingReviewProduct(reviewProduct) ? styles.pendingOpenLink : undefined}
+            >
               <ExternalLink size={18} aria-hidden="true" /> Отвори
             </a>
             {renderReviewActions(reviewProduct)}
@@ -359,7 +348,6 @@ export default function UsersAdminClientPage() {
             <tr>
               <th>Потребител</th>
               <th>Роля</th>
-              <th>Артист статус</th>
               <th>Продукти</th>
               <th>Създаден</th>
               <th>Действия</th>
@@ -369,46 +357,34 @@ export default function UsersAdminClientPage() {
             {users.map((item) => {
               const draft = drafts[item._id] || buildDraft(item);
               const isSelf = item._id === currentUser?._id;
-              const isDirty =
-                draft.role !== item.role ||
-                (draft.role === 'artist' && draft.artistStatus !== (item.artistStatus || 'pending'));
+              const isDirty = draft.role !== item.role;
+              const hasPendingReview = Number(item.pendingReviewCount) > 0;
 
               return (
-                <tr key={item._id}>
+                <tr key={item._id} className={hasPendingReview ? styles.pendingUserRow : undefined}>
                   <td>
                     <div className={styles.userName}>{item.username}</div>
                     <div className={styles.userEmail}>{item.email}</div>
                     {isSelf ? <div className={styles.selfNote}>Това е вашият профил.</div> : null}
                   </td>
                   <td>
-                    <select
-                      className={styles.select}
-                      value={draft.role}
-                      onChange={(event) => updateDraft(item._id, { role: event.target.value })}
-                      disabled={isSelf || savingId === item._id}
-                    >
+                    <div className={styles.roleOptions}>
                       {ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
+                        <label key={option.value} className={styles.roleOption}>
+                          <input
+                            type="radio"
+                            name={`role-${item._id}`}
+                            value={option.value}
+                            checked={draft.role === option.value}
+                            onChange={(event) => updateDraft(item._id, { role: event.target.value })}
+                            disabled={isSelf || savingId === item._id}
+                          />
                           {option.label}
-                        </option>
+                        </label>
                       ))}
-                    </select>
+                    </div>
                   </td>
-                  <td>
-                    <select
-                      className={styles.select}
-                      value={draft.artistStatus}
-                      onChange={(event) => updateDraft(item._id, { artistStatus: event.target.value })}
-                      disabled={draft.role !== 'artist' || isSelf || savingId === item._id}
-                    >
-                      {ARTIST_STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{item.productCount || 0}</td>
+                  <td className={hasPendingReview ? styles.pendingText : undefined}>{item.productCount || 0}</td>
                   <td>{formatDate(item.createdAt)}</td>
                   <td>
                     <div className={styles.actions}>
@@ -450,7 +426,6 @@ export default function UsersAdminClientPage() {
               <h2>{dossier.user.username}</h2>
               <p>
                 {dossier.user.email} · {dossier.user.role}
-                {dossier.user.artistStatus ? ` · ${getStatusLabel(dossier.user.artistStatus)}` : ''}
               </p>
             </div>
             <ShieldAlert size={28} aria-hidden="true" />
@@ -459,7 +434,10 @@ export default function UsersAdminClientPage() {
           {dossier.products.length > 0 ? (
             <ul className={styles.productList}>
               {dossier.products.map((product) => (
-                <li key={product._id} className={styles.productItem}>
+                <li
+                  key={product._id}
+                  className={`${styles.productItem} ${isPendingReviewProduct(product) ? styles.pendingProductItem : ''}`}
+                >
                   <div>
                     <div className={styles.productTitle}>{product.title}</div>
                     <div className={styles.productMeta}>
@@ -469,7 +447,12 @@ export default function UsersAdminClientPage() {
                     </div>
                   </div>
                   <div className={styles.productActions}>
-                  <a href={product.url} target="_blank" rel="noreferrer">
+                  <a
+                    href={product.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={isPendingReviewProduct(product) ? styles.pendingOpenLink : undefined}
+                  >
                     <ExternalLink size={18} aria-hidden="true" /> Отвори
                   </a>
                     {renderReviewActions(product)}

@@ -3,6 +3,7 @@ import {
   canCreateProduct,
   canHardDeleteProduct,
   canManageProduct,
+  canSoftDeleteProduct,
   canSubmitProductForReview,
   canViewProduct,
   canWithdrawProductReview,
@@ -31,16 +32,23 @@ describe('product permission helpers', () => {
     expect(canViewProduct(archived, admin)).toBe(true);
     expect(canManageProduct(archived, admin)).toBe(true);
     expect(canHardDeleteProduct(archived, admin)).toBe(true);
+    expect(canSoftDeleteProduct(product({ publicationStatus: 'deleted' }), admin)).toBe(false);
   });
 
-  it('allows non-suspended artists to create and manage only own draft or rejected products', () => {
+  it('allows non-suspended artists to create and manage their own active products', () => {
     expect(canCreateProduct(artist)).toBe(true);
     expect(canCreateProduct(pendingArtist)).toBe(true);
     expect(canManageProduct(product({ publicationStatus: 'draft' }), artist)).toBe(true);
     expect(canManageProduct(product({ owner: 'artist-3', publicationStatus: 'draft' }), pendingArtist)).toBe(true);
     expect(canManageProduct(product({ publicationStatus: 'rejected' }), artist)).toBe(true);
-    expect(canManageProduct(product({ publicationStatus: 'published' }), artist)).toBe(false);
+    expect(canManageProduct(product({ publicationStatus: 'pending_review' }), artist)).toBe(true);
+    expect(canManageProduct(product({ publicationStatus: 'published' }), artist)).toBe(true);
+    expect(canManageProduct(product({ publicationStatus: 'archived' }), artist)).toBe(false);
+    expect(canManageProduct(product({ publicationStatus: 'deleted' }), artist)).toBe(false);
     expect(canManageProduct(product({ owner: 'artist-2' }), artist)).toBe(false);
+    expect(canSoftDeleteProduct(product({ publicationStatus: 'published' }), artist)).toBe(true);
+    expect(canSoftDeleteProduct(product({ publicationStatus: 'archived' }), artist)).toBe(false);
+    expect(canSoftDeleteProduct(product({ owner: 'artist-2', publicationStatus: 'published' }), artist)).toBe(false);
   });
 
   it('blocks customers and suspended artists from product mutations', () => {
@@ -60,7 +68,8 @@ describe('product permission helpers', () => {
   it('allows artist review transitions only for own eligible products', () => {
     expect(canSubmitProductForReview(product({ publicationStatus: 'draft' }), artist)).toBe(true);
     expect(canSubmitProductForReview(product({ publicationStatus: 'rejected' }), artist)).toBe(true);
-    expect(canSubmitProductForReview(product({ publicationStatus: 'published' }), artist)).toBe(false);
+    expect(canSubmitProductForReview(product({ publicationStatus: 'pending_review' }), artist)).toBe(true);
+    expect(canSubmitProductForReview(product({ publicationStatus: 'published' }), artist)).toBe(true);
     expect(canWithdrawProductReview(product({ publicationStatus: 'pending_review' }), artist)).toBe(true);
     expect(canWithdrawProductReview(product({ publicationStatus: 'pending_review' }), otherArtist)).toBe(false);
   });
