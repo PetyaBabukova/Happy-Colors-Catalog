@@ -3,7 +3,6 @@ import {
   canCreateProduct,
   canHardDeleteProduct,
   canManageProduct,
-  canSoftDeleteProduct,
   canSubmitProductForReview,
   canViewProduct,
   canWithdrawProductReview,
@@ -32,7 +31,6 @@ describe('product permission helpers', () => {
     expect(canViewProduct(archived, admin)).toBe(true);
     expect(canManageProduct(archived, admin)).toBe(true);
     expect(canHardDeleteProduct(archived, admin)).toBe(true);
-    expect(canSoftDeleteProduct(product({ publicationStatus: 'deleted' }), admin)).toBe(false);
   });
 
   it('allows non-suspended artists to create and manage their own active products', () => {
@@ -46,9 +44,9 @@ describe('product permission helpers', () => {
     expect(canManageProduct(product({ publicationStatus: 'archived' }), artist)).toBe(false);
     expect(canManageProduct(product({ publicationStatus: 'deleted' }), artist)).toBe(false);
     expect(canManageProduct(product({ owner: 'artist-2' }), artist)).toBe(false);
-    expect(canSoftDeleteProduct(product({ publicationStatus: 'published' }), artist)).toBe(true);
-    expect(canSoftDeleteProduct(product({ publicationStatus: 'archived' }), artist)).toBe(false);
-    expect(canSoftDeleteProduct(product({ owner: 'artist-2', publicationStatus: 'published' }), artist)).toBe(false);
+    expect(canHardDeleteProduct(product({ publicationStatus: 'published' }), artist)).toBe(true);
+    expect(canHardDeleteProduct(product({ publicationStatus: 'archived' }), artist)).toBe(false);
+    expect(canHardDeleteProduct(product({ owner: 'artist-2', publicationStatus: 'published' }), artist)).toBe(false);
   });
 
   it('blocks customers and suspended artists from product mutations', () => {

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import HomeBanner from '../../models/HomeBanner.js';
 import { createExpressApp } from '../../server.js';
@@ -180,7 +180,7 @@ describe('home banners integration', () => {
       .send({ imageUrl: newImageUrl })
       .expect(200);
 
-    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldImageUrl);
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldImageUrl, { throwOnError: false });
   });
 
   it('does not delete an old image on edit when a product still references it', async () => {
@@ -202,7 +202,7 @@ describe('home banners integration', () => {
       .send({ imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/replacement.webp' })
       .expect(200);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 
   it('does not delete an old image on edit when a product video still references it', async () => {
@@ -242,7 +242,23 @@ describe('home banners integration', () => {
     await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
 
     await expect(HomeBanner.findById(banner._id)).resolves.toBeNull();
-    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl);
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl, { throwOnError: true });
+  });
+
+  it('keeps the banner when storage cleanup fails during delete', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/delete-fails.webp';
+    const banner = await createHomeBanner({ owner, imageUrl });
+    deleteImageFromGCS.mockRejectedValueOnce(new Error('storage outage'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(500);
+
+    await expect(HomeBanner.findById(banner._id).lean()).resolves.toMatchObject({
+      _id: banner._id,
+      imageUrl,
+    });
   });
 
   it('deletes a banner but keeps a shared image in storage', async () => {
@@ -258,7 +274,7 @@ describe('home banners integration', () => {
 
     await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 
   it('deletes a banner but keeps an image still used by a product', async () => {
@@ -276,6 +292,6 @@ describe('home banners integration', () => {
 
     await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 });

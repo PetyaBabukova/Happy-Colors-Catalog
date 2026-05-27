@@ -31,7 +31,13 @@ describe('revalidateProductSurfaces', () => {
 
     await expect(revalidateProductSurfaces({ productId: 'product-1' })).resolves.toEqual({
       ok: true,
-      status: 200,
+      results: [
+        {
+          url: 'https://happycolors.example/api/revalidate/products',
+          ok: true,
+          status: 200,
+        },
+      ],
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://happycolors.example/api/revalidate/products',
@@ -44,5 +50,30 @@ describe('revalidateProductSurfaces', () => {
         body: JSON.stringify({ productId: 'product-1' }),
       })
     );
+  });
+
+  it('revalidates both local client and public site urls when they are configured', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('CLIENT_URL', 'http://localhost:3000');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', 'https://happycolors.eu');
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', 'secret');
+
+    await expect(revalidateProductSurfaces({ productId: 'product-1' })).resolves.toEqual({
+      ok: true,
+      results: [
+        {
+          url: 'http://localhost:3000/api/revalidate/products',
+          ok: true,
+          status: 200,
+        },
+        {
+          url: 'https://happycolors.eu/api/revalidate/products',
+          ok: true,
+          status: 200,
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

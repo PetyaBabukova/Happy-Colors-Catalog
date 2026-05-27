@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import HomeBanner from '../models/HomeBanner.js';
+import BlogArticle from '../models/BlogArticle.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { sendEmail } from '../helpers/sendEmail.js';
@@ -26,9 +27,9 @@ import {
 } from '../utils/productPublication.js';
 import {
   canCreateProduct,
+  canHardDeleteProduct,
   canManageProduct,
   canReviewProduct,
-  canSoftDeleteProduct,
   canSubmitProductForReview,
   canViewProduct,
   canWithdrawProductReview,
@@ -375,7 +376,10 @@ async function notifyFullAdminsForProductReview(product, artist) {
 
 function buildEditProductData(data) {
   const sanitizedFields = pickAllowedProductFields(data);
-  const normalizedFields = normalizeImageFields(sanitizedFields);
+  const hasImageFields =
+    Object.prototype.hasOwnProperty.call(sanitizedFields, 'imageUrl') ||
+    Object.prototype.hasOwnProperty.call(sanitizedFields, 'imageUrls');
+  const normalizedFields = hasImageFields ? normalizeImageFields(sanitizedFields) : { ...sanitizedFields };
 
   if (Object.prototype.hasOwnProperty.call(sanitizedFields, 'videos')) {
     normalizedFields.videos = validateAndNormalizeVideos(sanitizedFields.videos, {
@@ -417,7 +421,45 @@ function collectVideoAssetsForCleanup(currentVideos, nextVideos) {
   return [...assetsToDelete].filter(Boolean);
 }
 
-async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = {}) {
+function addProductAssetUrls(assetUrls, source = {}) {
+  if (!source) {
+    return;
+  }
+
+  if (source.imageUrl) {
+    assetUrls.add(source.imageUrl);
+  }
+
+  for (const imageUrl of source.imageUrls || []) {
+    if (imageUrl) {
+      assetUrls.add(imageUrl);
+    }
+  }
+
+  for (const video of normalizeStoredVideos(source.videos)) {
+    if (video.url) {
+      assetUrls.add(video.url);
+    }
+
+    if (video.posterUrl) {
+      assetUrls.add(video.posterUrl);
+    }
+  }
+}
+
+function collectProductAssetUrls(product = {}) {
+  const assetUrls = new Set();
+
+  addProductAssetUrls(assetUrls, product);
+  addProductAssetUrls(assetUrls, product.draftContent);
+
+  return [...assetUrls].filter(Boolean);
+}
+
+async function deleteAssetsFromStorage(
+  assetUrls,
+  { excludeProductId = null, throwOnError = false } = {}
+) {
   try {
     const uniqueAssetUrls = [...new Set(assetUrls.filter(Boolean))];
 
@@ -425,7 +467,7 @@ async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = 
       return;
     }
 
-    const [homeBannerRefs, productRefs] = await Promise.all([
+    const [homeBannerRefs, productRefs, blogArticleRefs] = await Promise.all([
       HomeBanner.find({ imageUrl: { $in: uniqueAssetUrls } }, { imageUrl: 1 }).lean(),
       Product.find(
         {
@@ -435,41 +477,54 @@ async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = 
             { imageUrls: { $in: uniqueAssetUrls } },
             { 'videos.url': { $in: uniqueAssetUrls } },
             { 'videos.posterUrl': { $in: uniqueAssetUrls } },
+            { 'draftContent.imageUrl': { $in: uniqueAssetUrls } },
+            { 'draftContent.imageUrls': { $in: uniqueAssetUrls } },
+            { 'draftContent.videos.url': { $in: uniqueAssetUrls } },
+            { 'draftContent.videos.posterUrl': { $in: uniqueAssetUrls } },
           ],
         },
-        { imageUrl: 1, imageUrls: 1, videos: 1 }
+        { imageUrl: 1, imageUrls: 1, videos: 1, draftContent: 1 }
+      ).lean(),
+      BlogArticle.find(
+        {
+          $or: [
+            { heroImageUrl: { $in: uniqueAssetUrls } },
+            { thumbnailImageUrl: { $in: uniqueAssetUrls } },
+          ],
+        },
+        { heroImageUrl: 1, thumbnailImageUrl: 1 }
       ).lean(),
     ]);
     const referencedAssetUrls = new Set(homeBannerRefs.map((banner) => banner.imageUrl));
 
     for (const product of productRefs) {
-      if (uniqueAssetUrls.includes(product.imageUrl)) {
-        referencedAssetUrls.add(product.imageUrl);
+      for (const assetUrl of collectProductAssetUrls(product)) {
+        if (uniqueAssetUrls.includes(assetUrl)) {
+          referencedAssetUrls.add(assetUrl);
+        }
+      }
+    }
+
+    for (const article of blogArticleRefs) {
+      if (uniqueAssetUrls.includes(article.heroImageUrl)) {
+        referencedAssetUrls.add(article.heroImageUrl);
       }
 
-      for (const imageUrl of product.imageUrls || []) {
-        if (uniqueAssetUrls.includes(imageUrl)) {
-          referencedAssetUrls.add(imageUrl);
-        }
-
-      }
-
-      for (const video of normalizeStoredVideos(product.videos)) {
-        if (uniqueAssetUrls.includes(video.url)) {
-          referencedAssetUrls.add(video.url);
-        }
-
-        if (uniqueAssetUrls.includes(video.posterUrl)) {
-          referencedAssetUrls.add(video.posterUrl);
-        }
+      if (uniqueAssetUrls.includes(article.thumbnailImageUrl)) {
+        referencedAssetUrls.add(article.thumbnailImageUrl);
       }
     }
 
     const deletionCandidates = uniqueAssetUrls.filter((assetUrl) => !referencedAssetUrls.has(assetUrl));
 
-    await Promise.all(deletionCandidates.map((assetUrl) => deleteImageFromGCS(assetUrl)));
+    await Promise.all(
+      deletionCandidates.map((assetUrl) => deleteImageFromGCS(assetUrl, { throwOnError }))
+    );
   } catch (error) {
     console.error('Error while deleting product assets from storage:', error);
+    if (throwOnError) {
+      throw error;
+    }
   }
 }
 
@@ -727,7 +782,12 @@ export async function editProduct(productId, productData, user) {
     : sanitizedProductData.imageUrl
       ? [sanitizedProductData.imageUrl]
       : [];
-  const mergedImageUrls = [...new Set([...sourceImageUrls, ...incomingImageUrls])];
+  const hasIncomingImageFields =
+    Object.prototype.hasOwnProperty.call(sanitizedProductData, 'imageUrl') ||
+    Object.prototype.hasOwnProperty.call(sanitizedProductData, 'imageUrls');
+  const nextImageUrls = hasIncomingImageFields
+    ? [...new Set(incomingImageUrls)]
+    : sourceImageUrls;
 
   if (isArtistEditingPublishedProduct) {
     product.draftContent = {
@@ -736,8 +796,8 @@ export async function editProduct(productId, productData, user) {
       price: sanitizedProductData.price ?? editSource.price,
       category: sanitizedProductData.category ?? editSource.category,
       availability: sanitizedProductData.availability || editSource.availability || 'available',
-      imageUrls: mergedImageUrls,
-      imageUrl: mergedImageUrls[0] || '',
+      imageUrls: nextImageUrls,
+      imageUrl: nextImageUrls[0] || '',
       videos: Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')
         ? sanitizedProductData.videos
         : sourceVideos,
@@ -763,8 +823,8 @@ export async function editProduct(productId, productData, user) {
     product[key] = value;
   }
 
-  product.imageUrls = mergedImageUrls;
-  product.imageUrl = mergedImageUrls[0] || '';
+  product.imageUrls = nextImageUrls;
+  product.imageUrl = nextImageUrls[0] || '';
 
   const videoAssetsToDelete = Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')
     ? collectVideoAssetsForCleanup(currentVideos, sanitizedProductData.videos)
@@ -810,17 +870,15 @@ export async function deleteProduct(productId, user) {
     throw createNotFoundError('Продуктът не беше намерен');
   }
 
-  if (!canSoftDeleteProduct(product, user)) {
+  if (!canHardDeleteProduct(product, user)) {
     throw createForbiddenError('Нямате права да изтриете този продукт.');
   }
 
   const wasPublic = isPublicProduct(product);
-  product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DELETED;
-  product.deletedAt = new Date();
-  product.deletedBy = user._id;
-  product.isHomepageFeatured = false;
-  product.homepageFeaturedOrder = 0;
-  await product.save();
+  const assetUrls = collectProductAssetUrls(product);
+
+  await deleteAssetsFromStorage(assetUrls, { excludeProductId: product._id, throwOnError: true });
+  await Product.findByIdAndDelete(product._id);
 
   if (wasPublic) {
     await revalidateProductSurfaces({ productId: product._id });
@@ -910,18 +968,24 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
       product,
       [
         PRODUCT_PUBLICATION_STATUSES.ARCHIVED,
-        PRODUCT_PUBLICATION_STATUSES.DELETED,
       ],
-      'Only archived or deleted products can be restored to draft.'
+      'Only archived products can be restored to draft.'
     );
   }
 
   const wasPublic = isPublicProduct(product);
+  let approvedDraftAssetsToDelete = [];
   product.reviewedBy = user._id;
   product.reviewedAt = new Date();
 
   if (nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED && hasDraftContent(product)) {
     const draftContent = product.draftContent;
+    const previousPublicAssetUrls = collectProductAssetUrls(product.toObject());
+    const nextPublicAssetUrls = new Set(collectProductAssetUrls(draftContent));
+
+    approvedDraftAssetsToDelete = previousPublicAssetUrls.filter(
+      (assetUrl) => !nextPublicAssetUrls.has(assetUrl)
+    );
 
     product.title = draftContent.title;
     product.description = draftContent.description;
@@ -960,13 +1024,13 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
   }
 
   if (nextStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT) {
-    product.deletedAt = null;
-    product.deletedBy = null;
     product.isHomepageFeatured = false;
     product.homepageFeaturedOrder = 0;
   }
 
   await product.save();
+  await deleteAssetsFromStorage(approvedDraftAssetsToDelete, { excludeProductId: product._id });
+
   if (wasPublic || nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
     await revalidateProductSurfaces({ productId: product._id });
   }

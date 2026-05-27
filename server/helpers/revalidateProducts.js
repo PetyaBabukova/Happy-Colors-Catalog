@@ -1,13 +1,37 @@
-function buildRevalidateUrl() {
-  const explicitUrl = String(process.env.PRODUCT_REVALIDATE_URL || '').trim();
+function normalizeBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
 
-  if (explicitUrl) {
-    return explicitUrl;
+function toProductRevalidateUrl(value) {
+  const normalized = normalizeBaseUrl(value);
+
+  if (!normalized) {
+    return '';
   }
 
-  const clientUrl = String(process.env.CLIENT_URL || '').replace(/\/$/, '');
+  if (/\/api\/revalidate\/products$/i.test(normalized)) {
+    return normalized;
+  }
 
-  return clientUrl ? `${clientUrl}/api/revalidate/products` : '';
+  return `${normalized}/api/revalidate/products`;
+}
+
+function buildRevalidateUrls() {
+  const explicitUrls = String(process.env.PRODUCT_REVALIDATE_URLS || process.env.PRODUCT_REVALIDATE_URL || '')
+    .split(',')
+    .map(toProductRevalidateUrl)
+    .filter(Boolean);
+
+  const inferredUrls = [
+    process.env.CLIENT_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.NEWSLETTER_PUBLIC_SITE_URL,
+    process.env.PUBLIC_SITE_URL,
+  ]
+    .map(toProductRevalidateUrl)
+    .filter(Boolean);
+
+  return [...new Set([...explicitUrls, ...inferredUrls])];
 }
 
 function getRevalidateSecret() {
@@ -15,10 +39,10 @@ function getRevalidateSecret() {
 }
 
 export async function revalidateProductSurfaces({ productId } = {}) {
-  const url = buildRevalidateUrl();
+  const urls = buildRevalidateUrls();
   const secret = getRevalidateSecret();
 
-  if (!url || !secret) {
+  if (urls.length === 0 || !secret) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('Product revalidation is not configured.');
     }
@@ -30,19 +54,29 @@ export async function revalidateProductSurfaces({ productId } = {}) {
     return { skipped: true };
   }
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-revalidate-secret': secret,
-      },
-      body: JSON.stringify(productId ? { productId: String(productId) } : {}),
-    });
+  const body = JSON.stringify(productId ? { productId: String(productId) } : {});
+  const results = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-revalidate-secret': secret,
+          },
+          body,
+        });
 
-    return { ok: response.ok, status: response.status };
-  } catch (error) {
-    console.error('Failed to revalidate product surfaces:', error?.message || error);
-    return { ok: false, error: true };
-  }
+        return { url, ok: response.ok, status: response.status };
+      } catch (error) {
+        console.error('Failed to revalidate product surfaces:', error?.message || error);
+        return { url, ok: false, error: true };
+      }
+    })
+  );
+
+  return {
+    ok: results.every((result) => result.ok),
+    results,
+  };
 }

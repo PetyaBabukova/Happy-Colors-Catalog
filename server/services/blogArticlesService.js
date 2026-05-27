@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import sanitizeHtml from 'sanitize-html';
 import BlogArticle from '../models/BlogArticle.js';
+import HomeBanner from '../models/HomeBanner.js';
+import Product from '../models/Product.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
 
 const CREATE_FIELDS = new Set([
@@ -581,7 +583,24 @@ async function isBlogImageReferenced(assetUrl, { excludeArticleId = null } = {})
     $or: [{ heroImageUrl: assetUrl }, { thumbnailImageUrl: assetUrl }],
   };
 
-  return Boolean(await BlogArticle.exists(query));
+  const [articleExists, bannerExists, productExists] = await Promise.all([
+    BlogArticle.exists(query),
+    HomeBanner.exists({ imageUrl: assetUrl }),
+    Product.exists({
+      $or: [
+        { imageUrl: assetUrl },
+        { imageUrls: assetUrl },
+        { 'videos.url': assetUrl },
+        { 'videos.posterUrl': assetUrl },
+        { 'draftContent.imageUrl': assetUrl },
+        { 'draftContent.imageUrls': assetUrl },
+        { 'draftContent.videos.url': assetUrl },
+        { 'draftContent.videos.posterUrl': assetUrl },
+      ],
+    }),
+  ]);
+
+  return Boolean(articleExists || bannerExists || productExists);
 }
 
 async function deleteBlogImageIfUnreferenced(assetUrl, options = {}) {
@@ -590,9 +609,12 @@ async function deleteBlogImageIfUnreferenced(assetUrl, options = {}) {
   }
 
   try {
-    await deleteImageFromGCS(assetUrl);
+    await deleteImageFromGCS(assetUrl, { throwOnError: options.throwOnError === true });
   } catch (error) {
     console.error('Error while deleting old blog article image:', error);
+    if (options.throwOnError) {
+      throw error;
+    }
   }
 }
 
@@ -703,30 +725,20 @@ export async function editBlogArticle(articleId, data, userId) {
   return serializeArticle(article);
 }
 
-export async function archiveBlogArticle(articleId, userId) {
+export async function deleteBlogArticle(articleId, userId) {
   assertUser(userId);
 
   const article = await findArticleOrThrow(articleId);
-  ensurePublishedState(article);
+  const imageUrls = [...new Set([article.heroImageUrl, article.thumbnailImageUrl].filter(Boolean))];
 
-  if (!article.archivedAt) {
-    article.archivedAt = new Date();
-    await article.save();
+  for (const imageUrl of imageUrls) {
+    await deleteBlogImageIfUnreferenced(imageUrl, {
+      excludeArticleId: article._id,
+      throwOnError: true,
+    });
   }
 
-  return serializeArticle(article);
-}
+  await BlogArticle.findByIdAndDelete(article._id);
 
-export async function restoreBlogArticle(articleId, userId) {
-  assertUser(userId);
-
-  const article = await findArticleOrThrow(articleId);
-  ensurePublishedState(article);
-
-  if (article.archivedAt) {
-    article.archivedAt = null;
-    await article.save();
-  }
-
-  return serializeArticle(article);
+  return { message: 'Blog article was deleted successfully.' };
 }

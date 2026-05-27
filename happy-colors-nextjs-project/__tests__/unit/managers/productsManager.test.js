@@ -226,6 +226,37 @@ describe('productsManager', () => {
     expect(setSuccess).toHaveBeenCalledWith(true);
   });
 
+  it('redirects artist edits waiting for approval with a review notice', async () => {
+    const setSuccess = vi.fn();
+    const setError = vi.fn();
+    const setInvalidFields = vi.fn();
+    const router = { push: vi.fn(), refresh: vi.fn() };
+
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          _id: 'product-1',
+          publicationStatus: 'published',
+          reviewStatus: 'pending_review',
+        },
+      })
+    );
+
+    await onEditProductSubmit(
+      buildFormValues(),
+      setSuccess,
+      setError,
+      setInvalidFields,
+      { _id: 'owner-1' },
+      router,
+      'product-1'
+    );
+
+    expect(router.push).toHaveBeenCalledWith('/products/product-1?updated=review-pending');
+    expect(router.refresh).toHaveBeenCalled();
+    expect(setSuccess).toHaveBeenCalledWith(true);
+  });
+
   it('deletes product images with credentials and returns backend result', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ body: { imageUrls: ['remaining.webp'] } }));
 

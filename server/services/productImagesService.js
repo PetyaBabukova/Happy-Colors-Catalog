@@ -1,6 +1,7 @@
 import Product from '../models/Product.js';
 import { deleteImageFromGCS } from '../helpers/gcsImageHelper.js';
-import { canManageProductMedia } from '../utils/productPermissions.js';
+import { PRODUCT_PUBLICATION_STATUSES } from '../utils/productPublication.js';
+import { canManageProduct, canManageProductMedia } from '../utils/productPermissions.js';
 
 function createError(message, statusCode) {
   const error = new Error(message);
@@ -16,6 +17,14 @@ function canDeleteMedia(product, user) {
   return canManageProductMedia(product, user);
 }
 
+function shouldStagePublishedMediaRemoval(product, user) {
+  return (
+    typeof user !== 'string' &&
+    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED &&
+    canManageProduct(product, user)
+  );
+}
+
 export async function deleteProductImage(productId, imageUrl, user) {
   const product = await Product.findById(productId);
 
@@ -23,7 +32,9 @@ export async function deleteProductImage(productId, imageUrl, user) {
     throw createError('Продуктът не беше намерен.', 404);
   }
 
-  if (!canDeleteMedia(product, user)) {
+  const stageOnly = shouldStagePublishedMediaRemoval(product, user) && !canDeleteMedia(product, user);
+
+  if (!canDeleteMedia(product, user) && !stageOnly) {
     throw createError('Нямате права да редактирате този продукт.', 403);
   }
 
@@ -44,11 +55,13 @@ export async function deleteProductImage(productId, imageUrl, user) {
     throw createError('Продуктът трябва да има поне едно изображение.', 400);
   }
 
-  product.imageUrls = updatedImages;
-  product.imageUrl = updatedImages[0] || '';
+  if (!stageOnly) {
+    product.imageUrls = updatedImages;
+    product.imageUrl = updatedImages[0] || '';
 
-  await product.save();
-  await deleteImageFromGCS(imageUrl);
+    await product.save();
+    await deleteImageFromGCS(imageUrl);
+  }
 
   return {
     message: 'Изображението беше изтрито.',

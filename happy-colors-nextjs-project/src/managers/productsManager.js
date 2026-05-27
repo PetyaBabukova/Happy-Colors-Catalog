@@ -119,7 +119,11 @@ export async function onEditProductSubmit(
     setSuccess(true);
     setError('');
     setInvalidFields([]);
-    router.push(`/products/${productId}`);
+    router.push(
+      result?.reviewStatus === 'pending_review' || result?.publicationStatus === 'pending_review'
+        ? `/products/${productId}?updated=review-pending`
+        : `/products/${productId}`
+    );
     router.refresh();
   } catch (err) {
     setSuccess(false);

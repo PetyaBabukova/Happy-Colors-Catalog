@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import BlogArticle from '../../models/BlogArticle.js';
 import { createExpressApp } from '../../server.js';
@@ -302,64 +302,76 @@ describe('blog articles integration', () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
     const cookie = authCookie(owner);
-    const article = await createBlogArticle({ owner });
 
     for (let index = 0; index < 20; index += 1) {
+      const article = await createBlogArticle({
+        owner,
+        heroImageUrl: `https://storage.googleapis.com/test-bucket/blog/articles/hero/rate-${index}.webp`,
+        thumbnailImageUrl: `https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/rate-${index}.webp`,
+      });
+
       await request(app)
-        .patch(`/blog-articles/${article._id}/archive`)
+        .delete(`/blog-articles/${article._id}`)
         .set('Cookie', cookie)
-        .expect(200);
+        .expect(204);
     }
 
+    const limitedArticle = await createBlogArticle({
+      owner,
+      heroImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/hero/rate-limited.webp',
+      thumbnailImageUrl:
+        'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/rate-limited.webp',
+    });
+
     await request(app)
-      .patch(`/blog-articles/${article._id}/archive`)
+      .delete(`/blog-articles/${limitedArticle._id}`)
       .set('Cookie', cookie)
       .expect(429);
   });
 
-  it('archives idempotently and restores without changing status', async () => {
+  it('hard deletes an article and removes unreferenced bucket images', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
     const cookie = authCookie(owner);
-    const article = await createBlogArticle(articleFields({ owner }));
+    const heroImageUrl = 'https://storage.googleapis.com/test-bucket/blog/articles/hero/delete-me.webp';
+    const thumbnailImageUrl =
+      'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/delete-me.webp';
+    const article = await createBlogArticle(articleFields({ owner, heroImageUrl, thumbnailImageUrl }));
 
-    await request(app).patch(`/blog-articles/${article._id}/archive`).expect(401);
-    await request(app).patch(`/blog-articles/${article._id}/restore`).expect(401);
+    await request(app).delete(`/blog-articles/${article._id}`).expect(401);
 
-    const archiveRes = await request(app)
-      .patch(`/blog-articles/${article._id}/archive`)
+    await request(app)
+      .delete(`/blog-articles/${article._id}`)
       .set('Cookie', cookie)
-      .expect(200);
-    const archivedAt = archiveRes.body.archivedAt;
+      .expect(204);
 
-    const secondArchiveRes = await request(app)
-      .patch(`/blog-articles/${article._id}/archive`)
-      .set('Cookie', cookie)
-      .expect(200);
-    expect(secondArchiveRes.body.archivedAt).toBe(archivedAt);
+    await expect(BlogArticle.findById(article._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(heroImageUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(thumbnailImageUrl, { throwOnError: true });
+    await request(app).get(`/blog-articles/${article._id}`).expect(404);
+  });
 
-    const restoreRes = await request(app)
-      .patch(`/blog-articles/${article._id}/restore`)
-      .set('Cookie', cookie)
-      .expect(200);
-    expect(restoreRes.body.archivedAt).toBeNull();
-    expect(restoreRes.body.status).toBe('published');
+  it('keeps the article when storage cleanup fails during delete', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const cookie = authCookie(owner);
+    const heroImageUrl =
+      'https://storage.googleapis.com/test-bucket/blog/articles/hero/delete-fails.webp';
+    const thumbnailImageUrl =
+      'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/delete-fails.webp';
+    const article = await createBlogArticle(articleFields({ owner, heroImageUrl, thumbnailImageUrl }));
+    deleteImageFromGCS.mockRejectedValueOnce(new Error('storage outage'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const legacyDraftInsert = await BlogArticle.collection.insertOne(
-      buildBlogArticle({
-        owner,
-        title: 'Legacy draft to archive',
-        status: 'draft',
-        publishedAt: null,
-      })
-    );
-    const legacyArchiveRes = await request(app)
-      .patch(`/blog-articles/${legacyDraftInsert.insertedId}/archive`)
+    await request(app)
+      .delete(`/blog-articles/${article._id}`)
       .set('Cookie', cookie)
-      .expect(200);
-    expect(legacyArchiveRes.body.status).toBe('published');
-    expect(legacyArchiveRes.body.publishedAt).toBeTruthy();
-    await request(app).get(`/blog-articles/${legacyDraftInsert.insertedId}`).expect(404);
+      .expect(500);
+
+    await expect(BlogArticle.findById(article._id).lean()).resolves.toMatchObject({
+      _id: article._id,
+      heroImageUrl,
+    });
   });
 
   it('cleans up replaced blog images only after saving and only when unreferenced', async () => {
@@ -379,8 +391,8 @@ describe('blog articles integration', () => {
       })
       .expect(200);
 
-    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldHero);
-    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldThumbnail);
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldHero, { throwOnError: false });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldThumbnail, { throwOnError: false });
 
     const sharedHero = 'https://storage.googleapis.com/test-bucket/blog/articles/hero/shared.webp';
     const sharedThumbnail = 'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/shared.webp';
@@ -406,7 +418,7 @@ describe('blog articles integration', () => {
       })
       .expect(200);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedHero);
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedThumbnail);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedHero);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedThumbnail);
   });
 });

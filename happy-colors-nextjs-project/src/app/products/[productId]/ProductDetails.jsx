@@ -95,6 +95,7 @@ export default function ProductDetails({ product }) {
 	}, [mediaSlides]);
 	const [activeTab, setActiveTab] = useState('description');
 	const [createdReviewNotice, setCreatedReviewNotice] = useState(false);
+	const [updatedReviewNotice, setUpdatedReviewNotice] = useState(false);
 	const [reviewActionLoading, setReviewActionLoading] = useState('');
 	const [reviewActionError, setReviewActionError] = useState('');
 	const [isDragging, setIsDragging] = useState(false);
@@ -144,6 +145,9 @@ export default function ProductDetails({ product }) {
 
 		setCreatedReviewNotice(
 			new URLSearchParams(window.location.search).get('created') === 'review-pending'
+		);
+		setUpdatedReviewNotice(
+			new URLSearchParams(window.location.search).get('updated') === 'review-pending'
 		);
 	}, []);
 
@@ -383,6 +387,12 @@ export default function ProductDetails({ product }) {
 					<MessageBox
 						type="success"
 						message="Продуктът ви е успешно създаден. Ще бъде публикуван след одобрение от администратор."
+					/>
+				)}
+				{updatedReviewNotice && (
+					<MessageBox
+						type="success"
+						message="Промените са запазени и ще бъдат публикувани след одобрение от администратор."
 					/>
 				)}
 				{product.publicationStatus === 'pending_review' && !createdReviewNotice && (

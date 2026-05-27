@@ -169,6 +169,25 @@ describe('ProductDetails', () => {
     await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
   });
 
+  it('shows a pending approval notice after artist edit redirects back to the product page', () => {
+    window.history.pushState(null, '', '/products/product-1?updated=review-pending');
+
+    render(
+      <ProductDetails
+        product={{
+          ...product,
+          publicationStatus: 'published',
+          reviewStatus: 'pending_review',
+        }}
+      />,
+      {
+        user: { _id: 'owner-1', role: 'artist', artistStatus: 'active' },
+      }
+    );
+
+    expect(screen.getByText(/Промените са запазени/)).toBeInTheDocument();
+  });
+
   it('shows newsletter send action only for authenticated users', () => {
     const authenticatedRender = render(<ProductDetails product={product} />, {
       user: { _id: 'user-2' },

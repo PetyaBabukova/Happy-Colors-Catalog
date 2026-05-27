@@ -2,14 +2,13 @@ import express from 'express';
 import { requireAuth, requireFullAdmin } from '../middlewares/auth.js';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
-  archiveBlogArticle,
   createBlogArticle,
+  deleteBlogArticle,
   editBlogArticle,
   getAdminBlogArticleById,
   getAdminBlogArticles,
   getPublicBlogArticleById,
   getPublicBlogArticles,
-  restoreBlogArticle,
 } from '../services/blogArticlesService.js';
 
 const router = express.Router();
@@ -102,23 +101,12 @@ router.put('/:articleId', blogArticlesMutationLimiter, requireAuth, requireFullA
   }
 });
 
-router.patch('/:articleId/archive', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
+router.delete('/:articleId', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
-    const article = await archiveBlogArticle(req.params.articleId, req.user?._id);
-
-    res.json(article);
+    await deleteBlogArticle(req.params.articleId, req.user?._id);
+    res.status(204).end();
   } catch (error) {
-    sendError(res, error, 400);
-  }
-});
-
-router.patch('/:articleId/restore', blogArticlesMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
-  try {
-    const article = await restoreBlogArticle(req.params.articleId, req.user?._id);
-
-    res.json(article);
-  } catch (error) {
-    sendError(res, error, 400);
+    sendError(res, error);
   }
 });
 

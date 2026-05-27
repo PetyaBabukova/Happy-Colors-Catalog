@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import { sendEmail } from '../../helpers/sendEmail.js';
 import Product from '../../models/Product.js';
@@ -8,6 +8,7 @@ import {
   authCookie,
   buildProduct,
   createActiveArtist,
+  createBlogArticle,
   createCategory,
   createFullAdmin,
   createHomeBanner,
@@ -257,15 +258,32 @@ describe('products integration', () => {
     const app = createExpressApp();
     const owner = await createActiveArtist();
     const category = await createCategory();
-    const product = await createProduct({ owner, category, publicationStatus: 'published' });
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/products/images/delete-me.webp';
+    const videoUrl = 'https://storage.googleapis.com/test-bucket/products/videos/delete-me.mp4';
+    const posterUrl = 'https://storage.googleapis.com/test-bucket/products/posters/delete-me.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      publicationStatus: 'published',
+      imageUrl,
+      imageUrls: [imageUrl],
+      videos: [
+        {
+          url: videoUrl,
+          posterUrl,
+          mimeType: 'video/mp4',
+          durationSeconds: 8,
+          uploadDate: new Date(),
+        },
+      ],
+    });
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
-      publicationStatus: 'deleted',
-      isHomepageFeatured: false,
-      homepageFeaturedOrder: 0,
-    });
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(videoUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(posterUrl, { throwOnError: true });
     await request(app).get(`/products/${product._id}`).expect(404);
 
     const mineRes = await request(app)
@@ -274,6 +292,28 @@ describe('products integration', () => {
       .expect(200);
 
     expect(mineRes.body.map((item) => item._id)).not.toContain(String(product._id));
+  });
+
+  it('keeps the product when storage cleanup fails during delete', async () => {
+    const app = createExpressApp();
+    const owner = await createActiveArtist();
+    const category = await createCategory();
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/products/images/delete-fails.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl,
+      imageUrls: [imageUrl],
+    });
+    deleteImageFromGCS.mockRejectedValueOnce(new Error('storage outage'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(500);
+
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      _id: product._id,
+      imageUrl,
+    });
   });
 
   it('removes deleted featured products from the homepage featured list', async () => {
@@ -317,10 +357,8 @@ describe('products integration', () => {
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
-      publicationStatus: 'deleted',
-    });
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 
   it('does not delete product storage assets that are still used by another product', async () => {
@@ -344,10 +382,60 @@ describe('products integration', () => {
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
-      publicationStatus: 'deleted',
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
+  it('does not delete product storage assets that are still used by a blog article or product draft', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const sharedBlogImageUrl =
+      'https://storage.googleapis.com/test-bucket/products/images/shared-blog.webp';
+    const sharedDraftPosterUrl =
+      'https://storage.googleapis.com/test-bucket/products/posters/shared-draft.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl: sharedBlogImageUrl,
+      imageUrls: [sharedBlogImageUrl, sharedDraftPosterUrl],
     });
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    await createBlogArticle({
+      owner,
+      heroImageUrl: sharedBlogImageUrl,
+      thumbnailImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/shared-blog.webp',
+    });
+    await createProduct({
+      owner,
+      category,
+      title: 'Draft keeps poster',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/products/images/other.webp',
+      imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/other.webp'],
+      draftContent: {
+        title: 'Draft content',
+        description: 'Draft description',
+        price: 10,
+        imageUrl: '',
+        imageUrls: [],
+        videos: [
+          {
+            url: 'https://storage.googleapis.com/test-bucket/products/videos/draft.mp4',
+            posterUrl: sharedDraftPosterUrl,
+            mimeType: 'video/mp4',
+            durationSeconds: 8,
+            uploadDate: new Date(),
+          },
+        ],
+        category: category._id,
+        availability: 'available',
+      },
+    });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedBlogImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedDraftPosterUrl);
   });
 
   it('rejects edit and delete requests from non-owners', async () => {
@@ -383,9 +471,7 @@ describe('products integration', () => {
       .expect(200);
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(admin)).expect(204);
-    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
-      publicationStatus: 'deleted',
-    });
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
   });
 
   it('supports artist review submission and full-admin approval', async () => {
@@ -475,24 +561,38 @@ describe('products integration', () => {
       category,
       publicationStatus: 'published',
       title: 'Approved public title',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+      imageUrls: [
+        'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+        'https://storage.googleapis.com/test-bucket/products/images/public-kept.webp',
+      ],
     });
 
     const editRes = await request(app)
       .put(`/products/${product._id}`)
       .set('Cookie', authCookie(artist))
-      .send({ title: 'Pending artist revision' })
+      .send({
+        title: 'Pending artist revision',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/products/images/public-kept.webp',
+        imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/public-kept.webp'],
+      })
       .expect(200);
 
     expect(editRes.body).toMatchObject({
       title: 'Pending artist revision',
       publicationStatus: 'published',
       reviewStatus: 'pending_review',
+      imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/public-kept.webp'],
     });
 
     const publicRes = await request(app).get(`/products/${product._id}`).expect(200);
     expect(publicRes.body).toMatchObject({
       title: 'Approved public title',
       publicationStatus: 'published',
+      imageUrls: [
+        'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+        'https://storage.googleapis.com/test-bucket/products/images/public-kept.webp',
+      ],
     });
 
     const reviewQueueRes = await request(app)
@@ -526,7 +626,12 @@ describe('products integration', () => {
       title: 'Pending artist revision',
       publicationStatus: 'published',
       reviewStatus: 'none',
+      imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/public-kept.webp'],
     });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(
+      'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+      { throwOnError: false }
+    );
   });
 
   it('requires a review note when rejecting a product', async () => {

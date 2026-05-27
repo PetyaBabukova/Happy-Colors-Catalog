@@ -69,15 +69,7 @@ export function canManageProductMedia(product, user) {
 }
 
 export function canHardDeleteProduct(product, user) {
-  return canSoftDeleteProduct(product, user);
-}
-
-export function canSoftDeleteProduct(product, user) {
   if (!product) {
-    return false;
-  }
-
-  if (product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.DELETED) {
     return false;
   }
 
