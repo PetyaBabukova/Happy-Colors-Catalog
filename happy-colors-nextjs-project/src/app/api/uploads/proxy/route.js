@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 
-import { requireApiAuth } from '../../_lib/auth';
+import {
+  requireApiActiveArtistOrFullAdmin,
+  requireApiAuth,
+  requireApiFullAdmin,
+} from '../../_lib/auth';
 import {
   buildStorageObjectName,
   createPublicUrl,
@@ -32,7 +36,7 @@ const KIND_CONFIG = {
 
 export async function POST(request) {
   try {
-    const auth = requireApiAuth(request);
+    const auth = await requireApiAuth(request);
 
     if (!auth.ok) {
       return NextResponse.json({ message: auth.message }, { status: auth.status });
@@ -53,6 +57,14 @@ export async function POST(request) {
 
     if (!KIND_CONFIG[kind]) {
       return NextResponse.json({ message: 'Неподдържан тип upload.' }, { status: 400 });
+    }
+
+    const uploadAuth = kind === 'home-banner-image'
+      ? requireApiFullAdmin(auth)
+      : requireApiActiveArtistOrFullAdmin(auth);
+
+    if (!uploadAuth.ok) {
+      return NextResponse.json({ message: uploadAuth.message }, { status: uploadAuth.status });
     }
 
     if (!file || typeof file === 'string') {

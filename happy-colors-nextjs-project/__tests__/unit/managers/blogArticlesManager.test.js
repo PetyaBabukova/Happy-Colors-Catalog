@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  archiveBlogArticle,
   createBlogArticle,
+  deleteBlogArticle,
   editBlogArticle,
   getAdminBlogArticleById,
   getAdminBlogArticles,
   getBlogArticleById,
   getBlogArticles,
   invalidateBlogCaches,
-  restoreBlogArticle,
 } from '../../../src/managers/blogArticlesManager.js';
 
 function jsonResponse({ ok = true, body = {} } = {}) {
@@ -74,19 +73,18 @@ describe('blogArticlesManager', () => {
     expect(fetch.mock.calls[3][0]).toBe('/api/revalidate/blog');
   });
 
-  it('archives, restores, and logs revalidation failures without failing mutations', async () => {
+  it('deletes and logs revalidation failures without failing mutations', async () => {
     fetch
-      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'article-1' } }))
-      .mockRejectedValueOnce(new Error('revalidate failed'))
-      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'article-1' } }))
-      .mockResolvedValueOnce(jsonResponse());
+      .mockResolvedValueOnce(jsonResponse({ body: {} }))
+      .mockRejectedValueOnce(new Error('revalidate failed'));
 
-    await expect(archiveBlogArticle('article-1')).resolves.toEqual({ _id: 'article-1' });
-    await expect(restoreBlogArticle('article-1')).resolves.toEqual({ _id: 'article-1' });
+    await expect(deleteBlogArticle('article-1')).resolves.toEqual({});
 
     expect(console.error).toHaveBeenCalled();
-    expect(fetch.mock.calls[0][0]).toBe('http://localhost:3000/api/blog-articles/article-1/archive');
-    expect(fetch.mock.calls[2][0]).toBe('http://localhost:3000/api/blog-articles/article-1/restore');
+    expect(fetch.mock.calls[0][0]).toBe('http://localhost:3000/api/blog-articles/article-1');
+    expect(fetch.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ method: 'DELETE', credentials: 'include' })
+    );
   });
 
   it('throws meaningful errors on non-ok responses and exposes explicit invalidation helper', async () => {

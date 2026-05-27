@@ -1,7 +1,14 @@
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createExpressApp } from '../../server.js';
-import { buildUser, createUser } from './factories.js';
+import {
+  authCookie,
+  buildUser,
+  createActiveArtist,
+  createFullAdmin,
+  createProduct,
+  createUser,
+} from './factories.js';
 
 describe('users integration', () => {
   afterEach(() => {
@@ -27,6 +34,8 @@ describe('users integration', () => {
     expect(res.body).toMatchObject({
       username: user.username,
       email: user.email,
+      role: 'customer',
+      artistStatus: null,
     });
     expect(res.body.password).toBeUndefined();
     expect(res.headers['set-cookie'] || []).toHaveLength(0);
@@ -34,7 +43,12 @@ describe('users integration', () => {
 
   it('logs in and exposes the session through /users/me', async () => {
     const app = createExpressApp();
-    await createUser({ username: 'Owner', email: 'owner@example.com', password: 'StrongPass1!' });
+    await createUser({
+      username: 'Owner',
+      email: 'owner@example.com',
+      password: 'StrongPass1!',
+      role: 'full_admin',
+    });
 
     const loginRes = await request(app)
       .post('/users/login')
@@ -49,7 +63,22 @@ describe('users integration', () => {
     expect(meRes.body).toMatchObject({
       username: 'Owner',
       email: 'owner@example.com',
+      role: 'full_admin',
+      artistStatus: null,
     });
+  });
+
+  it('rejects /users/me when the token user no longer exists', async () => {
+    const app = createExpressApp();
+    const user = await createUser({ email: 'deleted@example.com', password: 'StrongPass1!' });
+    const loginRes = await request(app)
+      .post('/users/login')
+      .send({ email: 'deleted@example.com', password: 'StrongPass1!' })
+      .expect(200);
+
+    await user.deleteOne();
+
+    await request(app).get('/users/me').set('Cookie', loginRes.headers['set-cookie']).expect(401);
   });
 
   it('rejects invalid login credentials', async () => {
@@ -60,5 +89,171 @@ describe('users integration', () => {
       .post('/users/login')
       .send({ email: 'login@example.com', password: 'WrongPass1!' })
       .expect(401);
+  });
+
+  it('requires full admin access for the user admin list', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'artist-list@example.com' });
+
+    await request(app).get('/users/admin').expect(401);
+    await request(app).get('/users/admin').set('Cookie', authCookie(artist)).expect(403);
+  });
+
+  it('lists users for full admins with product counts and no passwords', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-list@example.com' });
+    const artist = await createActiveArtist({ email: 'listed-artist@example.com' });
+    await createProduct({ owner: artist, title: 'Listed product one' });
+    await createProduct({ owner: artist, title: 'Listed product two' });
+    await createProduct({
+      owner: artist,
+      title: 'Deleted product',
+      publicationStatus: 'deleted',
+    });
+
+    const res = await request(app)
+      .get('/users/admin')
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    const listedArtist = res.body.find((user) => user.email === artist.email);
+    expect(listedArtist).toMatchObject({
+      email: artist.email,
+      role: 'artist',
+      artistStatus: 'active',
+      productCount: 2,
+    });
+    expect(listedArtist.password).toBeUndefined();
+  });
+
+  it('returns a full admin user dossier with product links', async () => {
+    vi.stubEnv('CLIENT_URL', 'https://happycolors.example');
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-dossier@example.com' });
+    const artist = await createActiveArtist({ email: 'dossier-artist@example.com' });
+    const product = await createProduct({
+      owner: artist,
+      title: 'Dossier candle',
+      publicationStatus: 'pending_review',
+    });
+    await createProduct({
+      owner: artist,
+      title: 'Deleted dossier candle',
+      publicationStatus: 'deleted',
+    });
+
+    const res = await request(app)
+      .get(`/users/admin/${artist._id}`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(res.body.user).toMatchObject({
+      email: artist.email,
+      role: 'artist',
+      artistStatus: 'active',
+    });
+    expect(res.body.products).toEqual([
+      expect.objectContaining({
+        _id: String(product._id),
+        title: 'Dossier candle',
+        publicationStatus: 'pending_review',
+        url: `https://happycolors.example/products/${product._id}`,
+      }),
+    ]);
+    expect(res.body.products.map((item) => item.title)).not.toContain('Deleted dossier candle');
+    expect(res.body.user.password).toBeUndefined();
+  });
+
+  it('lets full admins change roles and activates artist users', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-update@example.com' });
+    const customer = await createUser({ email: 'artist-update@example.com' });
+
+    const res = await request(app)
+      .patch(`/users/admin/${customer._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'artist' })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      user: {
+        email: customer.email,
+        role: 'artist',
+        artistStatus: 'active',
+      },
+      reminder: null,
+    });
+  });
+
+  it('preserves existing artist status when the role is unchanged', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-preserve@example.com' });
+    const artist = await createUser({
+      email: 'suspended-preserve@example.com',
+      role: 'artist',
+      artistStatus: 'suspended',
+    });
+
+    const res = await request(app)
+      .patch(`/users/admin/${artist._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'artist' })
+      .expect(200);
+
+    expect(res.body.user).toMatchObject({
+      email: artist.email,
+      role: 'artist',
+      artistStatus: 'suspended',
+    });
+  });
+
+  it('rejects invalid role updates and self-demotion', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-invalid@example.com' });
+    const artist = await createActiveArtist({ email: 'artist-invalid@example.com' });
+
+    await request(app)
+      .patch(`/users/admin/${artist._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'super_admin' })
+      .expect(400);
+
+    await request(app)
+      .patch(`/users/admin/${admin._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'customer' })
+      .expect(400);
+  });
+
+  it('prevents removing the last full admin role', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'sole-admin@example.com' });
+    const otherAdmin = await createFullAdmin({ email: 'other-admin@example.com' });
+
+    await request(app)
+      .patch(`/users/admin/${otherAdmin._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'customer' })
+      .expect(200);
+
+    await request(app)
+      .patch(`/users/admin/${admin._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'customer' })
+      .expect(400);
+  });
+
+  it('requires a trusted origin for production role changes', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CLIENT_URL', 'https://happycolors.example');
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'admin-origin@example.com' });
+    const artist = await createActiveArtist({ email: 'artist-origin@example.com' });
+
+    await request(app)
+      .patch(`/users/admin/${artist._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ role: 'customer' })
+      .expect(403);
   });
 });

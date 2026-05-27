@@ -1,5 +1,6 @@
 import HomeBanner from '../models/HomeBanner.js';
 import Product from '../models/Product.js';
+import BlogArticle from '../models/BlogArticle.js';
 import mongoose from 'mongoose';
 import {
   deleteImageFromGCS,
@@ -242,7 +243,7 @@ async function isAssetUrlReferenced(assetUrl, { excludeBannerId = null } = {}) {
     ...(excludeBannerId ? { _id: { $ne: excludeBannerId } } : {}),
   };
 
-  const [bannerExists, productExists] = await Promise.all([
+  const [bannerExists, productExists, blogArticleExists] = await Promise.all([
     HomeBanner.exists(bannerQuery),
     Product.exists({
       $or: [
@@ -250,11 +251,18 @@ async function isAssetUrlReferenced(assetUrl, { excludeBannerId = null } = {}) {
         { imageUrls: assetUrl },
         { 'videos.posterUrl': assetUrl },
         { 'videos.url': assetUrl },
+        { 'draftContent.imageUrl': assetUrl },
+        { 'draftContent.imageUrls': assetUrl },
+        { 'draftContent.videos.posterUrl': assetUrl },
+        { 'draftContent.videos.url': assetUrl },
       ],
+    }),
+    BlogArticle.exists({
+      $or: [{ heroImageUrl: assetUrl }, { thumbnailImageUrl: assetUrl }],
     }),
   ]);
 
-  return Boolean(bannerExists || productExists);
+  return Boolean(bannerExists || productExists || blogArticleExists);
 }
 
 export async function shouldDeleteHomeBannerAsset(assetUrl, options = {}) {
@@ -267,7 +275,7 @@ async function deleteAssetIfUnreferenced(assetUrl, options = {}) {
   }
 
   if (await shouldDeleteHomeBannerAsset(assetUrl, options)) {
-    await deleteImageFromGCS(assetUrl);
+    await deleteImageFromGCS(assetUrl, { throwOnError: options.throwOnError === true });
   }
 }
 
@@ -344,8 +352,8 @@ export async function deleteHomeBanner(bannerId, userId) {
   }
 
   const imageUrl = banner.imageUrl;
+  await deleteAssetIfUnreferenced(imageUrl, { excludeBannerId: banner._id, throwOnError: true });
   await HomeBanner.findByIdAndDelete(bannerId);
-  await deleteAssetIfUnreferenced(imageUrl, { excludeBannerId: banner._id });
 
   return { message: 'Home banner was deleted successfully.' };
 }

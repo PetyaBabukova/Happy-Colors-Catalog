@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 
-import { requireApiAuth } from '../../_lib/auth';
+import {
+  requireApiActiveArtistOrFullAdmin,
+  requireApiAuth,
+  requireApiFullAdmin,
+} from '../../_lib/auth';
 import { connectToMongo } from '../../_lib/mongo';
 import { createPublicUrl, getBucketName, getStorage } from '../../_lib/gcs';
 import { verifyUploadDeleteToken } from '../../_lib/uploadDeleteToken';
@@ -60,7 +64,7 @@ async function isAttachedToPersistedContent(publicUrl) {
 
 export async function POST(request) {
   try {
-    const auth = requireApiAuth(request);
+    const auth = await requireApiAuth(request);
 
     if (!auth.ok) {
       return NextResponse.json({ message: auth.message }, { status: auth.status });
@@ -94,6 +98,14 @@ export async function POST(request) {
         { message: 'Невалиден storage object за изтриване.' },
         { status: 400 }
       );
+    }
+
+    const uploadAuth = objectName.startsWith('blog/')
+      ? requireApiFullAdmin(auth)
+      : requireApiActiveArtistOrFullAdmin(auth);
+
+    if (!uploadAuth.ok) {
+      return NextResponse.json({ message: uploadAuth.message }, { status: uploadAuth.status });
     }
 
     const tokenValidation = verifyUploadDeleteToken({

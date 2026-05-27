@@ -126,26 +126,14 @@ export async function editBlogArticle(articleId, values) {
   return article;
 }
 
-export async function archiveBlogArticle(articleId) {
-  const res = await fetch(`${baseURL}/blog-articles/${articleId}/archive`, {
-    method: 'PATCH',
+export async function deleteBlogArticle(articleId) {
+  const res = await fetch(`${baseURL}/blog-articles/${articleId}`, {
+    method: 'DELETE',
     credentials: 'include',
   });
-  const article = await readOrThrow(res, 'Неуспешно архивиране на блог статия.');
+  const result = await readOrThrow(res, 'Неуспешно изтриване на блог статия.');
 
   await invalidateBlogCaches(articleId);
 
-  return article;
-}
-
-export async function restoreBlogArticle(articleId) {
-  const res = await fetch(`${baseURL}/blog-articles/${articleId}/restore`, {
-    method: 'PATCH',
-    credentials: 'include',
-  });
-  const article = await readOrThrow(res, 'Неуспешно възстановяване на блог статия.');
-
-  await invalidateBlogCaches(articleId);
-
-  return article;
+  return result;
 }

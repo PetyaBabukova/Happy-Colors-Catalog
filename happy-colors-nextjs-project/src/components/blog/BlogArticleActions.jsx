@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { archiveBlogArticle } from '@/managers/blogArticlesManager';
+import { deleteBlogArticle } from '@/managers/blogArticlesManager';
 import styles from './blogPublic.module.css';
 
 export default function BlogArticleActions({ articleId }) {
@@ -26,7 +26,7 @@ export default function BlogArticleActions({ articleId }) {
     setBusyAction('delete');
 
     try {
-      await archiveBlogArticle(articleId);
+      await deleteBlogArticle(articleId);
       router.push('/blog');
       router.refresh();
     } catch (err) {

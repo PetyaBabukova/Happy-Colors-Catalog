@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
-import { requireApiAuth } from '../../_lib/auth';
+import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
 
 const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -57,7 +57,7 @@ function checkRateLimit(request, auth) {
 
 export async function POST(request) {
   try {
-    const auth = requireApiAuth(request);
+    const auth = requireApiFullAdmin(await requireApiAuth(request));
 
     if (!auth.ok) {
       return NextResponse.json({ message: auth.message }, { status: auth.status });

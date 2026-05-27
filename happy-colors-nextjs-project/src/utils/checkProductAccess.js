@@ -4,7 +4,7 @@ import { readResponseJsonSafely } from './errorHandler';
 
 export async function checkProductAccess(productId, user) {
   try {
-    const res = await fetch(`${baseURL}/products/${productId}`, {
+    const res = await fetch(`${baseURL}/products/mine/${productId}`, {
       cache: 'no-store',
       credentials: 'include',
     });

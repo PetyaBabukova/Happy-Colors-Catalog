@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { requireApiAuth } from '@/app/api/_lib/auth';
+import { requireApiActiveArtistOrFullAdmin, requireApiAuth } from '@/app/api/_lib/auth';
 import {
   buildStorageObjectName,
   createPublicUrl,
@@ -13,12 +13,21 @@ export const runtime = 'nodejs';
 
 export async function POST(request) {
   try {
-    const authResult = requireApiAuth(request);
+    const authResult = await requireApiAuth(request);
 
     if (!authResult.ok) {
       return NextResponse.json(
         { message: authResult.message },
         { status: authResult.status }
+      );
+    }
+
+    const uploadAuth = requireApiActiveArtistOrFullAdmin(authResult);
+
+    if (!uploadAuth.ok) {
+      return NextResponse.json(
+        { message: uploadAuth.message },
+        { status: uploadAuth.status }
       );
     }
 

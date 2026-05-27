@@ -2,12 +2,12 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import Product from '../../models/Product.js';
 import { createExpressApp } from '../../server.js';
-import { authCookie, createCategory, createProduct, createUser } from './factories.js';
+import { authCookie, createCategory, createProduct, createFullAdmin, createUser } from './factories.js';
 
 describe('categories integration', () => {
   it('creates and lists categories', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const createRes = await request(app)
       .post('/categories')
@@ -30,9 +30,28 @@ describe('categories integration', () => {
     await request(app).delete(`/categories/${category._id}`).expect(401);
   });
 
+  it('requires full admin for category management endpoints', async () => {
+    const app = createExpressApp();
+    const customer = await createUser();
+    const category = await createCategory({ name: 'Admin only', slug: 'admin-only' });
+
+    await request(app)
+      .post('/categories')
+      .set('Cookie', authCookie(customer))
+      .send({ name: 'Candles' })
+      .expect(403);
+    await request(app).get(`/categories/${category._id}`).set('Cookie', authCookie(customer)).expect(403);
+    await request(app)
+      .put(`/categories/${category._id}`)
+      .set('Cookie', authCookie(customer))
+      .send({ name: 'Updated' })
+      .expect(403);
+    await request(app).delete(`/categories/${category._id}`).set('Cookie', authCookie(customer)).expect(403);
+  });
+
   it('allows authenticated users to load and update a category', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory({ name: 'Original', slug: 'original' });
 
     const getRes = await request(app)
@@ -51,7 +70,7 @@ describe('categories integration', () => {
 
   it('returns only categories with products from /categories/visible', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const visible = await createCategory({ name: 'Visible', slug: 'visible' });
     await createCategory({ name: 'Hidden', slug: 'hidden' });
     await createProduct({ owner, category: visible });
@@ -64,7 +83,7 @@ describe('categories integration', () => {
 
   it('reassigns products when deleting a category in use', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory({ name: 'Original', slug: 'original' });
     const product = await createProduct({ owner, category });
 

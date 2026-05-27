@@ -3,13 +3,11 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import BlogArticle from '../../../models/BlogArticle.js';
 import {
-  archiveBlogArticle,
   createBlogArticle,
   editBlogArticle,
   extractContentText,
   generateExcerpt,
   getAdminBlogArticles,
-  restoreBlogArticle,
   sanitizeArticleHtml,
   validateBlogImageUrl,
   validateContentJson,
@@ -391,11 +389,11 @@ describe('blogArticlesService persistence behavior', () => {
     expect(updated.publishedAt.toISOString()).toBe(originalPublishedAt.toISOString());
   });
 
-  it('keeps archive, restore, and admin list behavior explicit', async () => {
+  it('keeps admin list behavior explicit', async () => {
     const firstOwnerId = new mongoose.Types.ObjectId().toString();
     const secondOwnerId = new mongoose.Types.ObjectId().toString();
     const first = await createBlogArticle(buildArticlePayload({ title: 'First' }), firstOwnerId);
-    const second = await createBlogArticle(
+    await createBlogArticle(
       buildArticlePayload({
         title: 'Second',
         heroImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/hero/second.webp',
@@ -407,15 +405,6 @@ describe('blogArticlesService persistence behavior', () => {
 
     await expect(getAdminBlogArticles(null)).rejects.toMatchObject({ statusCode: 401 });
     await expect(getAdminBlogArticles(firstOwnerId)).resolves.toHaveLength(2);
-
-    const archived = await archiveBlogArticle(second._id, firstOwnerId);
-    const secondArchive = await archiveBlogArticle(second._id, firstOwnerId);
-    const restored = await restoreBlogArticle(second._id, firstOwnerId);
-
-    expect(archived.archivedAt).toBeInstanceOf(Date);
-    expect(secondArchive.archivedAt.toISOString()).toBe(archived.archivedAt.toISOString());
-    expect(restored.archivedAt).toBeNull();
-    expect(restored.status).toBe('published');
     expect(first.status).toBe('published');
   });
 });

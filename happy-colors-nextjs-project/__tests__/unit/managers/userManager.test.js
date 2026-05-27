@@ -25,6 +25,8 @@ describe('userManager', () => {
           _id: 'user-1',
           username: 'petya',
           email: 'petya@example.com',
+          role: 'full_admin',
+          artistStatus: null,
           password: 'should-not-be-used',
         },
       })
@@ -44,6 +46,8 @@ describe('userManager', () => {
       _id: 'user-1',
       username: 'petya',
       email: 'petya@example.com',
+      role: 'full_admin',
+      artistStatus: null,
     });
     expect(setSuccess).toHaveBeenCalledWith(true);
     expect(setError).toHaveBeenCalledWith('');

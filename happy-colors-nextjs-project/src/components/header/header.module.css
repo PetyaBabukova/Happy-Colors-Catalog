@@ -196,6 +196,11 @@
     display: none;
 }
 
+.pendingAdminLink {
+    color: var(--dark-orange);
+    font-weight: 700;
+}
+
 .hideHamburger {
   display: none;
 }

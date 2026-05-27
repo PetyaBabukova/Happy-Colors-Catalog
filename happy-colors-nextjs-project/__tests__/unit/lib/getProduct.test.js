@@ -1,9 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const cookiesMock = vi.fn();
+
+vi.mock('next/headers', () => ({
+  cookies: cookiesMock,
+}));
+
 describe('getProduct', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.happycolors.eu/api');
+    cookiesMock.mockResolvedValue({
+      toString: () => 'auth_token=test-token',
+    });
   });
 
   afterEach(() => {
@@ -28,6 +37,7 @@ describe('getProduct', () => {
     await expect(getProduct('product-1')).resolves.toEqual(product);
     expect(fetch).toHaveBeenCalledWith('https://api.happycolors.eu/api/products/product-1', {
       cache: 'no-store',
+      headers: { Cookie: 'auth_token=test-token' },
     });
   });
 

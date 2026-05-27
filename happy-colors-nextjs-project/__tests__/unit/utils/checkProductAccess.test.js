@@ -19,7 +19,7 @@ describe('checkProductAccess', () => {
       product: { _id: 'product-1', owner: 'user-1' },
       unauthorized: false,
     });
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/products/product-1'), {
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/products/mine/product-1'), {
       cache: 'no-store',
       credentials: 'include',
     });

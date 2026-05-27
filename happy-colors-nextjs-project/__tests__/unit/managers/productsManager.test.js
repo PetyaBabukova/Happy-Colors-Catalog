@@ -43,10 +43,7 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8%20%D0%B8%20%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
       expect.objectContaining({
-        next: {
-          revalidate: 60,
-          tags: ['products'],
-        },
+        cache: 'no-store',
       })
     );
   });
@@ -80,9 +77,9 @@ describe('productsManager', () => {
     await expect(getHomepageFeaturedProducts()).resolves.toEqual([]);
   });
 
-  it('updates homepage featured products and invalidates product caches', async () => {
+  it('updates homepage featured products through the backend mutation', async () => {
     const products = [{ _id: 'product-2', title: 'Second' }];
-    fetch.mockResolvedValueOnce(jsonResponse({ body: products })).mockResolvedValueOnce(jsonResponse());
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
 
     await expect(updateHomepageFeaturedProducts(['product-2', 'product-1'])).resolves.toEqual(products);
 
@@ -95,25 +92,17 @@ describe('productsManager', () => {
         body: JSON.stringify({ productIds: ['product-2', 'product-1'] }),
       })
     );
-    expect(fetch).toHaveBeenNthCalledWith(
-      2,
-      '/api/revalidate/products',
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'include',
-        body: JSON.stringify({}),
-      })
-    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('creates products with normalized owner, category, media, availability, and cache invalidation', async () => {
+  it('creates products with normalized owner, category, media, and availability', async () => {
     const setSuccess = vi.fn();
     const setError = vi.fn();
     const setInvalidFields = vi.fn();
     const triggerCategoriesReload = vi.fn();
     const router = { push: vi.fn() };
 
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1' } })).mockResolvedValueOnce(jsonResponse());
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1', publicationStatus: 'published' } }));
 
     await onCreateProductSubmit(
       buildFormValues({ availability: '' }),
@@ -141,19 +130,34 @@ describe('productsManager', () => {
       availability: 'available',
     });
     expect(triggerCategoriesReload).toHaveBeenCalled();
-    expect(fetch).toHaveBeenNthCalledWith(
-      2,
-      '/api/revalidate/products',
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'include',
-        body: JSON.stringify({ productId: 'product-1' }),
-      })
-    );
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(router.push).toHaveBeenCalledWith('/products/product-1');
     expect(setSuccess).toHaveBeenCalledWith(true);
     expect(setError).toHaveBeenCalledWith('');
     expect(setInvalidFields).toHaveBeenCalledWith([]);
+  });
+
+  it('redirects newly submitted artist products to the detail page with a pending-review notice', async () => {
+    const setSuccess = vi.fn();
+    const setError = vi.fn();
+    const setInvalidFields = vi.fn();
+    const triggerCategoriesReload = vi.fn();
+    const router = { push: vi.fn() };
+
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-2', publicationStatus: 'pending_review' } }));
+
+    await onCreateProductSubmit(
+      buildFormValues(),
+      setSuccess,
+      setError,
+      setInvalidFields,
+      { _id: 'owner-1' },
+      router,
+      triggerCategoriesReload
+    );
+
+    expect(router.push).toHaveBeenCalledWith('/products/product-2?created=review-pending');
+    expect(setSuccess).toHaveBeenCalledWith(true);
   });
 
   it('maps create product field errors to invalid fields without navigating', async () => {
@@ -185,13 +189,13 @@ describe('productsManager', () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it('edits products and refreshes the current route after cache invalidation', async () => {
+  it('edits products and refreshes the current route', async () => {
     const setSuccess = vi.fn();
     const setError = vi.fn();
     const setInvalidFields = vi.fn();
     const router = { push: vi.fn(), refresh: vi.fn() };
 
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1' } })).mockResolvedValueOnce(jsonResponse());
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1', publicationStatus: 'published' } }));
 
     await onEditProductSubmit(
       buildFormValues({ category: 'cat-2', imageUrls: null, imageUrl: 'https://cdn.test/only.webp', videos: null }),
@@ -218,6 +222,37 @@ describe('productsManager', () => {
       videos: [],
     });
     expect(router.push).toHaveBeenCalledWith('/products/product-1');
+    expect(router.refresh).toHaveBeenCalled();
+    expect(setSuccess).toHaveBeenCalledWith(true);
+  });
+
+  it('redirects artist edits waiting for approval with a review notice', async () => {
+    const setSuccess = vi.fn();
+    const setError = vi.fn();
+    const setInvalidFields = vi.fn();
+    const router = { push: vi.fn(), refresh: vi.fn() };
+
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          _id: 'product-1',
+          publicationStatus: 'published',
+          reviewStatus: 'pending_review',
+        },
+      })
+    );
+
+    await onEditProductSubmit(
+      buildFormValues(),
+      setSuccess,
+      setError,
+      setInvalidFields,
+      { _id: 'owner-1' },
+      router,
+      'product-1'
+    );
+
+    expect(router.push).toHaveBeenCalledWith('/products/product-1?updated=review-pending');
     expect(router.refresh).toHaveBeenCalled();
     expect(setSuccess).toHaveBeenCalledWith(true);
   });

@@ -3,7 +3,7 @@ import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import Product from '../../models/Product.js';
 import { deleteProductImage } from '../../services/productImagesService.js';
 import { deleteProductVideo } from '../../services/productVideosService.js';
-import { createProduct } from './factories.js';
+import { createActiveArtist, createProduct } from './factories.js';
 
 function buildVideo(overrides = {}) {
   return {
@@ -53,6 +53,25 @@ describe('product storage asset services', () => {
     expect(deleteImageFromGCS).not.toHaveBeenCalled();
   });
 
+  it('stages image removal for artist-owned published products without changing public media immediately', async () => {
+    const owner = await createActiveArtist();
+    const product = await createProduct({
+      owner,
+      publicationStatus: 'published',
+      imageUrl: 'https://cdn.test/one.webp',
+      imageUrls: ['https://cdn.test/one.webp', 'https://cdn.test/two.webp'],
+    });
+
+    await expect(deleteProductImage(product._id, 'https://cdn.test/one.webp', owner)).resolves.toMatchObject({
+      imageUrls: ['https://cdn.test/two.webp'],
+      imageUrl: 'https://cdn.test/two.webp',
+    });
+
+    const unchanged = await Product.findById(product._id).lean();
+    expect(unchanged.imageUrls).toEqual(['https://cdn.test/one.webp', 'https://cdn.test/two.webp']);
+    expect(deleteImageFromGCS).not.toHaveBeenCalled();
+  });
+
   it('deletes a product video and preserves a poster still used by another video', async () => {
     const sharedPoster = 'https://storage.googleapis.com/test-bucket/products/posters/shared.webp';
     const product = await createProduct({
@@ -99,6 +118,23 @@ describe('product storage asset services', () => {
 
     const updated = await Product.findById(product._id).lean();
     expect(updated.videos).toEqual([]);
+  });
+
+  it('stages video removal for artist-owned published products without changing public media immediately', async () => {
+    const owner = await createActiveArtist();
+    const product = await createProduct({
+      owner,
+      publicationStatus: 'published',
+      videos: [buildVideo()],
+    });
+
+    await expect(deleteProductVideo(product._id, buildVideo().url, owner)).resolves.toMatchObject({
+      videos: [],
+    });
+
+    const unchanged = await Product.findById(product._id).lean();
+    expect(unchanged.videos).toHaveLength(1);
+    expect(deleteImageFromGCS).not.toHaveBeenCalled();
   });
 
   it('rejects blank, missing, unauthorized, or unrelated video deletions', async () => {
