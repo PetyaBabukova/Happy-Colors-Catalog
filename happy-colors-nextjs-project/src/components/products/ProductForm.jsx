@@ -108,6 +108,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
   const { categories } = useProducts();
   const autoUploadAttemptRef = useRef('');
   const replaceInputRefs = useRef({});
+  const submitInProgressRef = useRef(false);
 
   const {
     formValues,
@@ -136,6 +137,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
   const [videoDeletingUrl, setVideoDeletingUrl] = useState(null);
   const [videoUploadError, setVideoUploadError] = useState(null);
   const [videoDeleteError, setVideoDeleteError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedVideoFile, setSelectedVideoFile] = useState(null);
   const [selectedPosterFile, setSelectedPosterFile] = useState(null);
   const [selectedVideoVersion, setSelectedVideoVersion] = useState(0);
@@ -502,6 +504,46 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
     return null;
   };
 
+  const handleFormSubmit = (event) => {
+    if (submitInProgressRef.current) {
+      event.preventDefault();
+      return;
+    }
+
+    handleSubmit(
+      event,
+      formValues,
+      setFormValues,
+      setSuccess,
+      setError,
+      setInvalidFields,
+      (values, setSubmitSuccess, setSubmitError, setSubmitInvalidFields) => {
+        submitInProgressRef.current = true;
+        setSubmitting(true);
+        let submitResult;
+
+        try {
+          submitResult = onSubmit(values, setSubmitSuccess, setSubmitError, setSubmitInvalidFields, router);
+        } catch (error) {
+          submitInProgressRef.current = false;
+          setSubmitting(false);
+          throw error;
+        }
+
+        Promise.resolve(submitResult)
+          .catch((error) => {
+            setSubmitSuccess(false);
+            setSubmitError(error?.message || 'Възникна грешка при запазване на продукта.');
+          })
+          .finally(() => {
+            submitInProgressRef.current = false;
+            setSubmitting(false);
+          });
+      },
+      [validateVideoSubmitState]
+    );
+  };
+
   return (
     <div className={styles.registerFormContainer}>
       {error && <MessageBox type="error" message={`Грешка: ${error}`} />}
@@ -511,19 +553,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
 
       <form
         className={styles.registerForm}
-        onSubmit={(event) =>
-          handleSubmit(
-            event,
-            formValues,
-            setFormValues,
-            setSuccess,
-            setError,
-            setInvalidFields,
-            (values, setSubmitSuccess, setSubmitError, setSubmitInvalidFields) =>
-              onSubmit(values, setSubmitSuccess, setSubmitError, setSubmitInvalidFields, router),
-            [validateVideoSubmitState]
-          )
-        }
+        onSubmit={handleFormSubmit}
       >
         <label htmlFor="title">Име на продукта</label>
         <input
@@ -783,7 +813,7 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
           )}
         </section>
 
-        <button type="submit" disabled={videoUploading || Boolean(videoDeletingUrl) || Boolean(videoReplacing)}>
+        <button type="submit" disabled={submitting || videoUploading || Boolean(videoDeletingUrl) || Boolean(videoReplacing)}>
           Запази
         </button>
       </form>

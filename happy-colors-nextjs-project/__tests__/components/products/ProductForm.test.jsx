@@ -101,6 +101,30 @@ describe('ProductForm', () => {
     );
   });
 
+  it('ignores repeated submits while the first product save is still pending', async () => {
+    const onSubmit = vi.fn(() => new Promise(() => {}));
+
+    const { container } = render(
+      <ProductForm
+        initialValues={buildInitialValues()}
+        onSubmit={onSubmit}
+        legendText="Create product"
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector('input[name="title"]')).toHaveValue('Lavender Candle'));
+
+    const form = container.querySelector('form');
+    const submitButton = container.querySelector('button[type="submit"]');
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(submitButton).toBeDisabled();
+  });
+
   it('submits edit forms without validating optional backend metadata fields', async () => {
     const onSubmit = vi.fn();
     const { container } = render(
