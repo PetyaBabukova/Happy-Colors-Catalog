@@ -17,6 +17,15 @@ describe('Footer', () => {
     expect(screen.getByText(/Happy Colors/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cookie settings' })).toBeInTheDocument();
     expect(screen.getByRole('form', { name: 'newsletter form' })).toBeInTheDocument();
+    expect(screen.getByText('Последвайте ни:')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Facebook/ })).toHaveAttribute(
+      'href',
+      'https://www.facebook.com/happycolors.studio'
+    );
+    expect(screen.getByRole('link', { name: /Instagram/ })).toHaveAttribute(
+      'href',
+      'https://www.instagram.com/happycolors.crochet/'
+    );
     expect(screen.getByRole('link', { name: /webcreativeteam\.com/ })).toHaveAttribute(
       'href',
       'https://webcreativeteam.com'
