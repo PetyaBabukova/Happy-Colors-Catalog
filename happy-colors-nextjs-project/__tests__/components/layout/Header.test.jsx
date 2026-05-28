@@ -62,6 +62,7 @@ describe('Header', () => {
       '/blog/create',
       '/categories/create',
       '/categories',
+      '/analytics',
       '/users/admin',
       '/newsletter/send',
     ]);
