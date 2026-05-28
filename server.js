@@ -1,10 +1,10 @@
 import dotenv from 'dotenv';
 import next from 'next';
-import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from './server/mongoose.js';
+import { createUnifiedRoutingApp } from './server/unifiedRouting.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,19 +60,7 @@ const nextApp = next({
 await nextApp.prepare();
 
 const nextHandler = nextApp.getRequestHandler();
-const app = express();
-
-app.use('/api', (req, res, nextMiddleware) => {
-  expressApp(req, res, (error) => {
-    if (res.headersSent) {
-      return;
-    }
-
-    nextMiddleware(error);
-  });
-});
-
-app.use((req, res) => nextHandler(req, res));
+const app = createUnifiedRoutingApp({ expressApp, nextHandler });
 
 app.listen(PORT, () => {
   console.log(`✅ Unified server listening on port ${PORT}`);
