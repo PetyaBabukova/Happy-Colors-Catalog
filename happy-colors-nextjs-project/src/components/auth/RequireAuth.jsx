@@ -12,6 +12,8 @@ const DEFAULT_MESSAGE =
 export default function RequireAuth({
   children,
   message = DEFAULT_MESSAGE,
+  requiredRole = null,
+  roleMessage = message,
   redirectDelayMs = 1200,
 }) {
   const router = useRouter();
@@ -37,6 +39,10 @@ export default function RequireAuth({
 
   if (!user) {
     return <MessageBox type="error" message={message} />;
+  }
+
+  if (requiredRole && user.role !== requiredRole) {
+    return <MessageBox type="error" message={roleMessage} />;
   }
 
   return children;

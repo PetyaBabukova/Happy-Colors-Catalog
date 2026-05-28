@@ -161,6 +161,7 @@ export default function Header() {
         <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
+        <li><Link href="/analytics">Анализи</Link></li>
         <li>
           <Link
             href="/users/admin"
