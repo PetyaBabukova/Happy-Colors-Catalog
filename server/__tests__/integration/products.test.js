@@ -361,6 +361,25 @@ describe('products integration', () => {
     expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 
+  it('does not delete product storage assets that are still used by a home banner mobile image', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/products/images/shared-mobile-banner.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl: sharedImageUrl,
+      imageUrls: [sharedImageUrl],
+    });
+    await createHomeBanner({ owner, mobileImageUrl: sharedImageUrl });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
   it('does not delete product storage assets that are still used by another product', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();

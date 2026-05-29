@@ -9,6 +9,7 @@ import {
   createActiveArtist,
   createBlogArticle,
   createFullAdmin,
+  createHomeBanner,
 } from './factories.js';
 
 function articleFields(overrides = {}) {
@@ -420,5 +421,24 @@ describe('blog articles integration', () => {
 
     expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedHero);
     expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedThumbnail);
+  });
+
+  it('does not delete blog images that are still used by a home banner mobile image', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const cookie = authCookie(owner);
+    const sharedHero = 'https://storage.googleapis.com/test-bucket/blog/articles/hero/shared-mobile-banner.webp';
+    const thumbnailImageUrl =
+      'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/shared-mobile-banner.webp';
+    const article = await createBlogArticle(articleFields({ owner, heroImageUrl: sharedHero, thumbnailImageUrl }));
+    await createHomeBanner({ owner, mobileImageUrl: sharedHero });
+
+    await request(app)
+      .delete(`/blog-articles/${article._id}`)
+      .set('Cookie', cookie)
+      .expect(204);
+
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedHero);
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(thumbnailImageUrl, { throwOnError: true });
   });
 });

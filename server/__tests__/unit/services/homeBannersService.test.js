@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   validateHomeBannerImageUrl,
   validateInternalCtaHref,
+  validateOptionalHomeBannerImageUrl,
 } from '../../../services/homeBannersService.js';
 
 describe('homeBannersService validation', () => {
@@ -34,6 +35,16 @@ describe('homeBannersService validation', () => {
     ).toBe('https://storage.googleapis.com/test-bucket/home-banners/animals.webp');
   });
 
+  it('accepts empty and valid optional mobile image URLs', () => {
+    expect(validateOptionalHomeBannerImageUrl('')).toBe('');
+    expect(validateOptionalHomeBannerImageUrl(null)).toBe('');
+    expect(
+      validateOptionalHomeBannerImageUrl(
+        ' https://storage.googleapis.com/test-bucket/home-banners/mobile/animals.webp '
+      )
+    ).toBe('https://storage.googleapis.com/test-bucket/home-banners/mobile/animals.webp');
+  });
+
   it('rejects image URLs from the wrong bucket or host', () => {
     expect(() =>
       validateHomeBannerImageUrl(
@@ -51,6 +62,9 @@ describe('homeBannersService validation', () => {
     expect(() => validateHomeBannerImageUrl('javascript:alert(1)')).toThrow(/safe storage URL/i);
     expect(() => validateHomeBannerImageUrl('data:text/html,test')).toThrow(/safe storage URL/i);
     expect(() => validateHomeBannerImageUrl('file:///tmp/banner.webp')).toThrow(/safe storage URL/i);
+    expect(() => validateOptionalHomeBannerImageUrl('javascript:alert(1)')).toThrow(
+      /safe storage URL/i
+    );
     expect(() =>
       validateHomeBannerImageUrl(
         'https://storage.googleapis.com/test-bucket/home-banners/animals.webp'

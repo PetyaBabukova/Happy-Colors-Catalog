@@ -75,7 +75,7 @@ export default function Header() {
         <HeaderRouteWatcher onRouteChange={handleRouteChange} />
       </Suspense>
 
-      <header className="header">
+      <header className={styles.siteHeader}>
         <nav className={`${styles.mainNav} pageInline`}>
           <Link href="/">
             <div className={styles.logoContainer}>
@@ -147,7 +147,6 @@ export default function Header() {
             </Link>
           )}
         </nav>
-      </header>
 
       {canCreateProduct ? (
       <ul className={userNavClassName}>
@@ -175,6 +174,7 @@ export default function Header() {
         )}
       </ul>
       ) : null}
+      </header>
     </>
   );
 }

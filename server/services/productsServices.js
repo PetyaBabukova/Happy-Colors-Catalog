@@ -468,7 +468,15 @@ async function deleteAssetsFromStorage(
     }
 
     const [homeBannerRefs, productRefs, blogArticleRefs] = await Promise.all([
-      HomeBanner.find({ imageUrl: { $in: uniqueAssetUrls } }, { imageUrl: 1 }).lean(),
+      HomeBanner.find(
+        {
+          $or: [
+            { imageUrl: { $in: uniqueAssetUrls } },
+            { mobileImageUrl: { $in: uniqueAssetUrls } },
+          ],
+        },
+        { imageUrl: 1, mobileImageUrl: 1 }
+      ).lean(),
       Product.find(
         {
           ...(excludeProductId ? { _id: { $ne: excludeProductId } } : {}),
@@ -495,7 +503,9 @@ async function deleteAssetsFromStorage(
         { heroImageUrl: 1, thumbnailImageUrl: 1 }
       ).lean(),
     ]);
-    const referencedAssetUrls = new Set(homeBannerRefs.map((banner) => banner.imageUrl));
+    const referencedAssetUrls = new Set(
+      homeBannerRefs.flatMap((banner) => [banner.imageUrl, banner.mobileImageUrl].filter(Boolean))
+    );
 
     for (const product of productRefs) {
       for (const assetUrl of collectProductAssetUrls(product)) {

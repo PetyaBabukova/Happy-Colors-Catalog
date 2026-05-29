@@ -123,14 +123,18 @@ export default function HomeHeroCarousel({ banners = [] }) {
         onPointerCancel={resetDrag}
         onDragStart={(event) => event.preventDefault()}
       >
-        <img
-          key={currentBanner._id}
-          src={currentBanner.imageUrl}
-          alt={currentBanner.title}
-          className={styles.bannerImage}
-          draggable="false"
-          fetchPriority={currentIndex === 0 ? 'high' : 'auto'}
-        />
+        <picture key={currentBanner._id} className={styles.picture}>
+          {currentBanner.mobileImageUrl ? (
+            <source media="(max-width: 768px)" srcSet={currentBanner.mobileImageUrl} />
+          ) : null}
+          <img
+            src={currentBanner.imageUrl}
+            alt={currentBanner.title}
+            className={styles.bannerImage}
+            draggable="false"
+            fetchPriority={currentIndex === 0 ? 'high' : 'auto'}
+          />
+        </picture>
         <div className={styles.content}>
           <div className={styles.textPanel}>
             <h2>{currentBanner.title}</h2>

@@ -55,6 +55,7 @@ describe('Header', () => {
     expect(screen.getByText(/Petya/)).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(container.querySelector('ul[class*="userNav"]').className).toContain('userNavVisible');
+    expect(container.querySelector('header ul[class*="userNav"]')).toBeInTheDocument();
     expect(getUserNavLinks(container)).toEqual([
       '/products/create',
       '/home-banners/create',

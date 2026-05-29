@@ -14,6 +14,7 @@ const ALLOWED_HOME_BANNER_FIELDS = new Set([
   'ctaLabel',
   'ctaHref',
   'imageUrl',
+  'mobileImageUrl',
   'sortOrder',
   'isActive',
 ]);
@@ -122,6 +123,12 @@ export function validateHomeBannerImageUrl(imageUrl) {
   return urlValue;
 }
 
+export function validateOptionalHomeBannerImageUrl(imageUrl) {
+  const value = String(imageUrl || '').trim();
+
+  return value ? validateHomeBannerImageUrl(value) : '';
+}
+
 function assertValidBannerId(bannerId) {
   if (!mongoose.Types.ObjectId.isValid(bannerId)) {
     throw createError('Home banner was not found.', 404);
@@ -172,11 +179,26 @@ function validateTextLength(fieldName, value, maxLength) {
   }
 }
 
+function hasOwn(source, key) {
+  return Object.prototype.hasOwnProperty.call(source || {}, key);
+}
+
+function normalizeHomeBannerResponse(banner) {
+  if (!banner) {
+    return banner;
+  }
+
+  return {
+    ...banner,
+    mobileImageUrl: String(banner.mobileImageUrl || ''),
+  };
+}
+
 function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
   const sanitized = pickAllowedHomeBannerFields(data);
   const normalized = {};
 
-  if (requireAll || Object.prototype.hasOwnProperty.call(sanitized, 'title')) {
+  if (requireAll || hasOwn(sanitized, 'title')) {
     const title = String(sanitized.title || '').trim();
 
     if (!title) {
@@ -187,7 +209,7 @@ function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
     normalized.title = title;
   }
 
-  if (Object.prototype.hasOwnProperty.call(sanitized, 'description')) {
+  if (hasOwn(sanitized, 'description')) {
     const description = String(sanitized.description || '').trim();
 
     validateTextLength('Description', description, HOME_BANNER_FIELD_LIMITS.description);
@@ -196,7 +218,7 @@ function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
     normalized.description = '';
   }
 
-  if (requireAll || Object.prototype.hasOwnProperty.call(sanitized, 'ctaLabel')) {
+  if (requireAll || hasOwn(sanitized, 'ctaLabel')) {
     const ctaLabel = String(sanitized.ctaLabel || '').trim();
 
     if (!ctaLabel) {
@@ -207,24 +229,28 @@ function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
     normalized.ctaLabel = ctaLabel;
   }
 
-  if (requireAll || Object.prototype.hasOwnProperty.call(sanitized, 'ctaHref')) {
+  if (requireAll || hasOwn(sanitized, 'ctaHref')) {
     const ctaHref = validateInternalCtaHref(sanitized.ctaHref);
 
     validateTextLength('CTA link', ctaHref, HOME_BANNER_FIELD_LIMITS.ctaHref);
     normalized.ctaHref = ctaHref;
   }
 
-  if (requireAll || Object.prototype.hasOwnProperty.call(sanitized, 'imageUrl')) {
+  if (requireAll || hasOwn(sanitized, 'imageUrl')) {
     normalized.imageUrl = validateHomeBannerImageUrl(sanitized.imageUrl);
   }
 
-  if (Object.prototype.hasOwnProperty.call(sanitized, 'sortOrder')) {
+  if (requireAll || hasOwn(sanitized, 'mobileImageUrl')) {
+    normalized.mobileImageUrl = validateOptionalHomeBannerImageUrl(sanitized.mobileImageUrl);
+  }
+
+  if (hasOwn(sanitized, 'sortOrder')) {
     normalized.sortOrder = normalizeSortOrder(sanitized.sortOrder);
   } else if (requireAll) {
     normalized.sortOrder = 0;
   }
 
-  if (Object.prototype.hasOwnProperty.call(sanitized, 'isActive')) {
+  if (hasOwn(sanitized, 'isActive')) {
     normalized.isActive = normalizeBoolean(sanitized.isActive);
   } else if (requireAll) {
     normalized.isActive = true;
@@ -239,7 +265,7 @@ async function isAssetUrlReferenced(assetUrl, { excludeBannerId = null } = {}) {
   }
 
   const bannerQuery = {
-    imageUrl: assetUrl,
+    $or: [{ imageUrl: assetUrl }, { mobileImageUrl: assetUrl }],
     ...(excludeBannerId ? { _id: { $ne: excludeBannerId } } : {}),
   };
 
@@ -280,7 +306,9 @@ async function deleteAssetIfUnreferenced(assetUrl, options = {}) {
 }
 
 export async function getActiveHomeBanners() {
-  return HomeBanner.find({ isActive: true }).sort({ sortOrder: 1, createdAt: 1 }).lean();
+  const banners = await HomeBanner.find({ isActive: true }).sort({ sortOrder: 1, createdAt: 1 }).lean();
+
+  return banners.map(normalizeHomeBannerResponse);
 }
 
 export async function getHomeBannerById(bannerId) {
@@ -292,7 +320,7 @@ export async function getHomeBannerById(bannerId) {
     throw createError('Home banner was not found.', 404);
   }
 
-  return banner;
+  return normalizeHomeBannerResponse(banner);
 }
 
 export async function createHomeBanner(data, userId) {
@@ -306,7 +334,7 @@ export async function createHomeBanner(data, userId) {
   });
   const savedBanner = await banner.save();
 
-  return savedBanner.toObject();
+  return normalizeHomeBannerResponse(savedBanner.toObject());
 }
 
 export async function editHomeBanner(bannerId, data, userId) {
@@ -322,7 +350,7 @@ export async function editHomeBanner(bannerId, data, userId) {
     throw createError('Home banner was not found.', 404);
   }
 
-  const previousImageUrl = banner.imageUrl;
+  const previousUrls = new Set([banner.imageUrl, banner.mobileImageUrl].filter(Boolean));
   const nextData = normalizeHomeBannerFields(data, { requireAll: false });
 
   for (const [key, value] of Object.entries(nextData)) {
@@ -331,11 +359,14 @@ export async function editHomeBanner(bannerId, data, userId) {
 
   await banner.save();
 
-  if (nextData.imageUrl && previousImageUrl !== nextData.imageUrl) {
-    await deleteAssetIfUnreferenced(previousImageUrl, { excludeBannerId: banner._id });
+  const nextUrls = new Set([banner.imageUrl, banner.mobileImageUrl].filter(Boolean));
+  const deletionCandidates = [...previousUrls].filter((url) => !nextUrls.has(url));
+
+  for (const assetUrl of deletionCandidates) {
+    await deleteAssetIfUnreferenced(assetUrl, { excludeBannerId: banner._id });
   }
 
-  return banner.toObject();
+  return normalizeHomeBannerResponse(banner.toObject());
 }
 
 export async function deleteHomeBanner(bannerId, userId) {
@@ -351,8 +382,29 @@ export async function deleteHomeBanner(bannerId, userId) {
     throw createError('Home banner was not found.', 404);
   }
 
-  const imageUrl = banner.imageUrl;
-  await deleteAssetIfUnreferenced(imageUrl, { excludeBannerId: banner._id, throwOnError: true });
+  const deletionCandidates = [...new Set([banner.imageUrl, banner.mobileImageUrl].filter(Boolean))];
+  const deletionFailures = [];
+
+  for (const assetUrl of deletionCandidates) {
+    try {
+      await deleteAssetIfUnreferenced(assetUrl, {
+        excludeBannerId: banner._id,
+        throwOnError: true,
+      });
+    } catch (error) {
+      deletionFailures.push({ assetUrl, error });
+    }
+  }
+
+  if (deletionFailures.length > 0) {
+    const error = createError(
+      `Failed to delete ${deletionFailures.length} home banner asset(s) from storage.`,
+      500
+    );
+    error.cause = deletionFailures;
+    throw error;
+  }
+
   await HomeBanner.findByIdAndDelete(bannerId);
 
   return { message: 'Home banner was deleted successfully.' };
