@@ -53,6 +53,7 @@ function createFormRequest({ kind = 'home-banner-image', file = buildWebpFile() 
 
 describe('/api/uploads/proxy', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     authResult = { ok: true, user: authUser };
     bucketName = 'test-bucket';
     save.mockResolvedValue(undefined);
@@ -102,6 +103,37 @@ describe('/api/uploads/proxy', () => {
         contentType: 'image/webp',
       },
     });
+  });
+
+  it('uploads home banner mobile images to the dedicated storage folder', async () => {
+    const { POST } = await loadRoute();
+
+    const response = await POST(createFormRequest({ kind: 'home-banner-mobile-image' }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      publicUrl: 'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/banner.webp',
+      objectName: 'home-banners/mobile-images/banner.webp',
+      deleteToken: 'delete-token',
+      uploadMode: 'proxy',
+    });
+    expect(buildStorageObjectName).toHaveBeenCalledWith(
+      'home-banners/mobile-images',
+      'banner.webp',
+      'image/webp'
+    );
+    expect(fileRef).toHaveBeenCalledWith('home-banners/mobile-images/banner.webp');
+  });
+
+  it('requires full admin for home banner mobile images', async () => {
+    authResult = { ok: true, user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' } };
+    const { POST } = await loadRoute();
+
+    const response = await POST(createFormRequest({ kind: 'home-banner-mobile-image' }));
+
+    expect(response.status).toBe(403);
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('rejects the old generic image upload kind', async () => {

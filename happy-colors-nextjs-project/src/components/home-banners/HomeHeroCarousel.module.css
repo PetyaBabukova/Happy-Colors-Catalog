@@ -30,6 +30,11 @@
   padding: 1rem;
 }
 
+.picture {
+  display: block;
+  width: 100%;
+}
+
 .bannerImage {
   display: block;
   width: 100%;

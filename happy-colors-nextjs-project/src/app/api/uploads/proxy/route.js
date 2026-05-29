@@ -24,6 +24,10 @@ const KIND_CONFIG = {
     folder: 'home-banners/images',
     validateFile: validateImageUploadFile,
   },
+  'home-banner-mobile-image': {
+    folder: 'home-banners/mobile-images',
+    validateFile: validateImageUploadFile,
+  },
   video: {
     folder: 'products/videos',
     validateFile: validateVideoUploadFile,
@@ -59,7 +63,7 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Неподдържан тип upload.' }, { status: 400 });
     }
 
-    const uploadAuth = kind === 'home-banner-image'
+    const uploadAuth = kind === 'home-banner-image' || kind === 'home-banner-mobile-image'
       ? requireApiFullAdmin(auth)
       : requireApiActiveArtistOrFullAdmin(auth);
 

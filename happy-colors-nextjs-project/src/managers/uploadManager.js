@@ -103,7 +103,12 @@ async function uploadFileViaProxy({ kind, file }) {
 export async function uploadSignedFile({ kind, file }) {
   // Home banner images, video, and poster uploads go through the proxy route by default.
   // This avoids browser-to-GCS CORS failures during create/edit flows.
-  if (kind === 'home-banner-image' || kind === 'video' || kind === 'poster') {
+  if (
+    kind === 'home-banner-image' ||
+    kind === 'home-banner-mobile-image' ||
+    kind === 'video' ||
+    kind === 'poster'
+  ) {
     return uploadFileViaProxy({ kind, file });
   }
 

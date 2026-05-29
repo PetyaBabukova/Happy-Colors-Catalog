@@ -1,3 +1,8 @@
+.siteHeader {
+    display: flex;
+    flex-direction: column;
+}
+
 .mainNav {
     display: flex;
     justify-content: space-between;
@@ -184,7 +189,10 @@
     font-size: 1.2em;
     gap: 2em;
     align-items: center;
+    flex-wrap: wrap;
     padding: 0 1.5em;
+    background-color: var(--lighter-green);
+    border-top: 1px solid rgba(1, 102, 77, 0.12);
 }
 
 .userNavVisible {
@@ -207,6 +215,11 @@
 
 /* -------------------- МОБИЛНИ СТИЛОВЕ -------------------- */
 @media (max-width: 768px) {
+
+    .siteHeader {
+        display: flex;
+        flex-direction: column;
+    }
 
 
     .mainNav {
@@ -320,6 +333,19 @@
         background: none;
         box-shadow: none;
         border: none;
+    }
+
+    .userNav {
+        gap: 0.75rem;
+        align-items: flex-start;
+        padding: 0.65rem var(--page-inline-padding);
+        overflow-x: auto;
+        white-space: nowrap;
+        flex-wrap: nowrap;
+    }
+
+    .userNav li {
+        flex: 0 0 auto;
     }
 }
 

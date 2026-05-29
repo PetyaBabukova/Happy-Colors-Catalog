@@ -15,6 +15,7 @@ const banners = [
     ctaLabel: 'Виж животинки',
     ctaHref: '/search?q=животинки',
     imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/animals.webp',
+    mobileImageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/animals.webp',
   },
   {
     _id: 'banner-2',
@@ -44,10 +45,36 @@ describe('HomeHeroCarousel', () => {
     expect(screen.getByRole('link', { name: 'Виж декорация' })).toHaveAttribute('href', '/search?q=декорация');
   });
 
+  it('renders a mobile picture source when a mobile image exists', () => {
+    const { container } = render(<HomeHeroCarousel banners={banners} />);
+
+    const source = container.querySelector('source');
+
+    expect(source).toHaveAttribute('media', '(max-width: 768px)');
+    expect(source).toHaveAttribute(
+      'srcset',
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/animals.webp'
+    );
+    expect(screen.getByAltText('Животинки')).toHaveAttribute(
+      'src',
+      'https://storage.googleapis.com/test-bucket/home-banners/animals.webp'
+    );
+  });
+
+  it('renders only the desktop fallback image when no mobile image exists', () => {
+    const { container } = render(<HomeHeroCarousel banners={[{ ...banners[0], mobileImageUrl: '' }]} />);
+
+    expect(container.querySelector('source')).toBeNull();
+    expect(screen.getByAltText('Животинки')).toHaveAttribute(
+      'src',
+      'https://storage.googleapis.com/test-bucket/home-banners/animals.webp'
+    );
+  });
+
   it('switches slides with a horizontal pointer drag', () => {
     render(<HomeHeroCarousel banners={banners} />);
 
-    const mediaFrame = screen.getByAltText('Животинки').parentElement;
+    const mediaFrame = screen.getByAltText('Животинки').closest('div');
     const pointerDown = new Event('pointerdown', { bubbles: true });
     const pointerUp = new Event('pointerup', { bubbles: true });
 

@@ -585,7 +585,9 @@ async function isBlogImageReferenced(assetUrl, { excludeArticleId = null } = {})
 
   const [articleExists, bannerExists, productExists] = await Promise.all([
     BlogArticle.exists(query),
-    HomeBanner.exists({ imageUrl: assetUrl }),
+    HomeBanner.exists({
+      $or: [{ imageUrl: assetUrl }, { mobileImageUrl: assetUrl }],
+    }),
     Product.exists({
       $or: [
         { imageUrl: assetUrl },
