@@ -10,6 +10,7 @@ import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
 import { fetchAdminUsers } from '@/managers/usersAdminManager';
+import { X } from 'lucide-react';
 
 function HeaderRouteWatcher({ onRouteChange }) {
   const pathname = usePathname();
@@ -109,7 +110,7 @@ export default function Header() {
               aria-label="Затвори менюто"
               onClick={closeMobileMenu}
             >
-              X
+              <X aria-hidden="true" size={24} strokeWidth={1.8} />
             </button>
           )}
 
