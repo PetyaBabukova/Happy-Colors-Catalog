@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   Check,
   Gift,
   MessageCircleHeart,
@@ -12,19 +13,21 @@ const craftHighlights = [
   'Ръчна изработка',
   'Внимание към детайла',
   'Меки цветове и характер',
-  'Подходящо за подарък',
+  'Хипоалергенни материали',
+  'Безопасни очички, нослета и др.',
+  'Подарък за всеки повод',
 ];
 
 const usefulLinks = [
   {
     href: '/products',
-    title: 'Каталог',
-    text: 'Разгледайте наличните плетени играчки, аксесоари и декорации.',
+    title: 'Галерията на Happy Colors',
+    text: 'Разгледайте плетените играчки, аксесоари и декорации. Тези, които не са налични, могат да бъдат направени отново специално за вас.',
     Icon: Gift,
   },
   {
     href: '/faq',
-    title: 'Често задавани въпроси',
+    title: 'Имате въпроси',
     text: 'Вижте повече за запитвания, материали, доставка и грижа за изделията.',
     Icon: MessageCircleQuestion,
   },
@@ -93,7 +96,8 @@ export default function AboutUs() {
             <p>
               Ако харесате конкретно изделие или имате идея за подарък, можете да
               разгледате каталога, да прочетете полезните отговори или да изпратите
-              запитване без ангажимент.
+              запитване без ангажимент. Ако имате желание да изработя нещо специално
+              за вас, не се колебайте да ме попитате чрез мейл или по телефона.
             </p>
           </div>
         </div>
@@ -111,8 +115,11 @@ export default function AboutUs() {
           <nav className={styles.linkGrid} aria-label="Полезни връзки">
             {usefulLinks.map(({ href, title, text, Icon }) => (
               <Link key={href} className={styles.linkCard} href={href}>
-                <Icon className={styles.linkIcon} aria-hidden="true" size={28} strokeWidth={1.7} />
-                <span>{title}</span>
+                <span className={styles.linkCardHeading}>
+                  <Icon className={styles.linkIcon} aria-hidden="true" size={24} strokeWidth={1.7} />
+                  <span>{title}</span>
+                  <ArrowUpRight className={styles.linkArrow} aria-hidden="true" size={18} strokeWidth={1.9} />
+                </span>
                 <small>{text}</small>
               </Link>
             ))}
@@ -123,9 +130,15 @@ export default function AboutUs() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <WandSparkles className={styles.linkIcon} aria-hidden="true" size={28} strokeWidth={1.7} />
-              <span>webcreativeteam.com</span>
-              <small>Онлайн каталогът на Happy Colors е изработен от Web Creative Team.</small>
+              <span className={styles.linkCardHeading}>
+                <WandSparkles className={styles.linkIcon} aria-hidden="true" size={24} strokeWidth={1.7} />
+                <span>webcreativeteam.com</span>
+                <ArrowUpRight className={styles.linkArrow} aria-hidden="true" size={18} strokeWidth={1.9} />
+              </span>
+              <small>
+                Онлайн каталогът на Happy Colors е изработен от приятелите ни от Web
+                Creative Team. Ако се нуждаете от надеждни специалисти, потърсете ги.
+              </small>
             </a>
           </nav>
         </div>

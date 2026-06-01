@@ -142,16 +142,42 @@
   transform: translateY(-2px);
 }
 
-.linkIcon {
-  color: var(--dark-green);
-  margin-bottom: 0.1rem;
+.linkCardHeading {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
 }
 
-.linkCard span {
+.linkIcon {
+  color: var(--dark-green);
+}
+
+.linkArrow {
+  color: var(--dark-green);
+  opacity: 0.65;
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.linkCard:hover .linkArrow {
+  color: var(--dark-orange);
+  opacity: 1;
+  transform: translate(2px, -2px);
+}
+
+.linkCardHeading span {
   color: var(--dark-green);
   font-size: 1.2rem;
   font-weight: 700;
   line-height: 1.2;
+}
+
+.linkCard:hover .linkCardHeading span {
+  color: var(--dark-orange);
 }
 
 .linkCard small {
