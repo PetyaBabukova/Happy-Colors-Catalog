@@ -213,6 +213,10 @@
   display: none;
 }
 
+.closeMenuBtn {
+    display: none;
+}
+
 /* -------------------- МОБИЛНИ СТИЛОВЕ -------------------- */
 @media (max-width: 768px) {
 
@@ -255,6 +259,29 @@
     .hamburgerBtn img {
         width: 100%;
         height: 100%;
+    }
+
+    .closeMenuBtn {
+        width: 2.25rem;
+        height: 2.25rem;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        border: 1px solid var(--dark-green);
+        border-radius: 0.5em;
+        background-color: white;
+        color: var(--dark-green);
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .closeMenuBtn:hover {
+        background-color: var(--dark-orange);
+        border-color: var(--dark-orange);
+        color: white;
     }
 
 

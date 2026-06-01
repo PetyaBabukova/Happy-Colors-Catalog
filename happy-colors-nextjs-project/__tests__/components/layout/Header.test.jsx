@@ -136,4 +136,32 @@ describe('Header', () => {
 
     expect(navList.className).toContain('showMenu');
   });
+
+  it('closes the mobile menu from the close button', () => {
+    const { container } = render(<Header />);
+    const navList = container.querySelector('nav > ul');
+
+    fireEvent.click(container.querySelector('button[class*="hamburgerBtn"]'));
+    expect(navList.className).toContain('showMenu');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Затвори менюто' }));
+
+    expect(navList.className).not.toContain('showMenu');
+  });
+
+  it('closes the mobile menu when a navigation link is clicked', () => {
+    const { container } = render(<Header />);
+    const navList = container.querySelector('nav > ul');
+
+    fireEvent.click(container.querySelector('button[class*="hamburgerBtn"]'));
+    expect(navList.className).toContain('showMenu');
+
+    const catalogLink = container.querySelector('a[href="/products"]');
+    catalogLink.addEventListener('click', (event) => event.preventDefault(), {
+      once: true,
+    });
+    fireEvent.click(catalogLink);
+
+    expect(navList.className).not.toContain('showMenu');
+  });
 });

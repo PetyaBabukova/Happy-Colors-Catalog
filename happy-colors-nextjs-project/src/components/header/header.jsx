@@ -38,6 +38,14 @@ export default function Header() {
   const handleRouteChange = useCallback(() => {
     setMobileMenuOpen(false);
   }, []);
+  const closeMobileMenu = useCallback(() => {
+    setMobileMenuOpen(false);
+  }, []);
+  const handleMainNavListClick = useCallback((event) => {
+    if (event.target.closest('a')) {
+      setMobileMenuOpen(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isFullAdmin) {
@@ -85,6 +93,7 @@ export default function Header() {
 
           {!mobileMenuOpen && (
             <button
+              type="button"
               className={styles.hamburgerBtn}
               aria-label="Отвори менюто"
               onClick={() => setMobileMenuOpen(true)}
@@ -93,7 +102,21 @@ export default function Header() {
             </button>
           )}
 
-          <ul className={`${styles.mainNavList} ${mobileMenuOpen ? styles.showMenu : ''}`}>
+          {mobileMenuOpen && (
+            <button
+              type="button"
+              className={styles.closeMenuBtn}
+              aria-label="Затвори менюто"
+              onClick={closeMobileMenu}
+            >
+              X
+            </button>
+          )}
+
+          <ul
+            className={`${styles.mainNavList} ${mobileMenuOpen ? styles.showMenu : ''}`}
+            onClick={handleMainNavListClick}
+          >
             <li><Link href="/">Начало</Link></li>
 
             <li className={styles.hasSubmenu}>
