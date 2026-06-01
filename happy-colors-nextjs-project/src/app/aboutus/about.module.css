@@ -1,72 +1,228 @@
 /* aboutus/about.module.css */
 
-.aboutSection {
-  display: flex;
-  gap: 1.5rem;
-  align-items: stretch;
-  margin-bottom: 3rem;
-}
-
-.aboutImage {
-  flex: 0 0 75%;
-  min-height: 500px;
-}
-
-.aboutPicture {
-  display: block;
+.aboutPage {
   width: 100%;
-  height: 100%;
+  max-width: none;
+  margin-top: 0;
 }
 
-.aboutHeroImage {
-  display: block;
+.heroSection {
+  position: relative;
+  display: flex;
+  min-height: clamp(420px, 34vw, 600px);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.heroPicture {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.heroImage {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
 }
 
-.aboutText {
-  flex: 1;
+.heroContent {
+  width: min(52rem, 48%);
+  margin-left: auto;
+  padding: clamp(1.5rem, 4vw, 4rem);
+  align-self: flex-end;
+}
+
+.contentSection,
+.closingSection {
+  width: min(1180px, calc(100% - (var(--page-inline-padding) * 2)));
+  margin: 0 auto;
+}
+
+.contentSection {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(22rem, 1.1fr);
+  gap: clamp(2.5rem, 5vw, 5rem);
+  align-items: stretch;
+  padding: clamp(2.5rem, 5vw, 4.5rem) 0 clamp(2rem, 4vw, 3rem);
+}
+
+.leftColumn,
+.rightColumn {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem 1rem 0;
 }
 
-.aboutText h1 {
-  text-align: left;
+.leftColumn {
+  justify-content: space-between;
+  gap: clamp(2rem, 4vw, 3.5rem);
 }
 
-.aboutSubtitle {
-  text-align: left;
+.rightColumn {
+  justify-content: space-between;
+  gap: clamp(1.25rem, 2.5vw, 1.75rem);
+}
+
+.storyText h2,
+.linksIntro h2 {
+  margin: 0 0 1rem;
+}
+
+.storyText p,
+.linksIntro p {
+  margin: 0 0 1rem;
+  color: var(--dark-green);
+  font-size: clamp(1.12rem, 1.7vw, 1.35rem);
+  line-height: 1.65;
+}
+
+.storyText p:last-child {
+  margin-bottom: 0;
+}
+
+.thankYou {
+  font-style: italic;
+}
+
+.highlightList {
+  align-self: flex-end;
+  display: grid;
+  gap: 0.85rem;
+  width: min(100%, 21rem);
+  margin-top: clamp(4.4rem, 5.8vw, 5.35rem);
+  margin-bottom: 0;
+  padding: 0;
+}
+
+.highlightList li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0;
+  color: var(--dark-green);
+  font-size: clamp(1.05rem, 1.35vw, 1.18rem);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.checkIcon {
+  flex: 0 0 auto;
+  color: var(--dark-green);
+}
+
+.linkGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.linkCard {
+  display: flex;
+  min-height: 8.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding: 1rem;
+  border: 1px solid rgba(1, 102, 77, 0.18);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.62);
+  color: var(--dark-green);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.linkCard:hover {
+  border-color: var(--dark-orange);
+  color: var(--dark-green);
+  box-shadow: 0 0.55rem 1.15rem rgba(1, 102, 77, 0.08);
+  transform: translateY(-2px);
+}
+
+.linkIcon {
+  color: var(--dark-green);
+  margin-bottom: 0.1rem;
+}
+
+.linkCard span {
+  color: var(--dark-green);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.linkCard small {
+  color: var(--dark-green);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.closingSection p {
   margin: 0;
+  color: var(--dark-green);
+  font-size: clamp(1.1rem, 1.7vw, 1.35rem);
+  line-height: 1.6;
+  text-align: center;
 }
 
-.homePageIntro{
-    font-size: 1.4rem;
+@media screen and (max-width: 980px) {
+  .heroContent {
+    width: min(36rem, 58%);
+  }
 
+  .contentSection {
+    grid-template-columns: 1fr;
+  }
+
+  .leftColumn,
+  .rightColumn {
+    gap: 1.5rem;
+  }
+
+  .highlightList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-self: stretch;
+    width: 100%;
+    margin-top: 0;
+  }
 }
 
 @media screen and (max-width: 768px) {
-
-  .aboutSection {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .aboutImage {
-    flex: none;
+  .heroSection {
+    display: block;
     min-height: 0;
+    aspect-ratio: auto;
+    overflow: visible;
   }
 
-  .aboutText {
-    gap: 0.75rem;
-    padding: 0 1.5rem 1rem;
+  .heroPicture {
+    position: relative;
+    inset: auto;
+    display: block;
+    z-index: auto;
+    width: 100%;
+    aspect-ratio: 1 / 1;
   }
 
-  .aboutPicture,
-  .aboutHeroImage {
-    height: auto;
+  .heroContent {
+    width: 100%;
+    margin: 0;
+    padding: 1.25rem 1rem 0;
+  }
+
+  .contentSection {
+    padding-top: 2rem;
+  }
+
+  .highlightList,
+  .linkGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .linkCard {
+    min-height: auto;
   }
 }
