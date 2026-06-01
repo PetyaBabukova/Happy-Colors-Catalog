@@ -269,19 +269,19 @@
         align-items: center;
         justify-content: center;
         margin-left: auto;
-        border: 1px solid var(--dark-green);
-        border-radius: 0.5em;
-        background-color: white;
+        border: 0;
+        background-color: transparent;
         color: var(--dark-green);
-        font-size: 1.25rem;
-        line-height: 1;
         cursor: pointer;
+        padding: 0;
+        transition:
+            color 0.2s ease,
+            transform 0.2s ease;
     }
 
     .closeMenuBtn:hover {
-        background-color: var(--dark-orange);
-        border-color: var(--dark-orange);
-        color: white;
+        color: var(--dark-orange);
+        transform: scale(1.08);
     }
 
 
