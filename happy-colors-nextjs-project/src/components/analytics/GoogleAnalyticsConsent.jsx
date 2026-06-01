@@ -14,9 +14,9 @@ function buildPagePath(pathname, search) {
   return `${pathname || '/'}${search ? `?${search}` : ''}`;
 }
 
-function queueGtag(...args) {
+function queueGtag() {
   window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push(args);
+  window.dataLayer.push(arguments);
 }
 
 export default function GoogleAnalyticsConsent({
@@ -55,6 +55,7 @@ export default function GoogleAnalyticsConsent({
     }
 
     window.gtag('event', 'page_view', {
+      send_to: measurementId,
       page_path: buildPagePath(pathname, search),
       page_location: window.location.href,
       page_title: document.title,
