@@ -248,17 +248,33 @@
         width: 2.25rem;
         height: 2.25rem;
         flex-shrink: 0;
-        display: block;
-        background: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        background: transparent;
         border: none;
         padding: 0;
+        color: var(--dark-green);
         cursor: pointer;
-        background-color: none;
+        box-shadow: none;
+        transform: none;
+        transition: color 0.2s ease;
     }
 
-    .hamburgerBtn img {
-        width: 100%;
-        height: 100%;
+    .hamburgerBtn:hover,
+    .hamburgerBtn:active,
+    .hamburgerBtn:focus {
+        background: transparent;
+        color: var(--dark-green);
+        box-shadow: none;
+        transform: none;
+    }
+
+    .hamburgerBtn:focus-visible {
+        color: var(--dark-orange);
+        outline: 2px solid var(--dark-orange);
+        outline-offset: 0.2rem;
     }
 
     .closeMenuBtn {
@@ -274,14 +290,25 @@
         color: var(--dark-green);
         cursor: pointer;
         padding: 0;
+        box-shadow: none;
         transition:
             color 0.2s ease,
             transform 0.2s ease;
     }
 
-    .closeMenuBtn:hover {
+    .closeMenuBtn:hover,
+    .closeMenuBtn:active,
+    .closeMenuBtn:focus {
+        background-color: transparent;
+        color: var(--dark-green);
+        box-shadow: none;
+        transform: none;
+    }
+
+    .closeMenuBtn:focus-visible {
         color: var(--dark-orange);
-        transform: scale(1.08);
+        outline: 2px solid var(--dark-orange);
+        outline-offset: 0.2rem;
     }
 
 

@@ -10,7 +10,7 @@ import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
 import { fetchAdminUsers } from '@/managers/usersAdminManager';
-import { X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 function HeaderRouteWatcher({ onRouteChange }) {
   const pathname = usePathname();
@@ -99,7 +99,7 @@ export default function Header() {
               aria-label="Отвори менюто"
               onClick={() => setMobileMenuOpen(true)}
             >
-              <Image src="/hamburger.svg" alt="Меню" width={64} height={64} />
+              <Menu aria-hidden="true" size={32} strokeWidth={1.8} />
             </button>
           )}
 
