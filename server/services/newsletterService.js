@@ -4,17 +4,21 @@ import { sendEmail } from '../helpers/sendEmail.js';
 import NewsletterSubscriber from '../models/NewsletterSubscriber.js';
 
 const MAX_EMAIL_LENGTH = 254;
-const ALLOWED_SUBSCRIBE_FIELDS = new Set(['email', 'consent', 'website']);
+const ALLOWED_SUBSCRIBE_FIELDS = new Set(['email', 'consent', 'website', 'formToken']);
 const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
+const SUBSCRIBE_TOKEN_PURPOSE = 'newsletter-subscribe';
+const SUBSCRIBE_TOKEN_MAX_AGE_SECONDS = 30 * 60;
+const DEFAULT_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS = process.env.NODE_ENV === 'test' ? 0 : 2;
+const LEGACY_REACTIVATION_HEURISTIC_MS = 24 * 60 * 60 * 1000;
 const GENERIC_SUBSCRIBE_MESSAGE = 'Успешно се абонирахте.';
-const DUPLICATE_SUBSCRIBE_MESSAGE = 'Вече имате абонамент за тази страница.';
 const GENERIC_UNSUBSCRIBE_MESSAGE = 'Успешно се отписахте.';
 
 export class NewsletterError extends Error {
-  constructor(message, statusCode = 400) {
+  constructor(message, statusCode = 400, code = 'newsletter_error') {
     super(message);
     this.name = 'NewsletterError';
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -30,6 +34,16 @@ function getNewsletterSecret() {
   }
 
   return secret;
+}
+
+function getSubscribeTokenMinAgeSeconds() {
+  const configuredValue = Number(process.env.NEWSLETTER_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS);
+
+  if (Number.isFinite(configuredValue) && configuredValue >= 0) {
+    return configuredValue;
+  }
+
+  return DEFAULT_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS;
 }
 
 function encodeBase64Url(value) {
@@ -50,6 +64,10 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
+}
+
+function nowInSeconds() {
+  return Math.floor(Date.now() / 1000);
 }
 
 function timingSafeEqualStrings(first, second) {
@@ -83,6 +101,14 @@ function assertSubscribePayload(payload) {
   }
 }
 
+export function isHoneypotSubscribePayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return false;
+  }
+
+  return Boolean(String(payload.website ?? '').trim());
+}
+
 function assertValidEmail(email) {
   if (!email || email.length > MAX_EMAIL_LENGTH || !validator.isEmail(email)) {
     throw new NewsletterError('Моля, въведете валиден email адрес.');
@@ -94,6 +120,7 @@ function isDuplicateKeyError(error) {
 }
 
 async function upsertSubscriber(email) {
+  const now = new Date();
   const existing = await NewsletterSubscriber.findOne({ email });
 
   if (!existing) {
@@ -101,7 +128,12 @@ async function upsertSubscriber(email) {
       const subscriber = await NewsletterSubscriber.create({
         email,
         status: 'active',
-        consentGivenAt: new Date(),
+        consentGivenAt: now,
+        firstSubscribedAt: now,
+        lastSubscribedAt: now,
+        subscribeCount: 1,
+        hasEverUnsubscribed: false,
+        lastStatusChangedAt: now,
       });
 
       return { subscriber, shouldSendWelcomeEmail: true, alreadyActive: false };
@@ -116,7 +148,12 @@ async function upsertSubscriber(email) {
 
   if (existing.status === 'unsubscribed') {
     existing.status = 'active';
-    existing.consentGivenAt = new Date();
+    existing.consentGivenAt = now;
+    existing.firstSubscribedAt = existing.firstSubscribedAt || existing.createdAt || existing.consentGivenAt;
+    existing.lastSubscribedAt = now;
+    existing.subscribeCount = Math.max(1, Number(existing.subscribeCount || 1)) + 1;
+    existing.hasEverUnsubscribed = true;
+    existing.lastStatusChangedAt = now;
     existing.unsubscribedAt = null;
     existing.unsubscribeTokenVersion += 1;
     existing.welcomeEmailSentAt = null;
@@ -137,7 +174,21 @@ export function createUnsubscribeToken(subscriber) {
     JSON.stringify({
       sub: String(subscriber?._id || ''),
       ver: Number(subscriber?.unsubscribeTokenVersion || 1),
-      iat: Math.floor(Date.now() / 1000),
+      iat: nowInSeconds(),
+    })
+  );
+  const signature = signPayload(payload);
+
+  return `${payload}.${signature}`;
+}
+
+export function createSubscribeFormToken() {
+  const payload = encodeBase64Url(
+    JSON.stringify({
+      purpose: SUBSCRIBE_TOKEN_PURPOSE,
+      iat: nowInSeconds(),
+      // Unique per form render, but intentionally not single-use without a server-side nonce store.
+      nonce: crypto.randomBytes(16).toString('base64url'),
     })
   );
   const signature = signPayload(payload);
@@ -210,19 +261,65 @@ export function verifyUnsubscribeToken(token) {
   return decoded;
 }
 
-export async function subscribeToNewsletter(payload) {
-  assertSubscribePayload(payload);
+export function verifySubscribeFormToken(token, { nowSeconds = nowInSeconds() } = {}) {
+  const safeToken = String(token ?? '').trim();
+  const [payload, signature, extra] = safeToken.split('.');
 
-  const honeypot = String(payload.website ?? '').trim();
-
-  if (honeypot) {
-    return { message: GENERIC_SUBSCRIBE_MESSAGE, honeypot: true };
+  if (!payload || !signature || extra !== undefined) {
+    throw new NewsletterError('Невалидни данни за абонамент.', 400, 'invalid_form_token');
   }
+
+  const expectedSignature = signPayload(payload);
+
+  if (!timingSafeEqualStrings(signature, expectedSignature)) {
+    throw new NewsletterError('Невалидни данни за абонамент.', 400, 'invalid_form_token');
+  }
+
+  const decoded = safeJsonParse(decodeBase64Url(payload));
+
+  if (
+    !decoded ||
+    decoded.purpose !== SUBSCRIBE_TOKEN_PURPOSE ||
+    typeof decoded.iat !== 'number' ||
+    typeof decoded.nonce !== 'string' ||
+    !decoded.nonce
+  ) {
+    throw new NewsletterError('Невалидни данни за абонамент.', 400, 'invalid_form_token');
+  }
+
+  const ageSeconds = nowSeconds - decoded.iat;
+
+  if (ageSeconds > SUBSCRIBE_TOKEN_MAX_AGE_SECONDS) {
+    throw new NewsletterError('Невалидни данни за абонамент.', 400, 'expired_form_token');
+  }
+
+  if (ageSeconds < getSubscribeTokenMinAgeSeconds()) {
+    throw new NewsletterError('Невалидни данни за абонамент.', 400, 'too_new_form_token');
+  }
+
+  return decoded;
+}
+
+export function getLegacyReactivationHeuristic(firstDate, consentDate) {
+  if (!firstDate || !consentDate) {
+    return false;
+  }
+
+  return consentDate.getTime() - firstDate.getTime() > LEGACY_REACTIVATION_HEURISTIC_MS;
+}
+
+export async function subscribeToNewsletter(payload) {
+  if (isHoneypotSubscribePayload(payload)) {
+    return { message: GENERIC_SUBSCRIBE_MESSAGE };
+  }
+
+  assertSubscribePayload(payload);
+  verifySubscribeFormToken(payload.formToken);
 
   const email = normalizeEmail(payload.email);
   assertValidEmail(email);
 
-  const { subscriber, shouldSendWelcomeEmail, alreadyActive } = await upsertSubscriber(email);
+  const { subscriber, shouldSendWelcomeEmail } = await upsertSubscriber(email);
 
   if (shouldSendWelcomeEmail) {
     await sendWelcomeEmail(subscriber);
@@ -231,8 +328,7 @@ export async function subscribeToNewsletter(payload) {
   }
 
   return {
-    message: alreadyActive ? DUPLICATE_SUBSCRIBE_MESSAGE : GENERIC_SUBSCRIBE_MESSAGE,
-    status: alreadyActive ? 'already_subscribed' : 'subscribed',
+    message: GENERIC_SUBSCRIBE_MESSAGE,
   };
 }
 
@@ -259,6 +355,8 @@ export async function unsubscribeFromNewsletter(payload = {}) {
   if (subscriber.status !== 'unsubscribed') {
     subscriber.status = 'unsubscribed';
     subscriber.unsubscribedAt = new Date();
+    subscriber.hasEverUnsubscribed = true;
+    subscriber.lastStatusChangedAt = subscriber.unsubscribedAt;
     await subscriber.save();
   }
 

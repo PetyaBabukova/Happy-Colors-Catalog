@@ -1,10 +1,23 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Clock, Eye, RefreshCw, Users } from 'lucide-react';
+import {
+  Activity,
+  BarChart3,
+  Clock,
+  Eye,
+  MailCheck,
+  RefreshCw,
+  UserPlus,
+  Users,
+  UserX,
+} from 'lucide-react';
 import MessageBox from '@/components/ui/MessageBox';
 import { useAuth } from '@/context/AuthContext';
-import { fetchAnalyticsSummary } from '@/managers/analyticsManager';
+import {
+  fetchAnalyticsSummary,
+  fetchNewsletterSubscriberAnalytics,
+} from '@/managers/analyticsManager';
 import styles from './analytics.module.css';
 
 function formatNumber(value) {
@@ -40,6 +53,20 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatBadge(value) {
+  const labels = {
+    new: 'Нов',
+    subscribed: 'Абониран',
+    unsubscribed: 'Отписан',
+  };
+
+  return labels[value] || '';
+}
+
+function formatSubscriberStatus(value) {
+  return value === 'unsubscribed' ? 'Отписан' : 'Активен';
 }
 
 function MetricCard({ icon: Icon, label, value, detail }) {
@@ -85,12 +112,90 @@ function PeriodCard({ period }) {
   );
 }
 
+function SubscriberAnalyticsSection({ analytics }) {
+  if (!analytics) {
+    return null;
+  }
+
+  return (
+    <>
+      <section className={styles.subscriberSummary} aria-label="Абонати за бюлетина">
+        <MetricCard
+          icon={MailCheck}
+          label="Абонати"
+          value={formatNumber(analytics.summary?.active)}
+          detail={`${formatNumber(analytics.summary?.total)} общо`}
+        />
+        <MetricCard
+          icon={UserPlus}
+          label="Нови"
+          value={formatNumber(analytics.summary?.new)}
+          detail="последните 30 дни"
+        />
+        <MetricCard
+          icon={UserX}
+          label="Отписани"
+          value={formatNumber(analytics.summary?.unsubscribed)}
+          detail={`${formatNumber(analytics.summary?.resubscribed)} повторно абонирани`}
+        />
+      </section>
+
+      <section className={styles.subscriberPanel}>
+        <h2>Абонати</h2>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Статус</th>
+                <th>Етикет</th>
+                <th>Първо абониране</th>
+                <th>Последно абониране</th>
+                <th>Отписване</th>
+                <th>Welcome email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(analytics.subscribers || []).map((subscriber) => (
+                <tr key={subscriber.id}>
+                  <td>
+                    <span className={styles.primaryCell}>{subscriber.email}</span>
+                  </td>
+                  <td>{formatSubscriberStatus(subscriber.status)}</td>
+                  <td>
+                    {subscriber.badge ? (
+                      <span className={`${styles.badge} ${styles[`badge_${subscriber.badge}`] || ''}`}>
+                        {formatBadge(subscriber.badge)}
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>{formatDateTime(subscriber.firstSubscribedAt)}</td>
+                  <td>{formatDateTime(subscriber.lastSubscribedAt)}</td>
+                  <td>{formatDateTime(subscriber.unsubscribedAt)}</td>
+                  <td>{formatDateTime(subscriber.welcomeEmailSentAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {analytics.subscribers?.length ? null : (
+          <p className={styles.emptyText}>Все още няма абонати за бюлетина.</p>
+        )}
+      </section>
+    </>
+  );
+}
+
 export default function AnalyticsClientPage() {
   const { user, loading: authLoading } = useAuth();
   const [summary, setSummary] = useState(null);
+  const [subscriberAnalytics, setSubscriberAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [subscriberError, setSubscriberError] = useState('');
 
   const isFullAdmin = user?.role === 'full_admin';
 
@@ -101,17 +206,31 @@ export default function AnalyticsClientPage() {
       }
 
       setError('');
+      setSubscriberError('');
       setLoading(!refresh);
       setRefreshing(refresh);
 
-      try {
-        setSummary(await fetchAnalyticsSummary({ refresh }));
-      } catch (err) {
-        setError(err.message || 'Неуспешно зареждане на аналитичните данни.');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      const summaryRequest = fetchAnalyticsSummary({ refresh })
+        .then((value) => {
+          setSummary(value);
+        })
+        .catch((reason) => {
+          setError(reason?.message || 'Неуспешно зареждане на аналитичните данни.');
+        })
+        .finally(() => {
+          setLoading(false);
+          setRefreshing(false);
+        });
+
+      const subscriberRequest = fetchNewsletterSubscriberAnalytics()
+        .then((value) => {
+          setSubscriberAnalytics(value);
+        })
+        .catch((reason) => {
+          setSubscriberError(reason?.message || 'Неуспешно зареждане на данните за абонати.');
+        });
+
+      await Promise.allSettled([summaryRequest, subscriberRequest]);
     },
     [isFullAdmin]
   );
@@ -163,6 +282,7 @@ export default function AnalyticsClientPage() {
       </header>
 
       {error ? <MessageBox type="error" message={error} /> : null}
+      {subscriberError ? <MessageBox type="error" message={subscriberError} /> : null}
 
       {loading && !summary ? (
         <p className={styles.statusText}>Зареждане на аналитичните данни...</p>
@@ -235,7 +355,7 @@ export default function AnalyticsClientPage() {
               )}
             </article>
 
-            <article className={styles.tablePanel}>
+            <article className={`${styles.tablePanel} ${styles.compactTablePanel}`}>
               <h2>Източници за 30 дни</h2>
               <div className={styles.tableWrap}>
                 <table>
@@ -264,6 +384,8 @@ export default function AnalyticsClientPage() {
           </section>
         </>
       ) : null}
+
+      <SubscriberAnalyticsSection analytics={subscriberAnalytics} />
     </main>
   );
 }

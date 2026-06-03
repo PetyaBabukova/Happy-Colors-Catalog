@@ -1,18 +1,47 @@
+import crypto from 'crypto';
 import express from 'express';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
+  createSubscribeFormToken,
   createUnsubscribePageUrl,
+  isHoneypotSubscribePayload,
   subscribeToNewsletter,
   unsubscribeFromNewsletter,
+  verifySubscribeFormToken,
 } from '../services/newsletterService.js';
 
 const router = express.Router();
+const subscribeRateLimitMessage = 'Твърде много опити за абониране. Моля, опитайте отново след малко.';
 
 const subscribeLimiter = createRateLimiter({
   keyPrefix: 'newsletter-subscribe',
   windowMs: 10 * 60 * 1000,
   max: 5,
-  message: 'Твърде много опити за абониране. Моля, опитайте отново след малко.',
+  message: subscribeRateLimitMessage,
+});
+
+const subscribeTokenLimiter = createRateLimiter({
+  keyPrefix: 'newsletter-subscribe-token',
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: subscribeRateLimitMessage,
+});
+
+const subscribeEmailLimiter = createRateLimiter({
+  keyPrefix: 'newsletter-subscribe-email',
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: subscribeRateLimitMessage,
+  keyGenerator(req, clientIp) {
+    if (typeof req.body?.email !== 'string') {
+      return clientIp;
+    }
+
+    const secret = process.env.NEWSLETTER_UNSUBSCRIBE_SECRET || 'newsletter-subscribe-email-rate-limit';
+    const normalizedEmail = req.body.email.trim().toLowerCase();
+
+    return crypto.createHmac('sha256', secret).update(normalizedEmail).digest('hex');
+  },
 });
 
 const unsubscribeLimiter = createRateLimiter({
@@ -42,14 +71,38 @@ function sendError(res, error) {
     return res.status(500).json({ message: 'Възникна грешка. Моля, опитайте отново.' });
   }
 
-  return res.status(statusCode).json({ message: error.message });
+  return res.status(statusCode).json({ message: error.message, code: error.code });
 }
+
+router.get('/subscribe-token', subscribeTokenLimiter, (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'private, max-age=0, no-store');
+
+    return res.status(200).json({ token: createSubscribeFormToken() });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
 
 router.post('/subscribe', subscribeLimiter, requireJson, async (req, res) => {
   try {
-    const result = await subscribeToNewsletter(req.body);
+    if (isHoneypotSubscribePayload(req.body)) {
+      const result = await subscribeToNewsletter(req.body);
 
-    return res.status(200).json({ message: result.message, status: result.status });
+      return res.status(200).json({ message: result.message });
+    }
+
+    verifySubscribeFormToken(req.body?.formToken);
+
+    return subscribeEmailLimiter(req, res, async () => {
+      try {
+        const result = await subscribeToNewsletter(req.body);
+
+        return res.status(200).json({ message: result.message });
+      } catch (error) {
+        return sendError(res, error);
+      }
+    });
   } catch (error) {
     return sendError(res, error);
   }

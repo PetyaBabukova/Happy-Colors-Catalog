@@ -36,6 +36,15 @@ async function createSubscriber(overrides = {}) {
   });
 }
 
+async function getSubscribeToken(app, ip = '203.0.113.200') {
+  const res = await request(app)
+    .get('/newsletter/subscribe-token')
+    .set('x-forwarded-for', ip)
+    .expect(200);
+
+  return res.body.token;
+}
+
 async function waitUntil(predicate) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (predicate()) {
@@ -729,7 +738,12 @@ describe('newsletter send integration', () => {
     await request(app)
       .post('/newsletter/subscribe')
       .set('x-forwarded-for', ip)
-      .send({ email: 'new-subscriber@example.com', consent: true, website: '' })
+      .send({
+        email: 'new-subscriber@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.201'),
+      })
       .expect(200);
   });
 
@@ -763,7 +777,12 @@ describe('newsletter send integration', () => {
     await request(app)
       .post('/newsletter/subscribe')
       .set('x-forwarded-for', ip)
-      .send({ email: 'after-broadcast-limit@example.com', consent: true, website: '' })
+      .send({
+        email: 'after-broadcast-limit@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.202'),
+      })
       .expect(200);
   });
 
