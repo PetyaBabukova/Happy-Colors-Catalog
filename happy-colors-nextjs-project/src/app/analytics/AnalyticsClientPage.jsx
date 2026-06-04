@@ -36,6 +36,12 @@ function formatDuration(seconds) {
   return `${minutes} мин ${restSeconds} сек`;
 }
 
+function formatPercent(value) {
+  return `${new Intl.NumberFormat('bg-BG', {
+    maximumFractionDigits: 1,
+  }).format(Number(value || 0))}%`;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return '-';
@@ -53,6 +59,17 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatDeviceCategory(value) {
+  const labels = {
+    desktop: 'Компютър',
+    mobile: 'Мобилно',
+    tablet: 'Таблет',
+    smarttv: 'Smart TV',
+  };
+
+  return labels[String(value || '').toLowerCase()] || value || 'Неизвестно';
 }
 
 function formatBadge(value) {
@@ -355,32 +372,63 @@ export default function AnalyticsClientPage() {
               )}
             </article>
 
-            <article className={`${styles.tablePanel} ${styles.compactTablePanel}`}>
-              <h2>Източници за 30 дни</h2>
-              <div className={styles.tableWrap}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Канал</th>
-                      <th>Сесии</th>
-                      <th>Потребители</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(summary.trafficSources || []).map((source, index) => (
-                      <tr key={`${source.source}-${index}`}>
-                        <td>{source.source}</td>
-                        <td>{formatNumber(source.sessions)}</td>
-                        <td>{formatNumber(source.activeUsers)}</td>
+            <div className={styles.sidePanels}>
+              <article className={`${styles.tablePanel} ${styles.compactTablePanel}`}>
+                <h2>Източници за 30 дни</h2>
+                <div className={styles.tableWrap}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Канал</th>
+                        <th>Сесии</th>
+                        <th>Потребители</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {summary.trafficSources?.length ? null : (
-                <p className={styles.emptyText}>Все още няма данни за източници.</p>
-              )}
-            </article>
+                    </thead>
+                    <tbody>
+                      {(summary.trafficSources || []).map((source, index) => (
+                        <tr key={`${source.source}-${index}`}>
+                          <td>{source.source}</td>
+                          <td>{formatNumber(source.sessions)}</td>
+                          <td>{formatNumber(source.activeUsers)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {summary.trafficSources?.length ? null : (
+                  <p className={styles.emptyText}>Все още няма данни за източници.</p>
+                )}
+              </article>
+
+              <article className={`${styles.tablePanel} ${styles.compactTablePanel}`}>
+                <h2>Устройства за 30 дни</h2>
+                <div className={styles.tableWrap}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Устройство</th>
+                        <th>Сесии</th>
+                        <th>Потребители</th>
+                        <th>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(summary.devices || []).map((device, index) => (
+                        <tr key={`${device.category}-${index}`}>
+                          <td>{formatDeviceCategory(device.category)}</td>
+                          <td>{formatNumber(device.sessions)}</td>
+                          <td>{formatNumber(device.activeUsers)}</td>
+                          <td>{formatPercent(device.percent)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {summary.devices?.length ? null : (
+                  <p className={styles.emptyText}>Все още няма данни за устройства.</p>
+                )}
+              </article>
+            </div>
           </section>
         </>
       ) : null}

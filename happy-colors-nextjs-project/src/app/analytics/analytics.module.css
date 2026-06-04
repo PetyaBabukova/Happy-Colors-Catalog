@@ -92,7 +92,7 @@
 
 .subscriberSummary {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 1rem;
+  margin: 1.5rem 0 1rem;
 }
 
 .periodGrid {
@@ -102,6 +102,14 @@
 
 .tablesGrid {
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr);
+  align-items: stretch;
+}
+
+.sidePanels {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .metricCard,
@@ -257,8 +265,13 @@
   .summaryStrip,
   .subscriberSummary,
   .periodGrid,
-  .tablesGrid {
+  .tablesGrid,
+  .sidePanels {
     grid-template-columns: 1fr;
+  }
+
+  .sidePanels {
+    grid-template-rows: auto;
   }
 }
 

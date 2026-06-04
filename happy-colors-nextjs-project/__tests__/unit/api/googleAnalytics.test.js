@@ -40,6 +40,7 @@ describe('googleAnalytics API helper', () => {
       periods: [],
       topPages: [],
       trafficSources: [],
+      devices: [],
       realtime: { activeUsers: 0 },
     });
     expect(fetch).not.toHaveBeenCalled();
@@ -67,13 +68,19 @@ describe('googleAnalytics API helper', () => {
       .mockResolvedValueOnce(
         buildReportResponse([buildMetricRow([18, 12], ['Organic Search'])])
       )
+      .mockResolvedValueOnce(
+        buildReportResponse([
+          buildMetricRow([60, 45], ['mobile']),
+          buildMetricRow([40, 30], ['desktop']),
+        ])
+      )
       .mockResolvedValueOnce(buildReportResponse([buildMetricRow([3])]));
 
     const { getGoogleAnalyticsSummary } = await loadGoogleAnalyticsHelper();
     const firstSummary = await getGoogleAnalyticsSummary();
     const cachedSummary = await getGoogleAnalyticsSummary();
 
-    expect(fetch).toHaveBeenCalledTimes(7);
+    expect(fetch).toHaveBeenCalledTimes(8);
     expect(fetch.mock.calls[0]).toEqual([
       'https://oauth2.googleapis.com/token',
       expect.objectContaining({
@@ -90,6 +97,10 @@ describe('googleAnalytics API helper', () => {
       realtime: { activeUsers: 3 },
       topPages: [{ path: '/products', title: 'Каталог', pageViews: 45, activeUsers: 20 }],
       trafficSources: [{ source: 'Organic Search', sessions: 18, activeUsers: 12 }],
+      devices: [
+        { category: 'mobile', sessions: 60, activeUsers: 45, percent: 60 },
+        { category: 'desktop', sessions: 40, activeUsers: 30, percent: 40 },
+      ],
     });
     expect(firstSummary.periods).toHaveLength(3);
     expect(cachedSummary).toMatchObject({
@@ -118,7 +129,7 @@ describe('googleAnalytics API helper', () => {
     await getGoogleAnalyticsSummary();
     await getGoogleAnalyticsSummary({ forceRefresh: true });
 
-    expect(fetch).toHaveBeenCalledTimes(13);
+    expect(fetch).toHaveBeenCalledTimes(15);
     expect(
       fetch.mock.calls.filter(([url]) => url === 'https://oauth2.googleapis.com/token')
     ).toHaveLength(1);
@@ -197,6 +208,7 @@ describe('googleAnalytics API helper', () => {
           expires_in: 30,
         }),
       })
+      .mockResolvedValueOnce(buildReportResponse())
       .mockResolvedValueOnce(buildReportResponse())
       .mockResolvedValueOnce(buildReportResponse())
       .mockResolvedValueOnce(buildReportResponse())

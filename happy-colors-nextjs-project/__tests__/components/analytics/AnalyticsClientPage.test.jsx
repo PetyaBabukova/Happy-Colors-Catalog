@@ -41,6 +41,20 @@ const configuredSummary = {
       activeUsers: 7,
     },
   ],
+  devices: [
+    {
+      category: 'mobile',
+      sessions: 12,
+      activeUsers: 10,
+      percent: 60,
+    },
+    {
+      category: 'desktop',
+      sessions: 8,
+      activeUsers: 6,
+      percent: 40,
+    },
+  ],
 };
 
 const subscriberAnalytics = {
@@ -115,6 +129,9 @@ describe('AnalyticsClientPage', () => {
     expect(await screen.findByText('Catalog')).toBeInTheDocument();
     expect(screen.getByText('/products')).toBeInTheDocument();
     expect(screen.getByText('Organic Search')).toBeInTheDocument();
+    expect(screen.getByText('Мобилно')).toBeInTheDocument();
+    expect(screen.getByText('Компютър')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
     expect(screen.getByText('new@example.com')).toBeInTheDocument();
     expect(screen.getByText('old@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('Отписан').length).toBeGreaterThan(0);
@@ -130,6 +147,7 @@ describe('AnalyticsClientPage', () => {
       periods: [],
       topPages: [],
       trafficSources: [],
+      devices: [],
       realtime: { activeUsers: 0 },
     });
 
