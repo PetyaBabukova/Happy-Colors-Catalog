@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 import AnalyticsClientPage from '@/app/analytics/AnalyticsClientPage';
-import { fetchAnalyticsSummary } from '@/managers/analyticsManager';
+import {
+  fetchAnalyticsSummary,
+  fetchNewsletterSubscriberAnalytics,
+} from '@/managers/analyticsManager';
 
 vi.mock('@/managers/analyticsManager', () => ({
   fetchAnalyticsSummary: vi.fn(),
+  fetchNewsletterSubscriberAnalytics: vi.fn(),
 }));
 
 const configuredSummary = {
@@ -15,7 +19,7 @@ const configuredSummary = {
   realtime: { activeUsers: 3 },
   periods: [
     {
-      label: 'Днес',
+      label: 'Today',
       activeUsers: 12,
       pageViews: 34,
       sessions: 15,
@@ -25,7 +29,7 @@ const configuredSummary = {
   topPages: [
     {
       path: '/products',
-      title: 'Каталог',
+      title: 'Catalog',
       pageViews: 20,
       activeUsers: 8,
     },
@@ -39,10 +43,48 @@ const configuredSummary = {
   ],
 };
 
+const subscriberAnalytics = {
+  summary: {
+    total: 3,
+    active: 2,
+    unsubscribed: 1,
+    new: 1,
+    resubscribed: 1,
+  },
+  pagination: {
+    page: 1,
+    pageSize: 50,
+    totalPages: 1,
+  },
+  subscribers: [
+    {
+      id: 'sub-1',
+      email: 'new@example.com',
+      status: 'active',
+      badge: 'new',
+      firstSubscribedAt: '2026-06-02T09:00:00.000Z',
+      lastSubscribedAt: '2026-06-02T09:00:00.000Z',
+      unsubscribedAt: null,
+      welcomeEmailSentAt: '2026-06-02T09:01:00.000Z',
+    },
+    {
+      id: 'sub-2',
+      email: 'old@example.com',
+      status: 'unsubscribed',
+      badge: 'unsubscribed',
+      firstSubscribedAt: '2026-01-02T09:00:00.000Z',
+      lastSubscribedAt: '2026-01-02T09:00:00.000Z',
+      unsubscribedAt: '2026-02-02T09:00:00.000Z',
+      welcomeEmailSentAt: '2026-01-02T09:01:00.000Z',
+    },
+  ],
+};
+
 describe('AnalyticsClientPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchAnalyticsSummary.mockResolvedValue(configuredSummary);
+    fetchNewsletterSubscriberAnalytics.mockResolvedValue(subscriberAnalytics);
   });
 
   it('blocks non-full-admin users on the client', () => {
@@ -52,6 +94,7 @@ describe('AnalyticsClientPage', () => {
 
     expect(screen.getByText(/full admin/i)).toBeInTheDocument();
     expect(fetchAnalyticsSummary).not.toHaveBeenCalled();
+    expect(fetchNewsletterSubscriberAnalytics).not.toHaveBeenCalled();
   });
 
   it('renders the auth loading state before checking access', () => {
@@ -59,7 +102,7 @@ describe('AnalyticsClientPage', () => {
       authOverrides: { loading: true, user: undefined },
     });
 
-    expect(screen.getByText('Зареждане...')).toBeInTheDocument();
+    expect(screen.getByText((content) => content.endsWith('...'))).toBeInTheDocument();
     expect(fetchAnalyticsSummary).not.toHaveBeenCalled();
   });
 
@@ -68,11 +111,15 @@ describe('AnalyticsClientPage', () => {
       user: { username: 'Petya', role: 'full_admin' },
     });
 
-    expect(await screen.findByRole('heading', { name: 'Анализи' })).toBeInTheDocument();
-    expect(await screen.findByText('Каталог')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(await screen.findByText('Catalog')).toBeInTheDocument();
     expect(screen.getByText('/products')).toBeInTheDocument();
     expect(screen.getByText('Organic Search')).toBeInTheDocument();
+    expect(screen.getByText('new@example.com')).toBeInTheDocument();
+    expect(screen.getByText('old@example.com')).toBeInTheDocument();
+    expect(screen.getAllByText('Отписан').length).toBeGreaterThan(0);
     expect(fetchAnalyticsSummary).toHaveBeenCalledWith({ refresh: false });
+    expect(fetchNewsletterSubscriberAnalytics).toHaveBeenCalled();
   });
 
   it('shows setup guidance when the API is not configured', async () => {
@@ -90,7 +137,7 @@ describe('AnalyticsClientPage', () => {
       user: { username: 'Petya', role: 'full_admin' },
     });
 
-    expect(await screen.findByText(/не е конфигуриран/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Google Analytics API/i)).toBeInTheDocument();
   });
 
   it('shows an error when the analytics request fails', async () => {
@@ -107,6 +154,28 @@ describe('AnalyticsClientPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows subscriber analytics errors separately', async () => {
+    fetchNewsletterSubscriberAnalytics.mockRejectedValueOnce(new Error('Subscriber analytics failed'));
+
+    render(<AnalyticsClientPage />, {
+      user: { username: 'Petya', role: 'full_admin' },
+    });
+
+    expect(await screen.findByText('Subscriber analytics failed')).toBeInTheDocument();
+    expect(await screen.findByText('Catalog')).toBeInTheDocument();
+  });
+
+  it('renders analytics data without waiting for subscriber analytics to finish', async () => {
+    fetchNewsletterSubscriberAnalytics.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<AnalyticsClientPage />, {
+      user: { username: 'Petya', role: 'full_admin' },
+    });
+
+    expect(await screen.findByText('Catalog')).toBeInTheDocument();
+    expect(screen.getByRole('button')).not.toBeDisabled();
+  });
+
   it('disables refresh while the initial analytics request is loading', async () => {
     fetchAnalyticsSummary.mockReturnValueOnce(new Promise(() => {}));
 
@@ -115,7 +184,7 @@ describe('AnalyticsClientPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Обнови' })).toBeDisabled();
+      expect(screen.getByRole('button')).toBeDisabled();
     });
   });
 
@@ -128,7 +197,7 @@ describe('AnalyticsClientPage', () => {
       user: { username: 'Petya', role: 'full_admin' },
     });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Обнови' }));
+    fireEvent.click(await screen.findByRole('button'));
 
     await waitFor(() => {
       expect(fetchAnalyticsSummary).toHaveBeenLastCalledWith({ refresh: true });

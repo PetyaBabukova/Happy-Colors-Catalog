@@ -17,3 +17,23 @@ export async function fetchAnalyticsSummary({ refresh = false } = {}) {
 
   return data;
 }
+
+export async function fetchNewsletterSubscriberAnalytics({ page = 1, pageSize = 50 } = {}) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const res = await fetch(`${baseURL}/newsletter/subscribers/analytics?${params.toString()}`, {
+    credentials: 'include',
+  });
+  const data = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw createResponseError(
+      data?.message || 'Неуспешно зареждане на данните за абонати.',
+      data
+    );
+  }
+
+  return data;
+}

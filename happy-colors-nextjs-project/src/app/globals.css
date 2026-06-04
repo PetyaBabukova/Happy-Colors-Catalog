@@ -186,10 +186,12 @@ button {
   align-self: end;
 }
 
-button:hover {
-  background-color: var(--dark-orange);
-  color: white;
-  box-shadow: 0 0 0.4em var(--dark-orange);
+@media (hover: hover) and (pointer: fine) {
+  button:hover {
+    background-color: var(--dark-orange);
+    color: white;
+    box-shadow: 0 0 0.4em var(--dark-orange);
+  }
 }
 
 

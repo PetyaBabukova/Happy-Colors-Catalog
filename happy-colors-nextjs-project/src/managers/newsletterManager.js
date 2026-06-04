@@ -1,5 +1,21 @@
 import baseURL from '@/config';
-import { readResponseJsonSafely } from '@/utils/errorHandler';
+import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
+
+export async function getNewsletterSubscribeToken() {
+  const res = await fetch(`${baseURL}/newsletter/subscribe-token`, {
+    credentials: 'include',
+  });
+  const responseData = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw createResponseError(
+      responseData?.message || 'Не успяхме да подготвим формата за абонамент.',
+      responseData
+    );
+  }
+
+  return responseData;
+}
 
 export async function subscribeToNewsletter(data) {
   const res = await fetch(`${baseURL}/newsletter/subscribe`, {
@@ -11,7 +27,29 @@ export async function subscribeToNewsletter(data) {
   const responseData = await readResponseJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(responseData?.message || 'Не успяхме да запишем абонамента.');
+    throw createResponseError(
+      responseData?.message || 'Не успяхме да запишем абонамента.',
+      responseData
+    );
+  }
+
+  return responseData;
+}
+
+export async function confirmNewsletterSubscription(token) {
+  const res = await fetch(`${baseURL}/newsletter/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+
+  const responseData = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw createResponseError(
+      responseData?.message || 'Не успяхме да потвърдим абонамента.',
+      responseData
+    );
   }
 
   return responseData;
@@ -27,7 +65,10 @@ export async function unsubscribeFromNewsletter(token) {
   const responseData = await readResponseJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(responseData?.message || 'Не успяхме да ви отпишем.');
+    throw createResponseError(
+      responseData?.message || 'Не успяхме да ви отпишем.',
+      responseData
+    );
   }
 
   return responseData;
