@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 import AnalyticsClientPage from '@/app/analytics/AnalyticsClientPage';
 import {
+  deleteNewsletterSubscriber,
   fetchAnalyticsSummary,
   fetchNewsletterSubscriberAnalytics,
 } from '@/managers/analyticsManager';
 
 vi.mock('@/managers/analyticsManager', () => ({
+  deleteNewsletterSubscriber: vi.fn(),
   fetchAnalyticsSummary: vi.fn(),
   fetchNewsletterSubscriberAnalytics: vi.fn(),
 }));
@@ -97,6 +99,7 @@ const subscriberAnalytics = {
 describe('AnalyticsClientPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    deleteNewsletterSubscriber.mockResolvedValue({ message: 'Subscriber deleted.' });
     fetchAnalyticsSummary.mockResolvedValue(configuredSummary);
     fetchNewsletterSubscriberAnalytics.mockResolvedValue(subscriberAnalytics);
   });
@@ -134,6 +137,7 @@ describe('AnalyticsClientPage', () => {
     expect(screen.getByText('60%')).toBeInTheDocument();
     expect(screen.getByText('new@example.com')).toBeInTheDocument();
     expect(screen.getByText('old@example.com')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Изтрий/i })).toHaveLength(2);
     expect(screen.getAllByText('Отписан').length).toBeGreaterThan(0);
     expect(fetchAnalyticsSummary).toHaveBeenCalledWith({ refresh: false });
     expect(fetchNewsletterSubscriberAnalytics).toHaveBeenCalled();
@@ -220,5 +224,34 @@ describe('AnalyticsClientPage', () => {
     await waitFor(() => {
       expect(fetchAnalyticsSummary).toHaveBeenLastCalledWith({ refresh: true });
     });
+  });
+
+  it('deletes a subscriber after confirmation and refreshes subscriber analytics', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
+    fetchNewsletterSubscriberAnalytics
+      .mockResolvedValueOnce(subscriberAnalytics)
+      .mockResolvedValueOnce({
+        ...subscriberAnalytics,
+        summary: {
+          ...subscriberAnalytics.summary,
+          total: 2,
+        },
+        subscribers: subscriberAnalytics.subscribers.slice(1),
+      });
+
+    render(<AnalyticsClientPage />, {
+      user: { username: 'Petya', role: 'full_admin' },
+    });
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Изтрий/i }))[0]);
+
+    await waitFor(() => {
+      expect(deleteNewsletterSubscriber).toHaveBeenCalledWith('sub-1');
+    });
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Сигурни ли сте, че искате да изтриете new@example.com?'
+    );
+    expect(fetchNewsletterSubscriberAnalytics).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('old@example.com')).toBeInTheDocument();
   });
 });

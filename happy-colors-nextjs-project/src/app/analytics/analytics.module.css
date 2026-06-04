@@ -47,6 +47,33 @@
   white-space: nowrap;
 }
 
+.deleteSubscriberButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(168, 66, 38, 0.45);
+  border-radius: 4px;
+  background: rgba(255, 245, 236, 0.92);
+  color: var(--dark-orange);
+}
+
+.deleteSubscriberButton:hover,
+.deleteSubscriberButton:focus-visible {
+  border-color: var(--dark-orange);
+  background: var(--dark-orange);
+  color: #fff;
+}
+
+.deleteSubscriberButton:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .statusText,
 .emptyText {
   padding: 1rem;

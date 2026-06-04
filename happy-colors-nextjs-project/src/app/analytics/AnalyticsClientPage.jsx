@@ -8,6 +8,7 @@ import {
   Eye,
   MailCheck,
   RefreshCw,
+  Trash2,
   UserPlus,
   Users,
   UserX,
@@ -15,6 +16,7 @@ import {
 import MessageBox from '@/components/ui/MessageBox';
 import { useAuth } from '@/context/AuthContext';
 import {
+  deleteNewsletterSubscriber,
   fetchAnalyticsSummary,
   fetchNewsletterSubscriberAnalytics,
 } from '@/managers/analyticsManager';
@@ -129,7 +131,7 @@ function PeriodCard({ period }) {
   );
 }
 
-function SubscriberAnalyticsSection({ analytics }) {
+function SubscriberAnalyticsSection({ analytics, deletingSubscriberId, onDeleteSubscriber }) {
   if (!analytics) {
     return null;
   }
@@ -170,6 +172,7 @@ function SubscriberAnalyticsSection({ analytics }) {
                 <th>Последно абониране</th>
                 <th>Отписване</th>
                 <th>Welcome email</th>
+                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -192,6 +195,18 @@ function SubscriberAnalyticsSection({ analytics }) {
                   <td>{formatDateTime(subscriber.lastSubscribedAt)}</td>
                   <td>{formatDateTime(subscriber.unsubscribedAt)}</td>
                   <td>{formatDateTime(subscriber.welcomeEmailSentAt)}</td>
+                  <td>
+                    <button
+                      className={styles.deleteSubscriberButton}
+                      type="button"
+                      onClick={() => onDeleteSubscriber(subscriber)}
+                      disabled={deletingSubscriberId === subscriber.id}
+                      aria-label={`Изтрий ${subscriber.email}`}
+                      title={`Изтрий ${subscriber.email}`}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -211,6 +226,7 @@ export default function AnalyticsClientPage() {
   const [subscriberAnalytics, setSubscriberAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingSubscriberId, setDeletingSubscriberId] = useState('');
   const [error, setError] = useState('');
   const [subscriberError, setSubscriberError] = useState('');
 
@@ -257,6 +273,31 @@ export default function AnalyticsClientPage() {
       loadSummary();
     }
   }, [authLoading, loadSummary]);
+
+  async function handleDeleteSubscriber(subscriber) {
+    if (!subscriber?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Сигурни ли сте, че искате да изтриете ${subscriber.email}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSubscriberError('');
+    setDeletingSubscriberId(subscriber.id);
+
+    try {
+      await deleteNewsletterSubscriber(subscriber.id);
+      const nextAnalytics = await fetchNewsletterSubscriberAnalytics();
+      setSubscriberAnalytics(nextAnalytics);
+    } catch (reason) {
+      setSubscriberError(reason?.message || 'Неуспешно изтриване на абоната.');
+    } finally {
+      setDeletingSubscriberId('');
+    }
+  }
 
   const cacheMinutes = useMemo(() => {
     const seconds = Number(summary?.cacheTtlSeconds || 0);
@@ -433,7 +474,11 @@ export default function AnalyticsClientPage() {
         </>
       ) : null}
 
-      <SubscriberAnalyticsSection analytics={subscriberAnalytics} />
+      <SubscriberAnalyticsSection
+        analytics={subscriberAnalytics}
+        deletingSubscriberId={deletingSubscriberId}
+        onDeleteSubscriber={handleDeleteSubscriber}
+      />
     </main>
   );
 }
