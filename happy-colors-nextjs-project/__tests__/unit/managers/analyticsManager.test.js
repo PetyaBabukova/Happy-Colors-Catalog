@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  deleteNewsletterSubscriber,
   fetchAnalyticsSummary,
   fetchNewsletterSubscriberAnalytics,
 } from '../../../src/managers/analyticsManager.js';
@@ -55,5 +56,21 @@ describe('analyticsManager', () => {
 
     expect(error.message).toBe('Forbidden');
     expect(error.code).toBe('forbidden');
+  });
+
+  it('deletes newsletter subscribers with auth cookies', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { message: 'Subscriber deleted.' } }));
+
+    await expect(deleteNewsletterSubscriber('subscriber-1')).resolves.toEqual({
+      message: 'Subscriber deleted.',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/newsletter/subscribers/subscriber-1',
+      expect.objectContaining({
+        method: 'DELETE',
+        credentials: 'include',
+      })
+    );
   });
 });

@@ -47,6 +47,33 @@
   white-space: nowrap;
 }
 
+.deleteSubscriberButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(168, 66, 38, 0.45);
+  border-radius: 4px;
+  background: rgba(255, 245, 236, 0.92);
+  color: var(--dark-orange);
+}
+
+.deleteSubscriberButton:hover,
+.deleteSubscriberButton:focus-visible {
+  border-color: var(--dark-orange);
+  background: var(--dark-orange);
+  color: #fff;
+}
+
+.deleteSubscriberButton:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .statusText,
 .emptyText {
   padding: 1rem;
@@ -92,7 +119,7 @@
 
 .subscriberSummary {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 1rem;
+  margin: 1.5rem 0 1rem;
 }
 
 .periodGrid {
@@ -102,6 +129,14 @@
 
 .tablesGrid {
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr);
+  align-items: stretch;
+}
+
+.sidePanels {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .metricCard,
@@ -257,8 +292,13 @@
   .summaryStrip,
   .subscriberSummary,
   .periodGrid,
-  .tablesGrid {
+  .tablesGrid,
+  .sidePanels {
     grid-template-columns: 1fr;
+  }
+
+  .sidePanels {
+    grid-template-rows: auto;
   }
 }
 

@@ -5,6 +5,18 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 const NEW_SUBSCRIBER_BADGE_DAYS = 30;
 
+export class NewsletterSubscriberAdminError extends Error {
+  constructor(message, statusCode = 400) {
+    super(message);
+    this.name = 'NewsletterSubscriberAdminError';
+    this.statusCode = statusCode;
+  }
+}
+
+function isMongoId(value) {
+  return /^[a-f\d]{24}$/i.test(String(value || ''));
+}
+
 function parsePositiveInteger(value, fallback) {
   const parsed = Number(value);
 
@@ -188,4 +200,18 @@ export async function getNewsletterSubscriberAnalytics(query = {}) {
     },
     subscribers: pageSubscribers.map((subscriber) => serializeSubscriber(subscriber, now)),
   };
+}
+
+export async function deleteNewsletterSubscriber(subscriberId) {
+  if (!isMongoId(subscriberId)) {
+    throw new NewsletterSubscriberAdminError('Invalid subscriber id.', 400);
+  }
+
+  const deleted = await NewsletterSubscriber.findByIdAndDelete(subscriberId);
+
+  if (!deleted) {
+    throw new NewsletterSubscriberAdminError('Subscriber was not found.', 404);
+  }
+
+  return { message: 'Subscriber deleted.' };
 }

@@ -37,3 +37,20 @@ export async function fetchNewsletterSubscriberAnalytics({ page = 1, pageSize = 
 
   return data;
 }
+
+export async function deleteNewsletterSubscriber(subscriberId) {
+  const res = await fetch(`${baseURL}/newsletter/subscribers/${encodeURIComponent(subscriberId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  const data = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw createResponseError(
+      data?.message || 'Неуспешно изтриване на абоната.',
+      data
+    );
+  }
+
+  return data;
+}

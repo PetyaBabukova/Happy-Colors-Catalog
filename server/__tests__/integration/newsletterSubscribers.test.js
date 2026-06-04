@@ -26,11 +26,18 @@ describe('newsletter subscriber analytics integration', () => {
   it('requires full admin access', async () => {
     const app = createExpressApp();
     const customer = await createUser({ role: 'customer' });
+    const subscriber = await createSubscriber();
 
     await request(app).get('/newsletter/subscribers/analytics').expect(401);
+    await request(app).delete(`/newsletter/subscribers/${subscriber._id}`).expect(401);
 
     await request(app)
       .get('/newsletter/subscribers/analytics')
+      .set('Cookie', authCookie(customer))
+      .expect(403);
+
+    await request(app)
+      .delete(`/newsletter/subscribers/${subscriber._id}`)
       .set('Cookie', authCookie(customer))
       .expect(403);
   });
@@ -123,5 +130,34 @@ describe('newsletter subscriber analytics integration', () => {
       totalPages: 1,
     });
     expect(res.body.subscribers).toEqual([]);
+  });
+
+  it('lets full admins delete newsletter subscribers', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const subscriber = await createSubscriber({ email: 'delete-me@example.com' });
+
+    const res = await request(app)
+      .delete(`/newsletter/subscribers/${subscriber._id}`)
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toEqual({ message: 'Subscriber deleted.' });
+    expect(await NewsletterSubscriber.findById(subscriber._id)).toBeNull();
+  });
+
+  it('validates subscriber ids before deleting', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    await request(app)
+      .delete('/newsletter/subscribers/not-a-mongo-id')
+      .set('Cookie', authCookie(owner))
+      .expect(400);
+
+    await request(app)
+      .delete('/newsletter/subscribers/665000000000000000000001')
+      .set('Cookie', authCookie(owner))
+      .expect(404);
   });
 });

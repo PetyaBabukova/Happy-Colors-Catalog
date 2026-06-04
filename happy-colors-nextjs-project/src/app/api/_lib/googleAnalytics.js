@@ -176,6 +176,20 @@ function summarizeTrafficSources(response) {
   }));
 }
 
+function summarizeDevices(response) {
+  const rows = (response?.rows || []).map((row) => ({
+    category: dimensionValue(row, 0) || 'unknown',
+    sessions: metricValue(row, 0),
+    activeUsers: metricValue(row, 1),
+  }));
+  const totalSessions = rows.reduce((sum, row) => sum + row.sessions, 0);
+
+  return rows.map((row) => ({
+    ...row,
+    percent: totalSessions ? roundMetric((row.sessions / totalSessions) * 100, 1) : 0,
+  }));
+}
+
 function summarizeRealtime(response) {
   return {
     activeUsers: (response?.rows || []).reduce((sum, row) => sum + metricValue(row, 0), 0),
@@ -190,6 +204,7 @@ function emptySummary(configured = false) {
     periods: [],
     topPages: [],
     trafficSources: [],
+    devices: [],
     realtime: {
       activeUsers: 0,
     },
@@ -245,6 +260,13 @@ export async function getGoogleAnalyticsSummary({ forceRefresh = false } = {}) {
     orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
     limit: 8,
   }).then(summarizeTrafficSources);
+  const devicesRequest = runAnalyticsReport(config, token, {
+    dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
+    dimensions: [{ name: 'deviceCategory' }],
+    metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+    limit: 5,
+  }).then(summarizeDevices);
   const realtimeRequest = runAnalyticsReport(
     config,
     token,
@@ -254,10 +276,11 @@ export async function getGoogleAnalyticsSummary({ forceRefresh = false } = {}) {
     'runRealtimeReport'
   ).then(summarizeRealtime);
 
-  const [periods, topPages, trafficSources, realtime] = await Promise.all([
+  const [periods, topPages, trafficSources, devices, realtime] = await Promise.all([
     Promise.all(dateRangeRequests),
     topPagesRequest,
     trafficSourcesRequest,
+    devicesRequest,
     realtimeRequest,
   ]);
   const summary = {
@@ -268,6 +291,7 @@ export async function getGoogleAnalyticsSummary({ forceRefresh = false } = {}) {
     periods,
     topPages,
     trafficSources,
+    devices,
     realtime,
   };
 
