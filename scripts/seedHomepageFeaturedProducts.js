@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 
 import { HOMEPAGE_FEATURED_PRODUCTS_LIMIT } from '../server/config/homepageFeaturedProducts.js';
 import Product from '../server/models/Product.js';
+import { buildPublicProductFilter } from '../server/utils/productPublication.js';
 
 async function seedHomepageFeaturedProducts() {
   const mongoUri = process.env.MONGO_URI;
@@ -20,7 +21,10 @@ async function seedHomepageFeaturedProducts() {
     return;
   }
 
-  const products = await Product.find({ availability: { $ne: 'unavailable' } })
+  const products = await Product.find({
+    ...buildPublicProductFilter(),
+    availability: { $ne: 'unavailable' },
+  })
     .sort({ _id: 1 })
     .limit(HOMEPAGE_FEATURED_PRODUCTS_LIMIT)
     .lean();

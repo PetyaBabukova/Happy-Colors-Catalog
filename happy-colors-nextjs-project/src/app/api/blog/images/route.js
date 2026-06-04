@@ -1,7 +1,7 @@
 import path from 'path';
 import { NextResponse } from 'next/server';
 
-import { requireApiAuth } from '../../_lib/auth';
+import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
 import {
   buildStorageObjectName,
   createPublicUrl,
@@ -91,7 +91,7 @@ export async function POST(request) {
   let bucket = null;
 
   try {
-    const auth = requireApiAuth(request);
+    const auth = requireApiFullAdmin(await requireApiAuth(request));
 
     if (!auth.ok) {
       return NextResponse.json({ message: auth.message }, { status: auth.status });

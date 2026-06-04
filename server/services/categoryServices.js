@@ -2,6 +2,7 @@ import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 import { slugify } from '../utils/slugify.js';
 import mongoose from 'mongoose'; 
+import { buildPublicProductFilter } from '../utils/productPublication.js';
 
 
 // 👉 Създаване на категория със slug
@@ -23,7 +24,10 @@ export async function getVisibleCategories() {
   const visibleCategories = [];
 
   for (const category of categories) {
-    const productCount = await Product.countDocuments({ category: category._id });
+    const productCount = await Product.countDocuments({
+      ...buildPublicProductFilter(),
+      category: category._id,
+    });
     if (productCount > 0) {
       visibleCategories.push(category);
     }

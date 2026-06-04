@@ -64,7 +64,7 @@ export function extractObjectNameFromGcsUrl(assetUrl) {
   }
 }
 
-export async function deleteImageFromGCS(imageUrl) {
+export async function deleteImageFromGCS(imageUrl, { throwOnError = false } = {}) {
   const bucketName = getBucketName();
 
   if (!bucketName) {
@@ -90,5 +90,8 @@ export async function deleteImageFromGCS(imageUrl) {
     }
 
     console.error('Error deleting image from GCS:', error);
+    if (throwOnError) {
+      throw error;
+    }
   }
 }

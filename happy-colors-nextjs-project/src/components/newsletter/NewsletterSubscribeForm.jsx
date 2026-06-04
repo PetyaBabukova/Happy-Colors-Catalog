@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { subscribeToNewsletter } from '@/managers/newsletterManager';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  getNewsletterSubscribeToken,
+  subscribeToNewsletter,
+} from '@/managers/newsletterManager';
 import styles from './NewsletterSubscribeForm.module.css';
 
 const initialFormState = {
@@ -10,11 +13,32 @@ const initialFormState = {
   website: '',
 };
 
+const SUBSCRIBE_TOKEN_RETRY_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 2100;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function NewsletterSubscribeForm() {
   const [formValues, setFormValues] = useState(initialFormState);
+  const [formToken, setFormToken] = useState('');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const refreshFormToken = useCallback(async () => {
+    const result = await getNewsletterSubscribeToken();
+    const nextToken = String(result?.token || '');
+
+    setFormToken(nextToken);
+    return nextToken;
+  }, []);
+
+  useEffect(() => {
+    refreshFormToken().catch(() => {
+      setFormToken('');
+    });
+  }, [refreshFormToken]);
 
   function updateField(name, value) {
     setFormValues((current) => ({
@@ -42,18 +66,42 @@ export default function NewsletterSubscribeForm() {
 
     setIsSubmitting(true);
 
-    try {
-      const result = await subscribeToNewsletter({
+    async function submitWithToken(token) {
+      return subscribeToNewsletter({
         email: formValues.email,
         consent: formValues.consent,
         website: formValues.website,
+        formToken: token,
       });
+    }
+
+    try {
+      let token = formToken || (await refreshFormToken());
+      let result;
+
+      try {
+        result = await submitWithToken(token);
+      } catch (error) {
+        if (error?.code === 'too_new_form_token') {
+          await wait(SUBSCRIBE_TOKEN_RETRY_DELAY_MS);
+          result = await submitWithToken(token);
+        } else if (error?.code === 'invalid_form_token' || error?.code === 'expired_form_token') {
+          token = await refreshFormToken();
+          await wait(SUBSCRIBE_TOKEN_RETRY_DELAY_MS);
+          result = await submitWithToken(token);
+        } else {
+          throw error;
+        }
+      }
 
       setFormValues(initialFormState);
-      setMessage(result?.message || 'Успешно се абонирахте.');
-      setMessageType(result?.status === 'already_subscribed' ? 'error' : 'success');
+      setMessage(result?.message || 'Благодарим ви. Ако е необходимо потвърждение, ще получите имейл с линк за абонамента.');
+      setMessageType('success');
+      refreshFormToken().catch(() => {
+        setFormToken('');
+      });
     } catch (error) {
-      setMessage('Не успяхте да се абонирате. Моля опитайте по-късно.');
+      setMessage(error?.message || 'Не успяхте да се абонирате. Моля опитайте по-късно.');
       setMessageType('error');
     } finally {
       setIsSubmitting(false);

@@ -24,6 +24,19 @@ describe('RequireAuth', () => {
     expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
   });
 
+  it('waits for auth loading before checking the required role', () => {
+    render(
+      <RequireAuth requiredRole="full_admin" roleMessage="Full admin only.">
+        <p>Protected content</p>
+      </RequireAuth>,
+      { authOverrides: { loading: true, user: undefined } }
+    );
+
+    expect(screen.getByText('Зареждане...')).toBeInTheDocument();
+    expect(screen.queryByText('Full admin only.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
+  });
+
   it('renders children for authenticated users', () => {
     render(
       <RequireAuth>
@@ -33,6 +46,41 @@ describe('RequireAuth', () => {
     );
 
     expect(screen.getByText('Protected content')).toBeInTheDocument();
+  });
+
+  it('blocks authenticated users without the required role', () => {
+    render(
+      <RequireAuth requiredRole="full_admin" roleMessage="Full admin only.">
+        <p>Protected content</p>
+      </RequireAuth>,
+      { user: { _id: 'user-1', role: 'customer' } }
+    );
+
+    expect(screen.getByText('Full admin only.')).toBeInTheDocument();
+    expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
+  });
+
+  it('renders children for authenticated users with the required role', () => {
+    render(
+      <RequireAuth requiredRole="full_admin">
+        <p>Protected content</p>
+      </RequireAuth>,
+      { user: { _id: 'admin-1', role: 'full_admin' } }
+    );
+
+    expect(screen.getByText('Protected content')).toBeInTheDocument();
+  });
+
+  it('uses the login message as the default role-blocked message', () => {
+    render(
+      <RequireAuth requiredRole="full_admin" message="Custom restricted message.">
+        <p>Protected content</p>
+      </RequireAuth>,
+      { user: { _id: 'user-1', role: 'customer' } }
+    );
+
+    expect(screen.getByText('Custom restricted message.')).toBeInTheDocument();
+    expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
   });
 
   it('shows a message and redirects guests to login with the current path', () => {

@@ -30,6 +30,11 @@ const homeBannerSchema = new mongoose.Schema(
       required: [true, 'Image URL is required!'],
       trim: true,
     },
+    mobileImageUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     sortOrder: {
       type: Number,
       default: 0,
@@ -49,5 +54,6 @@ const homeBannerSchema = new mongoose.Schema(
 
 homeBannerSchema.index({ isActive: 1, sortOrder: 1, createdAt: 1 });
 homeBannerSchema.index({ imageUrl: 1 });
+homeBannerSchema.index({ mobileImageUrl: 1 });
 
 export default mongoose.models.HomeBanner || mongoose.model('HomeBanner', homeBannerSchema);

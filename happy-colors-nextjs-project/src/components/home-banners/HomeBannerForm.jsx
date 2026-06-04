@@ -13,6 +13,7 @@ const INITIAL_VALUES = {
   ctaLabel: '',
   ctaHref: '',
   imageUrl: '',
+  mobileImageUrl: '',
   sortOrder: 0,
   isActive: true,
 };
@@ -52,6 +53,7 @@ function normalizeInitialValues(initialValues) {
     ctaLabel: initialValues?.ctaLabel || '',
     ctaHref: initialValues?.ctaHref || '',
     imageUrl: initialValues?.imageUrl || '',
+    mobileImageUrl: initialValues?.mobileImageUrl || '',
     sortOrder: Number(initialValues?.sortOrder) || 0,
     isActive: typeof initialValues?.isActive === 'boolean' ? initialValues.isActive : true,
   };
@@ -75,17 +77,19 @@ export default function HomeBannerForm({
     setInvalidFields,
     handleChange,
   } = useForm(normalizeInitialValues(initialValues));
-  const [uploading, setUploading] = useState(false);
+  const [uploadingFields, setUploadingFields] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [uploadedImage, setUploadedImage] = useState(null);
+  const [uploadErrors, setUploadErrors] = useState({});
+  const [uploadedImages, setUploadedImages] = useState({});
+  const uploading = Object.keys(uploadingFields).length > 0;
 
   useEffect(() => {
     setFormValues(normalizeInitialValues(initialValues));
-    setUploadedImage(null);
+    setUploadedImages({});
+    setUploadErrors({});
   }, [initialValues, setFormValues]);
 
-  const cleanupUploadedImage = async (upload = uploadedImage) => {
+  const cleanupUploadedImage = async (upload) => {
     if (!upload?.objectName || !upload?.deleteToken) {
       return;
     }
@@ -93,40 +97,83 @@ export default function HomeBannerForm({
     await deleteSignedUploadedFile(upload.objectName, upload.deleteToken);
   };
 
-  const handleFileChange = async (event) => {
+  const cleanupUploadedImages = async (uploads = uploadedImages) => {
+    await Promise.all(
+      Object.values(uploads)
+        .filter(Boolean)
+        .map((upload) => cleanupUploadedImage(upload).catch(() => {}))
+    );
+  };
+
+  const handleFileChange = (fieldName, kind) => async (event) => {
     const file = event.target.files?.[0] || null;
 
     if (!file) {
       return;
     }
 
-    setUploadError('');
+    setUploadErrors((prev) => ({ ...prev, [fieldName]: '' }));
 
     if (!file.type.startsWith('image/')) {
-      setUploadError('Моля, изберете файл с изображение.');
+      setUploadErrors((prev) => ({
+        ...prev,
+        [fieldName]: 'Моля, изберете файл с изображение.',
+      }));
       event.target.value = '';
       return;
     }
 
     try {
-      setUploading(true);
+      setUploadingFields((prev) => ({
+        ...prev,
+        [fieldName]: true,
+      }));
 
-      if (uploadedImage) {
-        await cleanupUploadedImage(uploadedImage);
+      if (uploadedImages[fieldName]) {
+        await cleanupUploadedImage(uploadedImages[fieldName]);
       }
 
-      const uploadResult = await uploadSignedFile({ kind: 'home-banner-image', file });
+      const uploadResult = await uploadSignedFile({ kind, file });
 
-      setUploadedImage(uploadResult);
+      setUploadedImages((prev) => ({
+        ...prev,
+        [fieldName]: uploadResult,
+      }));
       setFormValues((prev) => ({
         ...prev,
-        imageUrl: uploadResult.publicUrl,
+        [fieldName]: uploadResult.publicUrl,
       }));
       event.target.value = '';
     } catch (err) {
-      setUploadError(err.message || 'Възникна грешка при качването на изображението.');
+      setUploadErrors((prev) => ({
+        ...prev,
+        [fieldName]:
+          err.message || 'Възникна грешка при качването на изображението.',
+      }));
     } finally {
-      setUploading(false);
+      setUploadingFields((prev) => {
+        const { [fieldName]: finishedField, ...rest } = prev;
+
+        return rest;
+      });
+    }
+  };
+
+  const handleRemoveMobileImage = () => {
+    const unsavedMobileUpload = uploadedImages.mobileImageUrl;
+    setUploadedImages((prev) => {
+      const { mobileImageUrl, ...rest } = prev;
+
+      return rest;
+    });
+    setUploadErrors((prev) => ({ ...prev, mobileImageUrl: '' }));
+    setFormValues((prev) => ({
+      ...prev,
+      mobileImageUrl: '',
+    }));
+
+    if (unsavedMobileUpload) {
+      cleanupUploadedImage(unsavedMobileUpload).catch(() => {});
     }
   };
 
@@ -189,22 +236,22 @@ export default function HomeBannerForm({
         ctaLabel: formValues.ctaLabel.trim(),
         ctaHref: formValues.ctaHref.trim(),
         imageUrl: formValues.imageUrl.trim(),
+        mobileImageUrl: String(formValues.mobileImageUrl || '').trim(),
         sortOrder,
         isActive: Boolean(formValues.isActive),
       });
-      setUploadedImage(null);
+      setUploadedImages({});
       setSuccess(true);
       router.push('/');
       router.refresh();
     } catch (err) {
-      if (uploadedImage) {
-        await cleanupUploadedImage(uploadedImage).catch(() => {});
-        setUploadedImage(null);
-        setFormValues((prev) => ({
-          ...prev,
-          imageUrl: initialValues?.imageUrl || '',
-        }));
-      }
+      await cleanupUploadedImages();
+      setUploadedImages({});
+      setFormValues((prev) => ({
+        ...prev,
+        imageUrl: initialValues?.imageUrl || '',
+        mobileImageUrl: initialValues?.mobileImageUrl || '',
+      }));
 
       setSuccess(false);
       setError(err.message || 'Възникна грешка при запазването на банера.');
@@ -267,25 +314,58 @@ export default function HomeBannerForm({
         />
         <p className={styles.fieldHint}>Използвайте вътрешен линк, например /products или /search?q=животинки.</p>
 
-        <label htmlFor="imageFile">Изображение</label>
+        <label htmlFor="imageFile">Desktop image</label>
+        <p className={styles.fieldHint}>Wide image for laptop and desktop layouts.</p>
         <input
           id="imageFile"
           type="file"
           accept="image/*"
-          onChange={handleFileChange}
+          onChange={handleFileChange('imageUrl', 'home-banner-image')}
+          disabled={uploading || submitting}
           className={invalidFields.includes('imageUrl') ? styles.invalidField : ''}
         />
-        {uploading && <p className={styles.fieldHint}>Качване на изображение...</p>}
-        {uploadError && <p className={styles.errorHint}>{uploadError}</p>}
+        {uploadingFields.imageUrl && <p className={styles.fieldHint}>Качване на изображение...</p>}
+        {uploadErrors.imageUrl && <p className={styles.errorHint}>{uploadErrors.imageUrl}</p>}
 
         {formValues.imageUrl && (
           <div className={styles.preview}>
-            <span className={styles.fieldHint}>Текущо изображение</span>
+            <span className={styles.fieldHint}>Desktop preview</span>
             <img
               src={formValues.imageUrl}
-              alt={formValues.title || 'Homepage banner preview'}
+              alt="Homepage banner desktop preview"
               className={styles.previewImage}
             />
+          </div>
+        )}
+
+        <label htmlFor="mobileImageFile">Mobile image (optional)</label>
+        <p className={styles.fieldHint}>Portrait or square crop for phones; keep the main subject near the center.</p>
+        <input
+          id="mobileImageFile"
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange('mobileImageUrl', 'home-banner-mobile-image')}
+          disabled={uploading || submitting}
+        />
+        {uploadingFields.mobileImageUrl && <p className={styles.fieldHint}>Качване на мобилно изображение...</p>}
+        {uploadErrors.mobileImageUrl && <p className={styles.errorHint}>{uploadErrors.mobileImageUrl}</p>}
+
+        {formValues.mobileImageUrl && (
+          <div className={styles.preview}>
+            <span className={styles.fieldHint}>Mobile preview</span>
+            <img
+              src={formValues.mobileImageUrl}
+              alt="Homepage banner mobile preview"
+              className={`${styles.previewImage} ${styles.mobilePreviewImage}`}
+            />
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={handleRemoveMobileImage}
+              disabled={uploading || submitting}
+            >
+              Remove mobile image
+            </button>
           </div>
         )}
 

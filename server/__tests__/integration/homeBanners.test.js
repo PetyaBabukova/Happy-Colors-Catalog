@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import HomeBanner from '../../models/HomeBanner.js';
 import { createExpressApp } from '../../server.js';
@@ -9,13 +9,13 @@ import {
   createCategory,
   createHomeBanner,
   createProduct,
-  createUser,
+  createFullAdmin,
 } from './factories.js';
 
 describe('home banners integration', () => {
   it('lists active banners sorted by sort order and creation date', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createHomeBanner({
       owner,
       title: 'Inactive',
@@ -53,7 +53,7 @@ describe('home banners integration', () => {
 
   it('returns 404 for invalid banner id formats', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
 
     await request(app).get('/home-banners/not-a-valid-id').set('Cookie', cookie).expect(404);
@@ -67,7 +67,7 @@ describe('home banners integration', () => {
 
   it('creates a banner for an authenticated trusted operator', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const payload = buildHomeBanner({ owner, title: 'Animals banner' });
     payload.owner = 'body-owner-is-ignored';
 
@@ -80,14 +80,30 @@ describe('home banners integration', () => {
     expect(res.body).toMatchObject({
       title: 'Animals banner',
       ctaHref: '/search?q=животинки',
+      mobileImageUrl: '',
       owner: String(owner._id),
     });
     expect(res.body).not.toHaveProperty('unexpectedField');
   });
 
+  it('creates a banner with an optional mobile image URL', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const mobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/animals-mobile.webp';
+
+    const res = await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send(buildHomeBanner({ owner, mobileImageUrl }))
+      .expect(201);
+
+    expect(res.body.mobileImageUrl).toBe(mobileImageUrl);
+  });
+
   it('does not persist injected fields from create payloads', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/home-banners')
@@ -107,7 +123,7 @@ describe('home banners integration', () => {
 
   it('rejects unsafe CTA hrefs and image URLs', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const cookie = authCookie(owner);
 
     await request(app)
@@ -126,11 +142,44 @@ describe('home banners integration', () => {
         })
       )
       .expect(400);
+
+    await request(app)
+      .post('/home-banners')
+      .set('Cookie', cookie)
+      .send(
+        buildHomeBanner({
+          owner,
+          mobileImageUrl: 'javascript:alert(1)',
+        })
+      )
+      .expect(400);
+  });
+
+  it('normalizes legacy banners without mobile image URLs in service responses', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({ owner, title: 'Legacy banner' });
+
+    await HomeBanner.collection.updateOne(
+      { _id: banner._id },
+      { $unset: { mobileImageUrl: '' } }
+    );
+
+    const listRes = await request(app).get('/home-banners').expect(200);
+    const readRes = await request(app)
+      .get(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(listRes.body.find((item) => item._id === String(banner._id))).toMatchObject({
+      mobileImageUrl: '',
+    });
+    expect(readRes.body.mobileImageUrl).toBe('');
   });
 
   it('returns a friendly validation error for overly long descriptions', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/home-banners')
@@ -143,8 +192,8 @@ describe('home banners integration', () => {
 
   it('allows authenticated trusted operators to read and edit any banner', async () => {
     const app = createExpressApp();
-    const creator = await createUser({ email: 'creator@example.com' });
-    const otherOperator = await createUser({ email: 'operator@example.com' });
+    const creator = await createFullAdmin({ email: 'creator@example.com' });
+    const otherOperator = await createFullAdmin({ email: 'operator@example.com' });
     const banner = await createHomeBanner({ owner: creator, title: 'Original title' });
 
     const readRes = await request(app)
@@ -169,7 +218,7 @@ describe('home banners integration', () => {
 
   it('deletes the old image on edit when it is not referenced elsewhere', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const oldImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/old.webp';
     const newImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/new.webp';
     const banner = await createHomeBanner({ owner, imageUrl: oldImageUrl });
@@ -180,12 +229,90 @@ describe('home banners integration', () => {
       .send({ imageUrl: newImageUrl })
       .expect(200);
 
-    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldImageUrl);
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldImageUrl, { throwOnError: false });
+  });
+
+  it('edits optional mobile images without clearing them on unrelated partial edits', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const mobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/first.webp';
+    const banner = await createHomeBanner({ owner });
+
+    const addRes = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ mobileImageUrl })
+      .expect(200);
+
+    expect(addRes.body.mobileImageUrl).toBe(mobileImageUrl);
+
+    const partialRes = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ title: 'Retitled banner' })
+      .expect(200);
+
+    expect(partialRes.body).toMatchObject({
+      title: 'Retitled banner',
+      mobileImageUrl,
+    });
+  });
+
+  it('deletes replaced and cleared mobile images only after saving', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const oldMobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/old.webp';
+    const newMobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/new.webp';
+    const banner = await createHomeBanner({ owner, mobileImageUrl: oldMobileImageUrl });
+
+    await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ mobileImageUrl: newMobileImageUrl })
+      .expect(200);
+
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(oldMobileImageUrl, { throwOnError: false });
+
+    deleteImageFromGCS.mockClear();
+
+    await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ mobileImageUrl: '' })
+      .expect(200);
+
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(newMobileImageUrl, { throwOnError: false });
+  });
+
+  it('does not delete a desktop image moved to the same banner mobile field', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const desktopImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/same-banner-swap-old.webp';
+    const newDesktopImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/same-banner-swap-new.webp';
+    const banner = await createHomeBanner({ owner, imageUrl: desktopImageUrl });
+
+    await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        imageUrl: newDesktopImageUrl,
+        mobileImageUrl: desktopImageUrl,
+      })
+      .expect(200);
+
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(
+      desktopImageUrl
+    );
   });
 
   it('does not delete an old image on edit when a product still references it', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/shared.webp';
     const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
@@ -202,12 +329,12 @@ describe('home banners integration', () => {
       .send({ imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/replacement.webp' })
       .expect(200);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 
   it('does not delete an old image on edit when a product video still references it', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedVideoUrl = 'https://storage.googleapis.com/test-bucket/home-banners/shared-video.mp4';
     const banner = await createHomeBanner({ owner, imageUrl: sharedVideoUrl });
@@ -235,19 +362,85 @@ describe('home banners integration', () => {
 
   it('deletes a banner and cleans up its image when unreferenced', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const imageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/delete-me.webp';
     const banner = await createHomeBanner({ owner, imageUrl });
 
     await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
 
     await expect(HomeBanner.findById(banner._id)).resolves.toBeNull();
-    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl);
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl, { throwOnError: true });
+  });
+
+  it('deletes both desktop and mobile images once when a banner is deleted', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/delete-desktop.webp';
+    const mobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/delete-mobile.webp';
+    const banner = await createHomeBanner({ owner, imageUrl, mobileImageUrl });
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(HomeBanner.findById(banner._id)).resolves.toBeNull();
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(mobileImageUrl, { throwOnError: true });
+  });
+
+  it('dedupes identical desktop and mobile URLs during delete', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/delete-once.webp';
+    const banner = await createHomeBanner({ owner, imageUrl, mobileImageUrl: imageUrl });
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    expect(deleteImageFromGCS.mock.calls.filter(([assetUrl]) => assetUrl === imageUrl)).toHaveLength(1);
+  });
+
+  it('keeps the banner when storage cleanup fails during delete', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/delete-fails.webp';
+    const banner = await createHomeBanner({ owner, imageUrl });
+    deleteImageFromGCS.mockRejectedValueOnce(new Error('storage outage'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(500);
+
+    await expect(HomeBanner.findById(banner._id).lean()).resolves.toMatchObject({
+      _id: banner._id,
+      imageUrl,
+    });
+  });
+
+  it('attempts every banner asset cleanup and keeps the banner if one delete fails', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const imageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/partial-delete-desktop.webp';
+    const mobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/partial-delete-mobile.webp';
+    const banner = await createHomeBanner({ owner, imageUrl, mobileImageUrl });
+    deleteImageFromGCS
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('storage outage'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(500);
+
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(mobileImageUrl, { throwOnError: true });
+    await expect(HomeBanner.findById(banner._id).lean()).resolves.toMatchObject({
+      _id: banner._id,
+      imageUrl,
+      mobileImageUrl,
+    });
   });
 
   it('deletes a banner but keeps a shared image in storage', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/shared-delete.webp';
     const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
     await createHomeBanner({
@@ -258,12 +451,31 @@ describe('home banners integration', () => {
 
     await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
+  it('deletes a banner but keeps a mobile image shared by another banner', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const sharedMobileImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/shared-delete.webp';
+    const banner = await createHomeBanner({ owner, mobileImageUrl: sharedMobileImageUrl });
+    await createHomeBanner({
+      owner,
+      title: 'Still using shared mobile image',
+      mobileImageUrl: sharedMobileImageUrl,
+    });
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(
+      sharedMobileImageUrl
+    );
   });
 
   it('deletes a banner but keeps an image still used by a product', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/home-banners/product-shared.webp';
     const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
@@ -276,6 +488,6 @@ describe('home banners integration', () => {
 
     await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 });

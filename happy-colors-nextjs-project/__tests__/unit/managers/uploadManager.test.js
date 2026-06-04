@@ -83,6 +83,28 @@ describe('uploadManager', () => {
     expect(fetch).toHaveBeenCalledWith('/api/uploads/proxy', expect.objectContaining({ method: 'POST' }));
   });
 
+  it('routes home banner mobile image uploads through the proxy route', async () => {
+    const file = buildFile();
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          publicUrl: 'https://cdn.test/home-banners/mobile-images/candle.webp',
+          objectName: 'home-banners/mobile-images/candle.webp',
+          deleteToken: 'delete-token',
+        },
+      })
+    );
+
+    await expect(uploadSignedFile({ kind: 'home-banner-mobile-image', file })).resolves.toEqual({
+      publicUrl: 'https://cdn.test/home-banners/mobile-images/candle.webp',
+      objectName: 'home-banners/mobile-images/candle.webp',
+      deleteToken: 'delete-token',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('/api/uploads/proxy', expect.objectContaining({ method: 'POST' }));
+  });
+
   it('routes video and poster uploads through the proxy route', async () => {
     fetch.mockResolvedValueOnce(
       jsonResponse({

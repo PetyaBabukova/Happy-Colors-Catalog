@@ -15,6 +15,8 @@ describe('user service integration', () => {
     expect(result).toMatchObject({
       username: 'Petya',
       email: 'petya@example.com',
+      role: 'customer',
+      artistStatus: null,
     });
     expect(result).not.toHaveProperty('password');
 
@@ -46,15 +48,19 @@ describe('user service integration', () => {
     const decoded = jwt.verify(result.token, process.env.JWT_SECRET);
 
     expect(result.user).toMatchObject({
-      _id: user._id,
+      _id: String(user._id),
       username: 'Petya',
       email: 'petya@example.com',
+      role: 'customer',
+      artistStatus: null,
     });
     expect(decoded).toMatchObject({
       _id: String(user._id),
       username: 'Petya',
       email: 'petya@example.com',
     });
+    expect(decoded).not.toHaveProperty('role');
+    expect(decoded).not.toHaveProperty('artistStatus');
   });
 
   it('rejects missing credentials, unknown users, wrong passwords, and missing JWT secret', async () => {

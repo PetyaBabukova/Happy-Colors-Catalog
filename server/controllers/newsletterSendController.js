@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireFullAdmin } from '../middlewares/auth.js';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import { requireTrustedOrigin } from '../middlewares/trustedOrigin.js';
 import {
@@ -53,7 +53,7 @@ function sendError(res, error) {
   return res.status(statusCode).json({ message: error.message });
 }
 
-router.get('/status', requireAuth, async (req, res) => {
+router.get('/status', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const result = await getNewsletterSendStatus();
 
@@ -63,7 +63,7 @@ router.get('/status', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/prefill/product/:productId', requireAuth, async (req, res) => {
+router.get('/prefill/product/:productId', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const result = await buildProductNewsletterPrefill(req.params.productId);
 
@@ -73,7 +73,7 @@ router.get('/prefill/product/:productId', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/prefill/blog/:articleId', requireAuth, async (req, res) => {
+router.get('/prefill/blog/:articleId', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const result = await buildBlogNewsletterPrefill(req.params.articleId);
 
@@ -83,7 +83,7 @@ router.get('/prefill/blog/:articleId', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/test', requireAuth, requireTrustedOrigin, testSendLimiter, requireJson, async (req, res) => {
+router.post('/test', requireAuth, requireFullAdmin, requireTrustedOrigin, testSendLimiter, requireJson, async (req, res) => {
   try {
     const result = await sendNewsletterTest(req.body);
 
@@ -93,7 +93,7 @@ router.post('/test', requireAuth, requireTrustedOrigin, testSendLimiter, require
   }
 });
 
-router.post('/', requireAuth, requireTrustedOrigin, broadcastLimiter, requireJson, async (req, res) => {
+router.post('/', requireAuth, requireFullAdmin, requireTrustedOrigin, broadcastLimiter, requireJson, async (req, res) => {
   try {
     const result = await sendNewsletterToSubscribers(req.body);
 

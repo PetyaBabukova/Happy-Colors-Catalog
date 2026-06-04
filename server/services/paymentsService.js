@@ -5,6 +5,7 @@ import Product from '../models/Product.js';
 import CheckoutDraft from '../models/CheckoutDraft.js';
 import { getStripeClient } from '../utils/stripeClient.js';
 import { sendEmail } from '../helpers/sendEmail.js';
+import { buildPublicProductFilter } from '../utils/productPublication.js';
 
 class PaymentError extends Error {
   constructor(message, statusCode = 400) {
@@ -126,7 +127,10 @@ async function mapItems(cartItems) {
 
   const uniqueProductIds = [...new Set(normalizedItems.map((item) => item.productId))];
 
-  const products = await Product.find({ _id: { $in: uniqueProductIds } }).lean();
+  const products = await Product.find({
+    ...buildPublicProductFilter(),
+    _id: { $in: uniqueProductIds },
+  }).lean();
 
   if (products.length !== uniqueProductIds.length) {
     throw new PaymentError('Един или повече продукти не съществуват.', 404);

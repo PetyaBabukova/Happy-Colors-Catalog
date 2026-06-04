@@ -1,7 +1,11 @@
 import Product from '../models/Product.js';
 import HomeBanner from '../models/HomeBanner.js';
+import BlogArticle from '../models/BlogArticle.js';
+import User from '../models/User.js';
 import mongoose from 'mongoose';
+import { sendEmail } from '../helpers/sendEmail.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
+import { revalidateProductSurfaces } from '../helpers/revalidateProducts.js';
 import {
   isAllowedPosterStorageUrl,
   isAllowedVideoStorageUrl,
@@ -13,6 +17,23 @@ import {
   MAX_VIDEOS_PER_PRODUCT,
 } from '../config/productLimits.js';
 import { HOMEPAGE_FEATURED_PRODUCTS_LIMIT } from '../config/homepageFeaturedProducts.js';
+import { isFullAdmin, USER_ROLES } from '../utils/userRoles.js';
+import {
+  buildPublicProductFilter,
+  isPublicProduct,
+  normalizeReviewNote,
+  PRODUCT_PUBLICATION_STATUSES,
+  PRODUCT_REVIEW_STATUSES,
+} from '../utils/productPublication.js';
+import {
+  canCreateProduct,
+  canHardDeleteProduct,
+  canManageProduct,
+  canReviewProduct,
+  canSubmitProductForReview,
+  canViewProduct,
+  canWithdrawProductReview,
+} from '../utils/productPermissions.js';
 
 const ALLOWED_PRODUCT_FIELDS = new Set([
   'title',
@@ -43,6 +64,21 @@ function createForbiddenError(message) {
   return error;
 }
 
+function buildClientUrl(path) {
+  const baseUrl = String(process.env.CLIENT_URL || '').replace(/\/$/, '');
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
+function toEmailLine(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function assertProductStatus(product, allowedStatuses, message) {
+  if (!allowedStatuses.includes(product.publicationStatus)) {
+    throw createValidationError(message);
+  }
+}
+
 function normalizeProductId(value) {
   return String(value || '').trim();
 }
@@ -70,6 +106,49 @@ function normalizeProductMedia(product) {
     ...normalizedImages,
     videos: normalizeStoredVideos(normalizedImages.videos),
   };
+}
+
+function hasDraftContent(product) {
+  return Boolean(product?.draftContent && typeof product.draftContent === 'object');
+}
+
+function normalizeDraftContent(product) {
+  if (!hasDraftContent(product)) {
+    return null;
+  }
+
+  return normalizeProductMedia({
+    ...product.draftContent,
+    _id: product._id,
+    owner: product.owner,
+    publicationStatus: product.publicationStatus,
+    reviewStatus: product.reviewStatus,
+    reviewNote: product.reviewNote,
+    draftRevision: product.draftRevision,
+    draftUpdatedAt: product.draftUpdatedAt,
+    draftSubmittedAt: product.draftSubmittedAt,
+    draftSubmittedBy: product.draftSubmittedBy,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+    isHomepageFeatured: product.isHomepageFeatured,
+    homepageFeaturedOrder: product.homepageFeaturedOrder,
+  });
+}
+
+function shouldExposeDraftContent(product, viewer) {
+  if (!hasDraftContent(product)) {
+    return false;
+  }
+
+  return canManageProduct(product, viewer) || canReviewProduct(viewer);
+}
+
+function normalizeProductForViewer(product, viewer = null) {
+  if (shouldExposeDraftContent(product, viewer)) {
+    return normalizeDraftContent(product);
+  }
+
+  return normalizeProductMedia(product);
 }
 
 function pickAllowedProductFields(source = {}) {
@@ -233,19 +312,74 @@ async function assertVideoAssetsNotAttachedToOtherProduct(videos, currentProduct
   }
 }
 
-function buildCreateProductData(data, ownerId) {
+function buildCreateProductData(data, user) {
   const sanitizedFields = pickAllowedProductFields(data);
 
   return {
     ...normalizeImageFields(sanitizedFields),
     videos: validateAndNormalizeVideos(sanitizedFields.videos),
-    owner: ownerId,
+    owner: user._id,
+    publicationStatus: isFullAdmin(user)
+      ? PRODUCT_PUBLICATION_STATUSES.PUBLISHED
+      : PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+    reviewStatus: isFullAdmin(user)
+      ? PRODUCT_REVIEW_STATUSES.NONE
+      : PRODUCT_REVIEW_STATUSES.PENDING_REVIEW,
   };
+}
+
+async function notifyFullAdminsForProductReview(product, artist) {
+  const isPendingReview =
+    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW ||
+    product.reviewStatus === PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+
+  if (isFullAdmin(artist) || !isPendingReview) {
+    return { sent: false, recipients: 0 };
+  }
+
+  const admins = await User.find({ role: USER_ROLES.FULL_ADMIN }, { email: 1 }).lean();
+  const adminEmails = [...new Set(admins.map((admin) => admin.email).filter(Boolean))];
+
+  if (adminEmails.length === 0) {
+    return { sent: false, recipients: 0 };
+  }
+
+  const productId = String(product._id);
+  const reviewUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}`);
+  const approveUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}&reviewAction=approve`);
+  const postponeUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}&reviewAction=postpone`);
+  const rejectUrl = buildClientUrl(`/users/admin?reviewProduct=${productId}&reviewAction=reject`);
+
+  try {
+    await sendEmail({
+      to: adminEmails,
+      subject: `Product pending approval: ${toEmailLine(product.title)}`,
+      text: [
+        `Artist: ${toEmailLine(artist.username)} <${artist.email}>`,
+        `Product: ${toEmailLine(product.title)}`,
+        '',
+        'A new artist product is waiting for admin review.',
+        '',
+        `Review: ${reviewUrl}`,
+        `Approve: ${approveUrl}`,
+        `Postpone: ${postponeUrl}`,
+        `Reject: ${rejectUrl}`,
+      ].join('\n'),
+    });
+
+    return { sent: true, recipients: adminEmails.length };
+  } catch (error) {
+    console.error('Failed to send product review notification:', error?.message || error);
+    return { sent: false, recipients: adminEmails.length, error: true };
+  }
 }
 
 function buildEditProductData(data) {
   const sanitizedFields = pickAllowedProductFields(data);
-  const normalizedFields = normalizeImageFields(sanitizedFields);
+  const hasImageFields =
+    Object.prototype.hasOwnProperty.call(sanitizedFields, 'imageUrl') ||
+    Object.prototype.hasOwnProperty.call(sanitizedFields, 'imageUrls');
+  const normalizedFields = hasImageFields ? normalizeImageFields(sanitizedFields) : { ...sanitizedFields };
 
   if (Object.prototype.hasOwnProperty.call(sanitizedFields, 'videos')) {
     normalizedFields.videos = validateAndNormalizeVideos(sanitizedFields.videos, {
@@ -287,7 +421,45 @@ function collectVideoAssetsForCleanup(currentVideos, nextVideos) {
   return [...assetsToDelete].filter(Boolean);
 }
 
-async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = {}) {
+function addProductAssetUrls(assetUrls, source = {}) {
+  if (!source) {
+    return;
+  }
+
+  if (source.imageUrl) {
+    assetUrls.add(source.imageUrl);
+  }
+
+  for (const imageUrl of source.imageUrls || []) {
+    if (imageUrl) {
+      assetUrls.add(imageUrl);
+    }
+  }
+
+  for (const video of normalizeStoredVideos(source.videos)) {
+    if (video.url) {
+      assetUrls.add(video.url);
+    }
+
+    if (video.posterUrl) {
+      assetUrls.add(video.posterUrl);
+    }
+  }
+}
+
+function collectProductAssetUrls(product = {}) {
+  const assetUrls = new Set();
+
+  addProductAssetUrls(assetUrls, product);
+  addProductAssetUrls(assetUrls, product.draftContent);
+
+  return [...assetUrls].filter(Boolean);
+}
+
+async function deleteAssetsFromStorage(
+  assetUrls,
+  { excludeProductId = null, throwOnError = false } = {}
+) {
   try {
     const uniqueAssetUrls = [...new Set(assetUrls.filter(Boolean))];
 
@@ -295,8 +467,16 @@ async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = 
       return;
     }
 
-    const [homeBannerRefs, productRefs] = await Promise.all([
-      HomeBanner.find({ imageUrl: { $in: uniqueAssetUrls } }, { imageUrl: 1 }).lean(),
+    const [homeBannerRefs, productRefs, blogArticleRefs] = await Promise.all([
+      HomeBanner.find(
+        {
+          $or: [
+            { imageUrl: { $in: uniqueAssetUrls } },
+            { mobileImageUrl: { $in: uniqueAssetUrls } },
+          ],
+        },
+        { imageUrl: 1, mobileImageUrl: 1 }
+      ).lean(),
       Product.find(
         {
           ...(excludeProductId ? { _id: { $ne: excludeProductId } } : {}),
@@ -305,45 +485,61 @@ async function deleteAssetsFromStorage(assetUrls, { excludeProductId = null } = 
             { imageUrls: { $in: uniqueAssetUrls } },
             { 'videos.url': { $in: uniqueAssetUrls } },
             { 'videos.posterUrl': { $in: uniqueAssetUrls } },
+            { 'draftContent.imageUrl': { $in: uniqueAssetUrls } },
+            { 'draftContent.imageUrls': { $in: uniqueAssetUrls } },
+            { 'draftContent.videos.url': { $in: uniqueAssetUrls } },
+            { 'draftContent.videos.posterUrl': { $in: uniqueAssetUrls } },
           ],
         },
-        { imageUrl: 1, imageUrls: 1, videos: 1 }
+        { imageUrl: 1, imageUrls: 1, videos: 1, draftContent: 1 }
+      ).lean(),
+      BlogArticle.find(
+        {
+          $or: [
+            { heroImageUrl: { $in: uniqueAssetUrls } },
+            { thumbnailImageUrl: { $in: uniqueAssetUrls } },
+          ],
+        },
+        { heroImageUrl: 1, thumbnailImageUrl: 1 }
       ).lean(),
     ]);
-    const referencedAssetUrls = new Set(homeBannerRefs.map((banner) => banner.imageUrl));
+    const referencedAssetUrls = new Set(
+      homeBannerRefs.flatMap((banner) => [banner.imageUrl, banner.mobileImageUrl].filter(Boolean))
+    );
 
     for (const product of productRefs) {
-      if (uniqueAssetUrls.includes(product.imageUrl)) {
-        referencedAssetUrls.add(product.imageUrl);
-      }
-
-      for (const imageUrl of product.imageUrls || []) {
-        if (uniqueAssetUrls.includes(imageUrl)) {
-          referencedAssetUrls.add(imageUrl);
+      for (const assetUrl of collectProductAssetUrls(product)) {
+        if (uniqueAssetUrls.includes(assetUrl)) {
+          referencedAssetUrls.add(assetUrl);
         }
       }
+    }
 
-      for (const video of normalizeStoredVideos(product.videos)) {
-        if (uniqueAssetUrls.includes(video.url)) {
-          referencedAssetUrls.add(video.url);
-        }
+    for (const article of blogArticleRefs) {
+      if (uniqueAssetUrls.includes(article.heroImageUrl)) {
+        referencedAssetUrls.add(article.heroImageUrl);
+      }
 
-        if (uniqueAssetUrls.includes(video.posterUrl)) {
-          referencedAssetUrls.add(video.posterUrl);
-        }
+      if (uniqueAssetUrls.includes(article.thumbnailImageUrl)) {
+        referencedAssetUrls.add(article.thumbnailImageUrl);
       }
     }
 
     const deletionCandidates = uniqueAssetUrls.filter((assetUrl) => !referencedAssetUrls.has(assetUrl));
 
-    await Promise.all(deletionCandidates.map((assetUrl) => deleteImageFromGCS(assetUrl)));
+    await Promise.all(
+      deletionCandidates.map((assetUrl) => deleteImageFromGCS(assetUrl, { throwOnError }))
+    );
   } catch (error) {
     console.error('Error while deleting product assets from storage:', error);
+    if (throwOnError) {
+      throw error;
+    }
   }
 }
 
 export async function getAllProducts(categoryName) {
-  const products = await Product.find()
+  const products = await Product.find(buildPublicProductFilter())
     .populate('category', 'name')
     .lean();
 
@@ -358,6 +554,7 @@ export async function getAllProducts(categoryName) {
 
 export async function getHomepageFeaturedProducts() {
   const products = await Product.find({
+    ...buildPublicProductFilter(),
     isHomepageFeatured: true,
     availability: { $ne: 'unavailable' },
   })
@@ -414,8 +611,13 @@ export async function updateHomepageFeaturedProducts(productIds) {
           (product) => product.availability === 'unavailable'
         );
 
+        const nonPublicProduct = selectedProducts.find((product) => !isPublicProduct(product));
+
         if (unavailableProduct) {
           throw createValidationError('Неналичен продукт не може да бъде избран за началната страница.');
+        }
+        if (nonPublicProduct) {
+          throw createValidationError('Only published products can be selected for the homepage.');
         }
       }
 
@@ -446,40 +648,117 @@ export async function updateHomepageFeaturedProducts(productIds) {
     await session.endSession();
   }
 
+  await revalidateProductSurfaces();
+
   return getHomepageFeaturedProducts();
 }
 
-export async function createProduct(data, ownerId) {
-  const productData = buildCreateProductData(data, ownerId);
+export async function createProduct(data, user) {
+  if (!canCreateProduct(user)) {
+    throw createForbiddenError('РќСЏРјР°С‚Рµ РїСЂР°РІР° РґР° СЃСЉР·РґР°РІР°С‚Рµ РїСЂРѕРґСѓРєС‚.');
+  }
+
+  const productData = buildCreateProductData(data, user);
 
   await assertVideoAssetsNotAttachedToOtherProduct(productData.videos);
 
   const product = new Product(productData);
   const savedProduct = await product.save();
+  await notifyFullAdminsForProductReview(savedProduct, user);
+  if (savedProduct.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    await revalidateProductSurfaces({ productId: savedProduct._id });
+  }
 
   return normalizeProductMedia(savedProduct.toObject());
 }
 
-export async function getProductById(productId) {
+export async function getProductById(productId, viewer = null) {
   const product = await Product.findById(productId)
     .populate('category', 'name')
     .lean();
 
-  if (!product) {
+  if (!canViewProduct(product, viewer)) {
+    return null;
+  }
+
+  return normalizeProductForViewer(product, viewer);
+}
+
+export async function getManagedProductById(productId, user) {
+  const product = await Product.findById(productId)
+    .populate('category', 'name')
+    .lean();
+
+  if (!canViewProduct(product, user)) {
     return null;
   }
 
   return normalizeProductMedia(product);
 }
 
-export async function editProduct(productId, productData, userId) {
+export async function getMyProducts(user, { page = 1, limit = 50 } = {}) {
+  const safePage = Math.max(Number(page) || 1, 1);
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const activeProductFilter = {
+    publicationStatus: { $ne: PRODUCT_PUBLICATION_STATUSES.DELETED },
+  };
+
+  if (isFullAdmin(user)) {
+    const products = await Product.find(activeProductFilter)
+      .sort({ updatedAt: -1, _id: -1 })
+      .skip((safePage - 1) * safeLimit)
+      .limit(safeLimit)
+      .populate('category', 'name')
+      .lean();
+
+    return products.map(normalizeProductMedia);
+  }
+
+  if (!canCreateProduct(user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  const products = await Product.find({ owner: user._id, ...activeProductFilter })
+    .sort({ updatedAt: -1, _id: -1 })
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
+    .populate('category', 'name')
+    .lean();
+
+  return products.map(normalizeProductMedia);
+}
+
+export async function getProductReviewQueue(user, { page = 1, limit = 50 } = {}) {
+  if (!canReviewProduct(user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  const safePage = Math.max(Number(page) || 1, 1);
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const products = await Product.find({
+    $or: [
+      { publicationStatus: PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW },
+      { reviewStatus: PRODUCT_REVIEW_STATUSES.PENDING_REVIEW },
+    ],
+    publicationStatus: { $ne: PRODUCT_PUBLICATION_STATUSES.DELETED },
+  })
+    .sort({ updatedAt: 1, _id: 1 })
+    .skip((safePage - 1) * safeLimit)
+    .limit(safeLimit)
+    .populate('category', 'name')
+    .lean();
+
+  return products.map((product) => normalizeProductForViewer(product, user));
+}
+
+export async function editProduct(productId, productData, user) {
   const product = await Product.findById(productId);
 
   if (!product) {
     throw createNotFoundError('Продуктът не съществува.');
   }
 
-  if (product.owner.toString() !== userId) {
+  if (!canManageProduct(product, user)) {
     throw createForbiddenError('Нямате права да редактирате този продукт.');
   }
 
@@ -490,6 +769,19 @@ export async function editProduct(productId, productData, userId) {
       : [];
   const currentVideos = normalizeStoredVideos(product.videos);
   const sanitizedProductData = buildEditProductData(productData);
+  const wasPublic = isPublicProduct(product);
+  const isAdminEdit = isFullAdmin(user);
+  const isArtistEditingPublishedProduct =
+    !isAdminEdit && product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED;
+  const editSource = isArtistEditingPublishedProduct && hasDraftContent(product)
+    ? product.draftContent
+    : product;
+  const sourceImageUrls = Array.isArray(editSource.imageUrls)
+    ? editSource.imageUrls.filter(Boolean)
+    : editSource.imageUrl
+      ? [editSource.imageUrl]
+      : [];
+  const sourceVideos = normalizeStoredVideos(editSource.videos);
 
   if (Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')) {
     await assertVideoAssetsNotAttachedToOtherProduct(sanitizedProductData.videos, product._id);
@@ -500,7 +792,38 @@ export async function editProduct(productId, productData, userId) {
     : sanitizedProductData.imageUrl
       ? [sanitizedProductData.imageUrl]
       : [];
-  const mergedImageUrls = [...new Set([...currentImageUrls, ...incomingImageUrls])];
+  const hasIncomingImageFields =
+    Object.prototype.hasOwnProperty.call(sanitizedProductData, 'imageUrl') ||
+    Object.prototype.hasOwnProperty.call(sanitizedProductData, 'imageUrls');
+  const nextImageUrls = hasIncomingImageFields
+    ? [...new Set(incomingImageUrls)]
+    : sourceImageUrls;
+
+  if (isArtistEditingPublishedProduct) {
+    product.draftContent = {
+      title: sanitizedProductData.title ?? editSource.title,
+      description: sanitizedProductData.description ?? editSource.description,
+      price: sanitizedProductData.price ?? editSource.price,
+      category: sanitizedProductData.category ?? editSource.category,
+      availability: sanitizedProductData.availability || editSource.availability || 'available',
+      imageUrls: nextImageUrls,
+      imageUrl: nextImageUrls[0] || '',
+      videos: Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')
+        ? sanitizedProductData.videos
+        : sourceVideos,
+    };
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+    product.reviewNote = '';
+    product.draftRevision = (product.draftRevision || 0) + 1;
+    product.draftUpdatedAt = new Date();
+    product.draftSubmittedAt = new Date();
+    product.draftSubmittedBy = user._id;
+
+    await product.save();
+    await notifyFullAdminsForProductReview(product, user);
+
+    return normalizeProductForViewer(product.toObject(), user);
+  }
 
   for (const [key, value] of Object.entries(sanitizedProductData)) {
     if (key === 'imageUrl' || key === 'imageUrls' || key === 'videos') {
@@ -510,8 +833,8 @@ export async function editProduct(productId, productData, userId) {
     product[key] = value;
   }
 
-  product.imageUrls = mergedImageUrls;
-  product.imageUrl = mergedImageUrls[0] || '';
+  product.imageUrls = nextImageUrls;
+  product.imageUrl = nextImageUrls[0] || '';
 
   const videoAssetsToDelete = Object.prototype.hasOwnProperty.call(sanitizedProductData, 'videos')
     ? collectVideoAssetsForCleanup(currentVideos, sanitizedProductData.videos)
@@ -521,34 +844,227 @@ export async function editProduct(productId, productData, userId) {
     product.videos = sanitizedProductData.videos;
   }
 
+  if (isAdminEdit) {
+    if (product.publicationStatus !== PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+      product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PUBLISHED;
+      product.reviewedBy = user._id;
+      product.reviewedAt = new Date();
+      product.reviewNote = undefined;
+    }
+  } else {
+    product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW;
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+    product.reviewNote = '';
+    product.draftRevision = (product.draftRevision || 0) + 1;
+    product.draftUpdatedAt = new Date();
+    product.draftSubmittedAt = new Date();
+    product.draftSubmittedBy = user._id;
+  }
+
   await product.save();
   await deleteAssetsFromStorage(videoAssetsToDelete, { excludeProductId: product._id });
+  if (!isAdminEdit) {
+    await notifyFullAdminsForProductReview(product, user);
+  }
+  if (wasPublic || product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    await revalidateProductSurfaces({ productId: product._id });
+  }
 
-  return normalizeProductMedia(product.toObject());
+  return normalizeProductForViewer(product.toObject(), user);
 }
 
-export async function deleteProduct(productId, userId) {
+export async function deleteProduct(productId, user) {
   const product = await Product.findById(productId);
 
   if (!product) {
     throw createNotFoundError('Продуктът не беше намерен');
   }
 
-  if (product.owner.toString() !== userId) {
+  if (!canHardDeleteProduct(product, user)) {
     throw createForbiddenError('Нямате права да изтриете този продукт.');
   }
 
-  const imageUrlsToDelete =
-    Array.isArray(product.imageUrls) && product.imageUrls.length > 0
-      ? product.imageUrls.filter(Boolean)
-      : product.imageUrl
-        ? [product.imageUrl]
-        : [];
-  const videosToDelete = normalizeStoredVideos(product.videos);
-  const videoAssetUrls = videosToDelete.flatMap((video) => [video.url, video.posterUrl]);
+  const wasPublic = isPublicProduct(product);
+  const assetUrls = collectProductAssetUrls(product);
 
-  await Product.findByIdAndDelete(productId);
-  await deleteAssetsFromStorage([...imageUrlsToDelete, ...videoAssetUrls], { excludeProductId: product._id });
+  await deleteAssetsFromStorage(assetUrls, { excludeProductId: product._id, throwOnError: true });
+  await Product.findByIdAndDelete(product._id);
+
+  if (wasPublic) {
+    await revalidateProductSurfaces({ productId: product._id });
+  }
 
   return { message: 'Продуктът беше изтрит успешно.' };
+}
+
+export async function submitProductForReview(productId, user) {
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    throw createNotFoundError('Product does not exist.');
+  }
+
+  if (!canSubmitProductForReview(product, user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW;
+  product.reviewStatus = PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+  product.draftSubmittedAt = new Date();
+  product.draftSubmittedBy = user._id;
+  await product.save();
+  await notifyFullAdminsForProductReview(product, user);
+
+  return normalizeProductMedia(product.toObject());
+}
+
+export async function withdrawProductReview(productId, user) {
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    throw createNotFoundError('Product does not exist.');
+  }
+
+  if (!canWithdrawProductReview(product, user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  product.publicationStatus = PRODUCT_PUBLICATION_STATUSES.DRAFT;
+  product.reviewStatus = PRODUCT_REVIEW_STATUSES.DRAFT;
+  await product.save();
+
+  return normalizeProductMedia(product.toObject());
+}
+
+async function setReviewedProductStatus(productId, user, nextStatus, reviewNote = '') {
+  if (!canReviewProduct(user)) {
+    throw createForbiddenError('Forbidden');
+  }
+
+  const product = await Product.findById(productId);
+
+  if (!product) {
+    throw createNotFoundError('Product does not exist.');
+  }
+
+  if (
+    [
+      PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
+      PRODUCT_PUBLICATION_STATUSES.REJECTED,
+    ].includes(nextStatus)
+  ) {
+    const isPendingReview =
+      product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW ||
+      product.reviewStatus === PRODUCT_REVIEW_STATUSES.PENDING_REVIEW;
+
+    if (!isPendingReview) {
+      throw createValidationError('Only products pending review can be approved or rejected.');
+    }
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.ARCHIVED) {
+    assertProductStatus(
+      product,
+      [
+        PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
+        PRODUCT_PUBLICATION_STATUSES.PENDING_REVIEW,
+      ],
+      'Only published products or products pending review can be archived.'
+    );
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT) {
+    assertProductStatus(
+      product,
+      [
+        PRODUCT_PUBLICATION_STATUSES.ARCHIVED,
+      ],
+      'Only archived products can be restored to draft.'
+    );
+  }
+
+  const wasPublic = isPublicProduct(product);
+  let approvedDraftAssetsToDelete = [];
+  product.reviewedBy = user._id;
+  product.reviewedAt = new Date();
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED && hasDraftContent(product)) {
+    const draftContent = product.draftContent;
+    const previousPublicAssetUrls = collectProductAssetUrls(product.toObject());
+    const nextPublicAssetUrls = new Set(collectProductAssetUrls(draftContent));
+
+    approvedDraftAssetsToDelete = previousPublicAssetUrls.filter(
+      (assetUrl) => !nextPublicAssetUrls.has(assetUrl)
+    );
+
+    product.title = draftContent.title;
+    product.description = draftContent.description;
+    product.price = draftContent.price;
+    product.category = draftContent.category;
+    product.availability = draftContent.availability || 'available';
+    product.imageUrl = draftContent.imageUrl || '';
+    product.imageUrls = Array.isArray(draftContent.imageUrls) ? draftContent.imageUrls.filter(Boolean) : [];
+    product.videos = normalizeStoredVideos(draftContent.videos);
+    product.draftContent = null;
+  }
+
+  if (
+    nextStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED &&
+    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED
+  ) {
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.REJECTED;
+  } else {
+    product.publicationStatus = nextStatus;
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.REJECTED) {
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.REJECTED;
+    product.reviewNote = normalizeReviewNote(reviewNote, { required: true });
+  } else if (nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    product.reviewStatus = PRODUCT_REVIEW_STATUSES.NONE;
+    product.reviewNote = '';
+    product.draftContent = null;
+    product.draftSubmittedAt = null;
+    product.draftSubmittedBy = null;
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.ARCHIVED) {
+    product.isHomepageFeatured = false;
+    product.homepageFeaturedOrder = 0;
+  }
+
+  if (nextStatus === PRODUCT_PUBLICATION_STATUSES.DRAFT) {
+    product.isHomepageFeatured = false;
+    product.homepageFeaturedOrder = 0;
+  }
+
+  await product.save();
+  await deleteAssetsFromStorage(approvedDraftAssetsToDelete, { excludeProductId: product._id });
+
+  if (wasPublic || nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
+    await revalidateProductSurfaces({ productId: product._id });
+  }
+
+  return normalizeProductMedia(product.toObject());
+}
+
+export function approveProduct(productId, user) {
+  return setReviewedProductStatus(productId, user, PRODUCT_PUBLICATION_STATUSES.PUBLISHED);
+}
+
+export function rejectProduct(productId, user, reviewNote) {
+  return setReviewedProductStatus(
+    productId,
+    user,
+    PRODUCT_PUBLICATION_STATUSES.REJECTED,
+    reviewNote
+  );
+}
+
+export function archiveProduct(productId, user) {
+  return setReviewedProductStatus(productId, user, PRODUCT_PUBLICATION_STATUSES.ARCHIVED);
+}
+
+export function restoreProduct(productId, user) {
+  return setReviewedProductStatus(productId, user, PRODUCT_PUBLICATION_STATUSES.DRAFT);
 }

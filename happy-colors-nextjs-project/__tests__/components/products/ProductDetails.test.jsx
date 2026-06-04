@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductDetails from '@/app/products/[productId]/ProductDetails';
 import useImageSlideshow from '@/hooks/useImageSlideshow';
-import { fireEvent, render, screen } from '../test-utils.jsx';
+import { approveAdminProduct } from '@/managers/usersAdminManager';
+import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 
 vi.mock('@/hooks/useImageSlideshow', () => ({
   default: vi.fn(),
+}));
+
+vi.mock('@/managers/usersAdminManager', () => ({
+  approveAdminProduct: vi.fn(),
+  rejectAdminProduct: vi.fn(),
 }));
 
 const showPrev = vi.fn();
@@ -54,6 +60,7 @@ describe('ProductDetails', () => {
     pause.mockClear();
     resume.mockClear();
     handleTrackTransitionEnd.mockClear();
+    approveAdminProduct.mockResolvedValue({});
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,
       addEventListener: vi.fn(),
@@ -135,6 +142,50 @@ describe('ProductDetails', () => {
 
     expect(guestRender.container.querySelector('a[href="/products/product-1/edit"]')).not.toBeInTheDocument();
     expect(guestRender.container.querySelector('a[href="/products/product-1/delete"]')).not.toBeInTheDocument();
+  });
+
+  it('shows full-admin review actions for pending products on the product page', async () => {
+    const routerRefresh = vi.fn();
+    const { container } = render(
+      <ProductDetails
+        product={{
+          ...product,
+          publicationStatus: 'published',
+          reviewStatus: 'pending_review',
+        }}
+      />,
+      {
+        user: { _id: 'admin-1', role: 'full_admin' },
+        routerOverrides: { refresh: routerRefresh },
+      }
+    );
+
+    expect(container.querySelector('a[href="/products/product-1/edit"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/products/product-1/delete"]')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Одобри' }));
+
+    expect(approveAdminProduct).toHaveBeenCalledWith('product-1');
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+  });
+
+  it('shows a pending approval notice after artist edit redirects back to the product page', () => {
+    window.history.pushState(null, '', '/products/product-1?updated=review-pending');
+
+    render(
+      <ProductDetails
+        product={{
+          ...product,
+          publicationStatus: 'published',
+          reviewStatus: 'pending_review',
+        }}
+      />,
+      {
+        user: { _id: 'owner-1', role: 'artist', artistStatus: 'active' },
+      }
+    );
+
+    expect(screen.getByText(/Промените са запазени/)).toBeInTheDocument();
   });
 
   it('shows newsletter send action only for authenticated users', () => {

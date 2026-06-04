@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import bcrypt from 'bcrypt';
 import validator from 'validator';
 import { signAuthToken } from '../middlewares/auth.js';
+import { serializeUser } from '../utils/userRoles.js';
 
 function normalizeEmail(email) {
   return String(email ?? '').trim().toLowerCase();
@@ -29,7 +30,7 @@ export async function loginUser(email, password) {
 
   const token = signAuthToken(
     {
-      _id: user._id,
+      _id: String(user._id),
       username: user.username,
       email: user.email,
     },
@@ -38,11 +39,7 @@ export async function loginUser(email, password) {
 
   return {
     token,
-    user: {
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-    },
+    user: serializeUser(user),
   };
 }
 
@@ -87,9 +84,5 @@ export async function registerUser({ username, email, password }) {
 
   await user.save();
 
-  return {
-    _id: user._id,
-    username: user.username,
-    email: user.email,
-  };
+  return serializeUser(user);
 }

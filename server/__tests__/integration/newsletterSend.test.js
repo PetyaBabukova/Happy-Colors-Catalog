@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { sendEmail } from '../../helpers/sendEmail.js';
 import NewsletterSubscriber from '../../models/NewsletterSubscriber.js';
 import { createExpressApp } from '../../server.js';
-import { authCookie, createBlogArticle, createProduct, createUser } from './factories.js';
+import { authCookie, createBlogArticle, createProduct, createFullAdmin } from './factories.js';
 
 const validContentJson = {
   type: 'doc',
@@ -31,9 +31,19 @@ async function createSubscriber(overrides = {}) {
     email: 'subscriber@example.com',
     status: 'active',
     consentGivenAt: new Date(),
+    confirmedAt: new Date(),
     welcomeEmailSentAt: new Date(),
     ...overrides,
   });
+}
+
+async function getSubscribeToken(app, ip = '203.0.113.200') {
+  const res = await request(app)
+    .get('/newsletter/subscribe-token')
+    .set('x-forwarded-for', ip)
+    .expect(200);
+
+  return res.body.token;
 }
 
 async function waitUntil(predicate) {
@@ -62,7 +72,7 @@ describe('newsletter send integration', () => {
 
   it('returns active subscriber count only from the authenticated status endpoint', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'active@example.com' });
     await createSubscriber({ email: 'unsubscribed@example.com', status: 'unsubscribed' });
 
@@ -75,9 +85,35 @@ describe('newsletter send integration', () => {
     expect(JSON.stringify(res.body)).not.toContain('active@example.com');
   });
 
+  it('excludes unconfirmed subscribe attempts from newsletter send targets', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.210')
+      .send({
+        email: 'unconfirmed@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.211'),
+      })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+
+    const res = await request(app)
+      .get('/newsletter/send/status')
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toEqual({ activeSubscribers: 0 });
+    expect(await NewsletterSubscriber.countDocuments()).toBe(0);
+  });
+
   it('sends test emails to configured recipients without subscriber data', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/newsletter/send/test')
@@ -106,7 +142,7 @@ describe('newsletter send integration', () => {
     const previousRecipients = process.env.NEWSLETTER_TEST_RECIPIENTS;
     process.env.NEWSLETTER_TEST_RECIPIENTS = '';
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     try {
       await request(app)
@@ -123,7 +159,7 @@ describe('newsletter send integration', () => {
 
   it('broadcasts to active subscribers only and keeps subscriber data out of the response', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'first@example.com' });
     await createSubscriber({ email: 'second@example.com' });
     await createSubscriber({ email: 'skipped@example.com', status: 'unsubscribed' });
@@ -158,7 +194,7 @@ describe('newsletter send integration', () => {
 
   it('returns a conflict while another broadcast is in progress', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'slow@example.com' });
     let releaseFirstSend;
 
@@ -190,7 +226,7 @@ describe('newsletter send integration', () => {
 
   it('falls back to text extracted from sanitized HTML when contentText is empty', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'html-only@example.com' });
 
     await request(app)
@@ -221,7 +257,7 @@ describe('newsletter send integration', () => {
 
   it('returns a clear zero-subscriber response without sending', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/newsletter/send')
@@ -240,7 +276,7 @@ describe('newsletter send integration', () => {
 
   it('uses a configured public image URL for custom newsletters', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'custom-image@example.com' });
 
     await request(app)
@@ -262,7 +298,7 @@ describe('newsletter send integration', () => {
     const previousImageUrl = process.env.NEWSLETTER_DEFAULT_IMAGE_URL;
     process.env.NEWSLETTER_DEFAULT_IMAGE_URL = '';
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'site-og@example.com' });
 
     try {
@@ -285,7 +321,7 @@ describe('newsletter send integration', () => {
 
   it('rejects authenticated newsletter mutations from untrusted browser origins before sending', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'csrf-target@example.com' });
 
     await request(app)
@@ -307,7 +343,7 @@ describe('newsletter send integration', () => {
 
   it('allows authenticated newsletter mutations from the configured public site origin', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     const res = await request(app)
       .post('/newsletter/send/test')
@@ -327,7 +363,7 @@ describe('newsletter send integration', () => {
     const previousNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     try {
       await request(app)
@@ -360,7 +396,7 @@ describe('newsletter send integration', () => {
     delete process.env.NODE_ENV;
     process.env.CLIENT_URL = 'https://happycolors.eu';
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     try {
       await request(app)
@@ -383,7 +419,7 @@ describe('newsletter send integration', () => {
 
   it('emails the owner a private failure report for partial broadcast failures', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'bad@example.com' });
     await createSubscriber({ email: 'good@example.com' });
     sendEmail
@@ -417,35 +453,35 @@ describe('newsletter send integration', () => {
 
     await request(app)
       .post('/newsletter/send')
-      .set('Cookie', authCookie(await createUser()))
+      .set('Cookie', authCookie(await createFullAdmin()))
       .set('x-forwarded-for', '203.0.113.10')
       .send(newsletterPayload({ email: 'owner@example.com', password: 'should-not-be-accepted' }))
       .expect(400);
 
     await request(app)
       .post('/newsletter/send')
-      .set('Cookie', authCookie(await createUser()))
+      .set('Cookie', authCookie(await createFullAdmin()))
       .set('x-forwarded-for', '203.0.113.11')
       .send(newsletterPayload({ subject: 'x'.repeat(161) }))
       .expect(400);
 
     await request(app)
       .post('/newsletter/send')
-      .set('Cookie', authCookie(await createUser()))
+      .set('Cookie', authCookie(await createFullAdmin()))
       .set('x-forwarded-for', '203.0.113.12')
       .send(newsletterPayload({ imageUrl: 'https://evil.example/image.png' }))
       .expect(400);
 
     await request(app)
       .post('/newsletter/send')
-      .set('Cookie', authCookie(await createUser()))
+      .set('Cookie', authCookie(await createFullAdmin()))
       .set('x-forwarded-for', '203.0.113.13')
       .send(newsletterPayload({ sourceType: 'admin' }))
       .expect(400);
 
     await request(app)
       .post('/newsletter/send')
-      .set('Cookie', authCookie(await createUser()))
+      .set('Cookie', authCookie(await createFullAdmin()))
       .set('x-forwarded-for', '203.0.113.14')
       .send(newsletterPayload({ sourceType: 'product', sourceId: 'not-a-mongo-id' }))
       .expect(400);
@@ -455,7 +491,7 @@ describe('newsletter send integration', () => {
 
   it('accepts nullable contentJson while still validating newsletter text content', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'nullable-json@example.com' });
 
     await request(app)
@@ -474,7 +510,7 @@ describe('newsletter send integration', () => {
 
   it('requires JSON content for send mutations', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     await request(app)
       .post('/newsletter/send')
@@ -503,7 +539,7 @@ describe('newsletter send integration', () => {
 
   it('rejects invalid product prefill ids before loading product records', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     await request(app)
       .get('/newsletter/send/prefill/product/not-a-mongo-id')
@@ -513,7 +549,7 @@ describe('newsletter send integration', () => {
 
   it('returns product prefill without subscriber data', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const product = await createProduct({
       title: 'Lavender Candle',
       description: 'A relaxing handmade candle.',
@@ -541,7 +577,7 @@ describe('newsletter send integration', () => {
 
   it('re-derives product CTA and image for product broadcasts', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const product = await createProduct({
       title: 'Product Newsletter',
       imageUrls: ['https://cdn.example.com/product-newsletter.webp'],
@@ -574,7 +610,7 @@ describe('newsletter send integration', () => {
 
   it('returns 404 for missing product sources in prefill and send', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const missingId = '665000000000000000000001';
 
     await request(app)
@@ -600,7 +636,7 @@ describe('newsletter send integration', () => {
 
   it('rejects invalid blog prefill ids before loading article records', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
 
     await request(app)
       .get('/newsletter/send/prefill/blog/not-a-mongo-id')
@@ -610,7 +646,7 @@ describe('newsletter send integration', () => {
 
   it('returns blog prefill using the first paragraph and thumbnail image', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const article = await createBlogArticle({
       title: 'Colorful story',
       contentHtml: '<p>First paragraph for subscribers.</p><p>Second paragraph.</p>',
@@ -637,7 +673,7 @@ describe('newsletter send integration', () => {
 
   it('skips empty leading paragraphs when building blog prefill', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const article = await createBlogArticle({
       title: 'Intro after empty paragraph',
       contentHtml: '<p><br></p><p>Real intro for subscribers.</p><p>Second paragraph.</p>',
@@ -657,7 +693,7 @@ describe('newsletter send integration', () => {
 
   it('re-derives blog CTA and image for blog broadcasts', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const article = await createBlogArticle({
       title: 'Blog Newsletter',
       thumbnailImageUrl: 'https://cdn.example.com/blog-newsletter.webp',
@@ -690,7 +726,7 @@ describe('newsletter send integration', () => {
 
   it('returns 404 for missing blog sources in prefill and send', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const missingId = '665000000000000000000002';
 
     await request(app)
@@ -707,7 +743,7 @@ describe('newsletter send integration', () => {
 
   it('rate limits test sends separately from public subscribe', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const ip = '203.0.113.55';
 
     for (let index = 0; index < 10; index += 1) {
@@ -729,13 +765,18 @@ describe('newsletter send integration', () => {
     await request(app)
       .post('/newsletter/subscribe')
       .set('x-forwarded-for', ip)
-      .send({ email: 'new-subscriber@example.com', consent: true, website: '' })
+      .send({
+        email: 'new-subscriber@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.201'),
+      })
       .expect(200);
   });
 
   it('rate limits broadcasts separately from public subscribe', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const ip = '203.0.113.56';
     await createSubscriber({ email: 'rate-limited-broadcast@example.com' });
 
@@ -763,13 +804,18 @@ describe('newsletter send integration', () => {
     await request(app)
       .post('/newsletter/subscribe')
       .set('x-forwarded-for', ip)
-      .send({ email: 'after-broadcast-limit@example.com', consent: true, website: '' })
+      .send({
+        email: 'after-broadcast-limit@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.202'),
+      })
       .expect(200);
   });
 
   it('does not let authenticated users bypass broadcast limits by changing x-forwarded-for', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     await createSubscriber({ email: 'spoofed-ip-broadcast@example.com' });
 
     for (let index = 0; index < 3; index += 1) {

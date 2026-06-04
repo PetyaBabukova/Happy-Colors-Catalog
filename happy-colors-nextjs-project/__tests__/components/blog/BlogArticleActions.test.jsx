@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BlogArticleActions from '@/components/blog/BlogArticleActions';
-import { archiveBlogArticle } from '@/managers/blogArticlesManager';
+import { deleteBlogArticle } from '@/managers/blogArticlesManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 
 vi.mock('@/managers/blogArticlesManager', () => ({
-  archiveBlogArticle: vi.fn(),
+  deleteBlogArticle: vi.fn(),
 }));
 
 const articleId = 'a'.repeat(24);
@@ -12,7 +12,7 @@ const articleId = 'a'.repeat(24);
 describe('BlogArticleActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    archiveBlogArticle.mockResolvedValue({ ok: true });
+    deleteBlogArticle.mockResolvedValue({ ok: true });
   });
 
   it('does not render article actions for guests', () => {
@@ -33,7 +33,7 @@ describe('BlogArticleActions', () => {
     expect(newsletterLink.className).toContain('newsletterActionLink');
   });
 
-  it('archives an article after confirmation', async () => {
+  it('deletes an article after confirmation', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const mockRouterPush = vi.fn();
     const refresh = vi.fn();
@@ -46,7 +46,7 @@ describe('BlogArticleActions', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    await waitFor(() => expect(archiveBlogArticle).toHaveBeenCalledWith(articleId));
+    await waitFor(() => expect(deleteBlogArticle).toHaveBeenCalledWith(articleId));
     expect(mockRouterPush).toHaveBeenCalledWith('/blog');
     expect(refresh).toHaveBeenCalled();
 

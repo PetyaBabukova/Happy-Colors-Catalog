@@ -61,7 +61,7 @@ export default function RootLayout({ children }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, '\\u003c') }}
         />
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout enableAnalytics={shouldIndexSite}>{children}</ClientLayout>
       </body>
 
     </html>

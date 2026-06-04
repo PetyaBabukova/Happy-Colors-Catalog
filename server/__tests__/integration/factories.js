@@ -5,6 +5,8 @@ import HomeBanner from '../../models/HomeBanner.js';
 import Order from '../../models/Order.js';
 import Product from '../../models/Product.js';
 import User from '../../models/User.js';
+import { ARTIST_STATUSES, USER_ROLES } from '../../utils/userRoles.js';
+import { PRODUCT_PUBLICATION_STATUSES } from '../../utils/productPublication.js';
 
 let sequence = 0;
 
@@ -32,6 +34,18 @@ export async function createUser(overrides = {}) {
   return User.create(buildUser(overrides));
 }
 
+export async function createFullAdmin(overrides = {}) {
+  return createUser({ role: USER_ROLES.FULL_ADMIN, ...overrides });
+}
+
+export async function createActiveArtist(overrides = {}) {
+  return createUser({
+    role: USER_ROLES.ARTIST,
+    artistStatus: ARTIST_STATUSES.ACTIVE,
+    ...overrides,
+  });
+}
+
 export function buildCategory(overrides = {}) {
   const id = nextId('category');
 
@@ -56,6 +70,7 @@ export function buildProduct({ category, owner, ...overrides } = {}) {
     category: category?._id || category,
     owner: owner?._id || owner,
     availability: 'available',
+    publicationStatus: PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
     ...overrides,
   };
 }

@@ -25,6 +25,35 @@ const newsletterSubscriberSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    confirmedAt: {
+      type: Date,
+      default: null,
+    },
+    firstSubscribedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    lastSubscribedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    subscribeCount: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    hasEverUnsubscribed: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    lastStatusChangedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
     unsubscribedAt: {
       type: Date,
       default: null,

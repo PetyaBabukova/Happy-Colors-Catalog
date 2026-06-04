@@ -1,0 +1,318 @@
+.page {
+  position: relative;
+  z-index: 0;
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  color: var(--dark-green);
+}
+
+.header {
+  position: static;
+  z-index: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0;
+  max-width: none;
+  background: transparent;
+}
+
+.header h1,
+.setupPanel h2,
+.periodCard h2,
+.tablePanel h2 {
+  margin: 0;
+  text-align: left;
+}
+
+.header h1 {
+  font-size: 2rem;
+}
+
+.header p {
+  max-width: 58rem;
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+}
+
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: auto;
+  min-width: 8rem;
+  white-space: nowrap;
+}
+
+.deleteSubscriberButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(168, 66, 38, 0.45);
+  border-radius: 4px;
+  background: rgba(255, 245, 236, 0.92);
+  color: var(--dark-orange);
+}
+
+.deleteSubscriberButton:hover,
+.deleteSubscriberButton:focus-visible {
+  border-color: var(--dark-orange);
+  background: var(--dark-orange);
+  color: #fff;
+}
+
+.deleteSubscriberButton:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.statusText,
+.emptyText {
+  padding: 1rem;
+  border: 1px dashed var(--light-green);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.setupPanel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid var(--dark-orange);
+  border-radius: 8px;
+  background: rgba(255, 245, 236, 0.86);
+}
+
+.setupTitle {
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.setupPanel p {
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+}
+
+.summaryStrip,
+.subscriberSummary,
+.periodGrid,
+.tablesGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.summaryStrip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.subscriberSummary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1.5rem 0 1rem;
+}
+
+.periodGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.tablesGrid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr);
+  align-items: stretch;
+}
+
+.sidePanels {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.metricCard,
+.periodCard,
+.tablePanel,
+.subscriberPanel {
+  border: 1px solid var(--light-green);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.metricCard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem;
+}
+
+.metricIcon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--lighter-green);
+  color: var(--dark-green);
+}
+
+.metricLabel,
+.metricValue,
+.metricDetail {
+  margin: 0;
+}
+
+.metricLabel,
+.metricDetail,
+.secondaryCell {
+  font-size: 0.88rem;
+  opacity: 0.78;
+}
+
+.metricValue {
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.periodCard,
+.tablePanel,
+.subscriberPanel {
+  padding: 1rem;
+}
+
+.periodCard h2,
+.tablePanel h2,
+.subscriberPanel h2 {
+  margin-bottom: 0.75rem;
+  font-size: 1.2rem;
+}
+
+.subscriberPanel {
+  margin-bottom: 1rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--light-green);
+  border-radius: 999px;
+  background: var(--lighter-green);
+  color: var(--dark-green);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge_new {
+  border-color: var(--dark-orange);
+  background: rgba(255, 245, 236, 0.92);
+}
+
+.badge_subscribed {
+  border-color: var(--dark-green);
+}
+
+.badge_unsubscribed {
+  border-color: rgba(120, 120, 120, 0.48);
+  background: rgba(245, 245, 245, 0.9);
+  color: rgba(40, 40, 40, 0.82);
+}
+
+.periodMetrics {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.tableWrap table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 36rem;
+}
+
+.compactTablePanel .tableWrap {
+  overflow-x: visible;
+}
+
+.compactTablePanel .tableWrap table {
+  min-width: 0;
+  table-layout: auto;
+}
+
+.compactTablePanel .tableWrap th,
+.compactTablePanel .tableWrap td {
+  padding-inline: 0.45rem;
+}
+
+.compactTablePanel .tableWrap th:first-child,
+.compactTablePanel .tableWrap td:first-child {
+  width: 52%;
+}
+
+.tableWrap th,
+.tableWrap td {
+  padding: 0.7rem 0.6rem;
+  border-bottom: 1px solid var(--light-green-transparent);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tableWrap th {
+  background: var(--lighter-green);
+  font-size: 0.92rem;
+}
+
+.primaryCell,
+.secondaryCell {
+  display: block;
+}
+
+.primaryCell {
+  font-weight: 700;
+}
+
+@media (max-width: 920px) {
+  .summaryStrip,
+  .subscriberSummary,
+  .periodGrid,
+  .tablesGrid,
+  .sidePanels {
+    grid-template-columns: 1fr;
+  }
+
+  .sidePanels {
+    grid-template-rows: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    width: min(100%, calc(100% - 1rem));
+  }
+
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .refreshButton {
+    width: 100%;
+  }
+}

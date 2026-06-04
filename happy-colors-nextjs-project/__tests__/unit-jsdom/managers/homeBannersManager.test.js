@@ -116,6 +116,29 @@ describe('homeBannersManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(4, '/api/revalidate/home-banners', expect.any(Object));
   });
 
+  it('invalidates homepage banner cache for mobile-only image edits', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: banner })).mockResolvedValueOnce(jsonResponse());
+
+    await expect(
+      editHomeBanner('banner-1', {
+        mobileImageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/banner.webp',
+      })
+    ).resolves.toEqual(banner);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/home-banners/banner-1',
+      expect.objectContaining({
+        method: 'PUT',
+        credentials: 'include',
+        body: JSON.stringify({
+          mobileImageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/mobile-images/banner.webp',
+        }),
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/revalidate/home-banners', expect.any(Object));
+  });
+
   it('throws backend messages from mutation failures', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'Not allowed' } }));
 

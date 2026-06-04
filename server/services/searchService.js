@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
+import { buildPublicProductFilter } from '../utils/productPublication.js';
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -50,6 +51,7 @@ export async function searchProducts(query) {
   const productTextConditions = buildRegexConditions(['title', 'description'], variants);
 
   const products = await Product.find({
+    ...buildPublicProductFilter(),
     $or: [
       ...productTextConditions,
       ...(categoryIds.length > 0 ? [{ category: { $in: categoryIds } }] : []),

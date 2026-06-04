@@ -1,8 +1,26 @@
 import Product from '../models/Product.js';
 import { deleteImageFromGCS } from '../helpers/gcsImageHelper.js';
 import { normalizeStoredVideos } from '../helpers/productVideoHelper.js';
+import { PRODUCT_PUBLICATION_STATUSES } from '../utils/productPublication.js';
+import { canManageProduct, canManageProductMedia } from '../utils/productPermissions.js';
 
-export async function deleteProductVideo(productId, videoUrl, userId) {
+function canDeleteMedia(product, user) {
+  if (typeof user === 'string') {
+    return product.owner.toString() === user;
+  }
+
+  return canManageProductMedia(product, user);
+}
+
+function shouldStagePublishedMediaRemoval(product, user) {
+  return (
+    typeof user !== 'string' &&
+    product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED &&
+    canManageProduct(product, user)
+  );
+}
+
+export async function deleteProductVideo(productId, videoUrl, user) {
   if (!String(videoUrl || '').trim()) {
     const error = new Error('Липсва video URL за изтриване.');
     error.statusCode = 400;
@@ -17,7 +35,9 @@ export async function deleteProductVideo(productId, videoUrl, userId) {
     throw error;
   }
 
-  if (product.owner.toString() !== userId) {
+  const stageOnly = shouldStagePublishedMediaRemoval(product, user) && !canDeleteMedia(product, user);
+
+  if (!canDeleteMedia(product, user) && !stageOnly) {
     const error = new Error('Нямате права да редактирате този продукт.');
     error.statusCode = 403;
     throw error;
@@ -34,6 +54,14 @@ export async function deleteProductVideo(productId, videoUrl, userId) {
 
   const remainingVideos = currentVideos.filter((video) => video.url !== videoUrl);
   const remainingPosterUrls = new Set(remainingVideos.map((video) => video.posterUrl));
+
+  if (stageOnly) {
+    return {
+      message: 'Р’РёРґРµРѕС‚Рѕ Р±РµС€Рµ РїСЂРµРјР°С…РЅР°С‚Рѕ РѕС‚ СЂРµРґР°РєС†РёСЏС‚Р°.',
+      videos: remainingVideos,
+    };
+  }
+
   product.videos = remainingVideos;
 
   await product.save();

@@ -1,12 +1,16 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
+import { sendEmail } from '../../helpers/sendEmail.js';
 import Product from '../../models/Product.js';
 import { createExpressApp } from '../../server.js';
 import {
   authCookie,
   buildProduct,
+  createActiveArtist,
+  createBlogArticle,
   createCategory,
+  createFullAdmin,
   createHomeBanner,
   createProduct,
   createUser,
@@ -31,7 +35,8 @@ describe('products integration', () => {
 
   it('creates a product for an authenticated owner', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createActiveArtist();
+    const admin = await createFullAdmin({ email: 'review-copy@example.com' });
     const category = await createCategory();
 
     const res = await request(app)
@@ -43,9 +48,67 @@ describe('products integration', () => {
     expect(res.body).toMatchObject({
       title: 'Created Product',
       owner: String(owner._id),
+      publicationStatus: 'pending_review',
     });
     expect(res.body.createdAt).toBeTruthy();
     expect(res.body.updatedAt).toBeTruthy();
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: [admin.email],
+        subject: expect.stringContaining('Product pending approval'),
+        text: expect.stringContaining(`/users/admin?reviewProduct=${res.body._id}`),
+      })
+    );
+  });
+
+  it('rejects product creation for customers', async () => {
+    const app = createExpressApp();
+    const customer = await createUser();
+    const category = await createCategory();
+
+    await request(app)
+      .post('/products')
+      .set('Cookie', authCookie(customer))
+      .send(buildProduct({ category }))
+      .expect(403);
+  });
+
+  it('does not expose non-published products publicly', async () => {
+    const app = createExpressApp();
+    const owner = await createActiveArtist();
+    const category = await createCategory();
+    const draft = await createProduct({
+      owner,
+      category,
+      title: 'Hidden draft',
+      publicationStatus: 'draft',
+      isHomepageFeatured: true,
+    });
+    await createProduct({ owner, category, title: 'Visible published' });
+
+    const listRes = await request(app).get('/products').expect(200);
+    const featuredRes = await request(app).get('/products/homepage-featured').expect(200);
+
+    expect(listRes.body.map((product) => product.title)).toEqual(['Visible published']);
+    expect(featuredRes.body).toEqual([]);
+    await request(app).get(`/products/${draft._id}`).expect(404);
+  });
+
+  it('keeps legacy products without publicationStatus public during migration', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const legacyProduct = await createProduct({ owner, category, title: 'Legacy public' });
+    await Product.collection.updateOne(
+      { _id: legacyProduct._id },
+      { $unset: { publicationStatus: '' } }
+    );
+
+    const listRes = await request(app).get('/products').expect(200);
+    const detailRes = await request(app).get(`/products/${legacyProduct._id}`).expect(200);
+
+    expect(listRes.body.map((product) => product._id)).toContain(String(legacyProduct._id));
+    expect(detailRes.body).toMatchObject({ _id: String(legacyProduct._id), title: 'Legacy public' });
   });
 
   it('rejects product creation without authentication', async () => {
@@ -97,7 +160,7 @@ describe('products integration', () => {
 
   it('allows authenticated users to update homepage featured products', async () => {
     const app = createExpressApp();
-    const owner = await createUser({ email: 'owner@example.com' });
+    const owner = await createFullAdmin({ email: 'owner@example.com' });
     const category = await createCategory();
     const first = await createProduct({ owner, category, title: 'First pick' });
     const second = await createProduct({ owner, category, title: 'Second pick' });
@@ -106,6 +169,14 @@ describe('products integration', () => {
       .put('/products/homepage-featured')
       .send({ productIds: [String(first._id)] })
       .expect(401);
+
+    const customer = await createUser({ email: 'customer@example.com' });
+
+    await request(app)
+      .put('/products/homepage-featured')
+      .set('Cookie', authCookie(customer))
+      .send({ productIds: [String(first._id)] })
+      .expect(403);
 
     const res = await request(app)
       .put('/products/homepage-featured')
@@ -124,7 +195,7 @@ describe('products integration', () => {
 
   it('allows an authenticated user to clear homepage featured products intentionally', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const product = await createProduct({
       owner,
@@ -148,7 +219,7 @@ describe('products integration', () => {
 
   it('rejects unavailable products in homepage featured updates', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const product = await createProduct({
       owner,
@@ -165,9 +236,14 @@ describe('products integration', () => {
 
   it('allows owners to edit their products', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createActiveArtist();
     const category = await createCategory();
-    const product = await createProduct({ owner, category, title: 'Original title' });
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Original title',
+      publicationStatus: 'draft',
+    });
 
     const editRes = await request(app)
       .put(`/products/${product._id}`)
@@ -180,18 +256,69 @@ describe('products integration', () => {
 
   it('allows owners to delete their products', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createActiveArtist();
     const category = await createCategory();
-    const product = await createProduct({ owner, category });
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/products/images/delete-me.webp';
+    const videoUrl = 'https://storage.googleapis.com/test-bucket/products/videos/delete-me.mp4';
+    const posterUrl = 'https://storage.googleapis.com/test-bucket/products/posters/delete-me.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      publicationStatus: 'published',
+      imageUrl,
+      imageUrls: [imageUrl],
+      videos: [
+        {
+          url: videoUrl,
+          posterUrl,
+          mimeType: 'video/mp4',
+          durationSeconds: 8,
+          uploadDate: new Date(),
+        },
+      ],
+    });
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id)).resolves.toBeNull();
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(imageUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(videoUrl, { throwOnError: true });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(posterUrl, { throwOnError: true });
+    await request(app).get(`/products/${product._id}`).expect(404);
+
+    const mineRes = await request(app)
+      .get('/products/mine')
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(mineRes.body.map((item) => item._id)).not.toContain(String(product._id));
+  });
+
+  it('keeps the product when storage cleanup fails during delete', async () => {
+    const app = createExpressApp();
+    const owner = await createActiveArtist();
+    const category = await createCategory();
+    const imageUrl = 'https://storage.googleapis.com/test-bucket/products/images/delete-fails.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl,
+      imageUrls: [imageUrl],
+    });
+    deleteImageFromGCS.mockRejectedValueOnce(new Error('storage outage'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(500);
+
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      _id: product._id,
+      imageUrl,
+    });
   });
 
   it('removes deleted featured products from the homepage featured list', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const deletedProduct = await createProduct({
       owner,
@@ -217,7 +344,7 @@ describe('products integration', () => {
 
   it('does not delete product storage assets that are still used by a home banner', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/products/images/shared.webp';
     const product = await createProduct({
@@ -230,13 +357,32 @@ describe('products integration', () => {
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id)).resolves.toBeNull();
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
+  it('does not delete product storage assets that are still used by a home banner mobile image', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/products/images/shared-mobile-banner.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl: sharedImageUrl,
+      imageUrls: [sharedImageUrl],
+    });
+    await createHomeBanner({ owner, mobileImageUrl: sharedImageUrl });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
   });
 
   it('does not delete product storage assets that are still used by another product', async () => {
     const app = createExpressApp();
-    const owner = await createUser();
+    const owner = await createFullAdmin();
     const category = await createCategory();
     const sharedImageUrl = 'https://storage.googleapis.com/test-bucket/products/images/shared-product.webp';
     const product = await createProduct({
@@ -255,16 +401,68 @@ describe('products integration', () => {
 
     await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
 
-    await expect(Product.findById(product._id)).resolves.toBeNull();
-    expect(deleteImageFromGCS).not.toHaveBeenCalledWith(sharedImageUrl);
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
+  it('does not delete product storage assets that are still used by a blog article or product draft', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const sharedBlogImageUrl =
+      'https://storage.googleapis.com/test-bucket/products/images/shared-blog.webp';
+    const sharedDraftPosterUrl =
+      'https://storage.googleapis.com/test-bucket/products/posters/shared-draft.webp';
+    const product = await createProduct({
+      owner,
+      category,
+      imageUrl: sharedBlogImageUrl,
+      imageUrls: [sharedBlogImageUrl, sharedDraftPosterUrl],
+    });
+    await createBlogArticle({
+      owner,
+      heroImageUrl: sharedBlogImageUrl,
+      thumbnailImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/shared-blog.webp',
+    });
+    await createProduct({
+      owner,
+      category,
+      title: 'Draft keeps poster',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/products/images/other.webp',
+      imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/other.webp'],
+      draftContent: {
+        title: 'Draft content',
+        description: 'Draft description',
+        price: 10,
+        imageUrl: '',
+        imageUrls: [],
+        videos: [
+          {
+            url: 'https://storage.googleapis.com/test-bucket/products/videos/draft.mp4',
+            posterUrl: sharedDraftPosterUrl,
+            mimeType: 'video/mp4',
+            durationSeconds: 8,
+            uploadDate: new Date(),
+          },
+        ],
+        category: category._id,
+        availability: 'available',
+      },
+    });
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedBlogImageUrl);
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedDraftPosterUrl);
   });
 
   it('rejects edit and delete requests from non-owners', async () => {
     const app = createExpressApp();
-    const owner = await createUser({ email: 'owner@example.com' });
-    const otherUser = await createUser({ email: 'other@example.com' });
+    const owner = await createActiveArtist({ email: 'owner@example.com' });
+    const otherUser = await createActiveArtist({ email: 'other@example.com' });
     const category = await createCategory();
-    const product = await createProduct({ owner, category });
+    const product = await createProduct({ owner, category, publicationStatus: 'draft' });
     const nonOwnerCookie = authCookie(otherUser);
 
     await request(app)
@@ -276,5 +474,247 @@ describe('products integration', () => {
     await request(app).delete(`/products/${product._id}`).set('Cookie', nonOwnerCookie).expect(403);
 
     await expect(Product.findById(product._id)).resolves.toBeTruthy();
+  });
+
+  it('allows full admins to manage products owned by other users', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'artist@example.com' });
+    const admin = await createFullAdmin({ email: 'admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({ owner: artist, category, publicationStatus: 'published' });
+
+    await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ title: 'Admin edited' })
+      .expect(200);
+
+    await request(app).delete(`/products/${product._id}`).set('Cookie', authCookie(admin)).expect(204);
+    await expect(Product.findById(product._id).lean()).resolves.toBeNull();
+  });
+
+  it('supports artist review submission and full-admin approval', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'review-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'review-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: artist,
+      category,
+      publicationStatus: 'draft',
+      title: 'Review me',
+    });
+
+    const submitRes = await request(app)
+      .patch(`/products/${product._id}/submit-review`)
+      .set('Cookie', authCookie(artist))
+      .expect(200);
+
+    expect(submitRes.body.publicationStatus).toBe('pending_review');
+
+    const queueRes = await request(app)
+      .get('/products/review-queue')
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(queueRes.body.map((item) => item._id)).toContain(String(product._id));
+
+    const approveRes = await request(app)
+      .patch(`/products/${product._id}/approve`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(approveRes.body.publicationStatus).toBe('published');
+    await request(app).get(`/products/${product._id}`).expect(200);
+  });
+
+  it('lets artists revise pending products and keeps the latest revision pending review', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'blocked-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'reject-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({ owner: artist, category, publicationStatus: 'pending_review' });
+
+    const pendingEditRes = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(artist))
+      .send({ title: 'Artist revised while pending' })
+      .expect(200);
+
+    expect(pendingEditRes.body).toMatchObject({
+      title: 'Artist revised while pending',
+      publicationStatus: 'pending_review',
+    });
+
+    const rejectRes = await request(app)
+      .patch(`/products/${product._id}/reject`)
+      .set('Cookie', authCookie(admin))
+      .send({ reviewNote: 'Please add one clearer photo.' })
+      .expect(200);
+
+    expect(rejectRes.body).toMatchObject({
+      publicationStatus: 'rejected',
+      reviewNote: 'Please add one clearer photo.',
+    });
+
+    const editRes = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(artist))
+      .send({ title: 'Artist revised' })
+      .expect(200);
+
+    expect(editRes.body).toMatchObject({
+      title: 'Artist revised',
+      publicationStatus: 'pending_review',
+      reviewNote: '',
+    });
+  });
+
+  it('stores artist edits to published products as pending draft content until admin approval', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'published-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'published-review-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: artist,
+      category,
+      publicationStatus: 'published',
+      title: 'Approved public title',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+      imageUrls: [
+        'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+        'https://storage.googleapis.com/test-bucket/products/images/public-kept.webp',
+      ],
+    });
+
+    const editRes = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(artist))
+      .send({
+        title: 'Pending artist revision',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/products/images/public-kept.webp',
+        imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/public-kept.webp'],
+      })
+      .expect(200);
+
+    expect(editRes.body).toMatchObject({
+      title: 'Pending artist revision',
+      publicationStatus: 'published',
+      reviewStatus: 'pending_review',
+      imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/public-kept.webp'],
+    });
+
+    const publicRes = await request(app).get(`/products/${product._id}`).expect(200);
+    expect(publicRes.body).toMatchObject({
+      title: 'Approved public title',
+      publicationStatus: 'published',
+      imageUrls: [
+        'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+        'https://storage.googleapis.com/test-bucket/products/images/public-kept.webp',
+      ],
+    });
+
+    const reviewQueueRes = await request(app)
+      .get('/products/review-queue')
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+    expect(reviewQueueRes.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: String(product._id),
+          title: 'Pending artist revision',
+          reviewStatus: 'pending_review',
+        }),
+      ])
+    );
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: [admin.email],
+        subject: expect.stringContaining('Product pending approval'),
+        text: expect.stringContaining(`/users/admin?reviewProduct=${product._id}`),
+      })
+    );
+
+    const approveRes = await request(app)
+      .patch(`/products/${product._id}/approve`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(approveRes.body).toMatchObject({
+      title: 'Pending artist revision',
+      publicationStatus: 'published',
+      reviewStatus: 'none',
+      imageUrls: ['https://storage.googleapis.com/test-bucket/products/images/public-kept.webp'],
+    });
+    expect(deleteImageFromGCS).toHaveBeenCalledWith(
+      'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
+      { throwOnError: false }
+    );
+  });
+
+  it('requires a review note when rejecting a product', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'empty-note-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'empty-note-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({ owner: artist, category, publicationStatus: 'pending_review' });
+
+    await request(app)
+      .patch(`/products/${product._id}/reject`)
+      .set('Cookie', authCookie(admin))
+      .send({ reviewNote: '   ' })
+      .expect(400);
+
+    await expect(Product.findById(product._id).lean()).resolves.toMatchObject({
+      publicationStatus: 'pending_review',
+    });
+  });
+
+  it('enforces allowed admin publication status transitions', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'transition-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'transition-admin@example.com' });
+    const category = await createCategory();
+    const draft = await createProduct({ owner: artist, category, publicationStatus: 'draft' });
+    const published = await createProduct({ owner: artist, category, publicationStatus: 'published' });
+    const pending = await createProduct({ owner: artist, category, publicationStatus: 'pending_review' });
+
+    await request(app)
+      .patch(`/products/${draft._id}/approve`)
+      .set('Cookie', authCookie(admin))
+      .expect(400);
+
+    await request(app)
+      .patch(`/products/${published._id}/reject`)
+      .set('Cookie', authCookie(admin))
+      .send({ reviewNote: 'Not from published.' })
+      .expect(400);
+
+    await request(app)
+      .patch(`/products/${draft._id}/archive`)
+      .set('Cookie', authCookie(admin))
+      .expect(400);
+
+    const archiveRes = await request(app)
+      .patch(`/products/${pending._id}/archive`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(archiveRes.body.publicationStatus).toBe('archived');
+
+    await request(app)
+      .patch(`/products/${published._id}/restore`)
+      .set('Cookie', authCookie(admin))
+      .expect(400);
+
+    const restoreRes = await request(app)
+      .patch(`/products/${pending._id}/restore`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(restoreRes.body.publicationStatus).toBe('draft');
+    await expect(Product.findById(draft._id).lean()).resolves.toMatchObject({ publicationStatus: 'draft' });
+    await expect(Product.findById(published._id).lean()).resolves.toMatchObject({ publicationStatus: 'published' });
   });
 });

@@ -88,6 +88,25 @@
   border: 1px solid rgba(0, 104, 71, 0.22);
 }
 
+.mobilePreviewImage {
+  width: min(100%, 14rem);
+  aspect-ratio: 4 / 5;
+}
+
+.secondaryButton {
+  width: fit-content;
+  align-self: flex-start;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(0, 104, 71, 0.3);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--dark-green);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .submitButton {
   width: fit-content;
   align-self: flex-end;

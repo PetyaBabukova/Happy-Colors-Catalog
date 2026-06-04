@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireFullAdmin } from '../middlewares/auth.js';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
   createHomeBanner,
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:bannerId', requireAuth, async (req, res) => {
+router.get('/:bannerId', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const banner = await getHomeBannerById(req.params.bannerId);
 
@@ -59,7 +59,7 @@ router.get('/:bannerId', requireAuth, async (req, res) => {
 
 // V1 treats every authenticated user as a trusted admin for homepage content.
 // If public registration is enabled later, replace this with an explicit admin role check.
-router.post('/', homeBannersMutationLimiter, requireAuth, async (req, res) => {
+router.post('/', homeBannersMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const banner = await createHomeBanner(req.body, req.user._id);
 
@@ -69,7 +69,7 @@ router.post('/', homeBannersMutationLimiter, requireAuth, async (req, res) => {
   }
 });
 
-router.put('/:bannerId', homeBannersMutationLimiter, requireAuth, async (req, res) => {
+router.put('/:bannerId', homeBannersMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const banner = await editHomeBanner(req.params.bannerId, req.body, req.user._id);
 
@@ -79,7 +79,7 @@ router.put('/:bannerId', homeBannersMutationLimiter, requireAuth, async (req, re
   }
 });
 
-router.delete('/:bannerId', homeBannersMutationLimiter, requireAuth, async (req, res) => {
+router.delete('/:bannerId', homeBannersMutationLimiter, requireAuth, requireFullAdmin, async (req, res) => {
   try {
     await deleteHomeBanner(req.params.bannerId, req.user._id);
 

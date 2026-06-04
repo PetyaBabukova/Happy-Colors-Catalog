@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpers.js';
 
-const authUser = { _id: 'user-1' };
+const authUser = { _id: 'user-1', role: 'full_admin' };
 const deleteFile = vi.fn();
 const file = vi.fn(() => ({ delete: deleteFile }));
 const bucket = vi.fn(() => ({ file }));
@@ -39,6 +39,16 @@ describe('/api/uploads/delete', () => {
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth: vi.fn(() => authResult),
+      requireApiFullAdmin: vi.fn((auth) =>
+        auth.ok && auth.user?.role !== 'full_admin'
+          ? { ok: false, status: 403, message: 'Forbidden.' }
+          : auth
+      ),
+      requireApiActiveArtistOrFullAdmin: vi.fn((auth) =>
+        auth.ok && auth.user?.role !== 'full_admin' && !(auth.user?.role === 'artist' && auth.user?.artistStatus === 'active')
+          ? { ok: false, status: 403, message: 'Forbidden.' }
+          : auth
+      ),
     }));
     vi.doMock('../../../src/app/api/_lib/gcs.js', () => ({
       createPublicUrl: vi.fn(

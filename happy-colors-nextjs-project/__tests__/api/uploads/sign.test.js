@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_VIDEO_UPLOAD_SIZE_BYTES } from '../../../src/config/productLimits.js';
 import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpers.js';
 
-const authUser = { _id: 'user-1' };
+const authUser = { _id: 'user-1', role: 'artist', artistStatus: 'active' };
 const generateSignedPostPolicyV4 = vi.fn();
 const file = vi.fn(() => ({ generateSignedPostPolicyV4 }));
 const bucket = vi.fn(() => ({ file }));
@@ -30,6 +30,11 @@ describe('/api/uploads/sign', () => {
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth: vi.fn(() => authResult),
+      requireApiActiveArtistOrFullAdmin: vi.fn((auth) =>
+        auth.ok && auth.user?.role !== 'full_admin' && !(auth.user?.role === 'artist' && auth.user?.artistStatus === 'active')
+          ? { ok: false, status: 403, message: 'Forbidden.' }
+          : auth
+      ),
     }));
     vi.doMock('../../../src/app/api/_lib/gcs.js', () => ({
       buildStorageObjectName,

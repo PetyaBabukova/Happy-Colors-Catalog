@@ -9,6 +9,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
+import { fetchAdminUsers } from '@/managers/usersAdminManager';
+import { Menu, X } from 'lucide-react';
 
 function HeaderRouteWatcher({ onRouteChange }) {
   const pathname = usePathname();
@@ -27,12 +29,54 @@ export default function Header() {
   const { user } = useAuth();
   const { visibleCategories } = useProducts();
   const { getTotalItems } = useCart();
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
 
   const cartItemCount = getTotalItems();
+  const isFullAdmin = user?.role === 'full_admin';
+  const canCreateProduct =
+    isFullAdmin || (user?.role === 'artist' && user?.artistStatus !== 'suspended');
   const userNavClassName = `${styles.userNav} ${styles.userNavVisible}`;
   const handleRouteChange = useCallback(() => {
     setMobileMenuOpen(false);
   }, []);
+  const closeMobileMenu = useCallback(() => {
+    setMobileMenuOpen(false);
+  }, []);
+  const handleMainNavListClick = useCallback((event) => {
+    if (event.target.closest('a')) {
+      setMobileMenuOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isFullAdmin) {
+      setPendingReviewCount(0);
+      return undefined;
+    }
+
+    let isCurrent = true;
+
+    fetchAdminUsers()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const total = Array.isArray(items)
+          ? items.reduce((sum, item) => sum + (Number(item.pendingReviewCount) || 0), 0)
+          : 0;
+        setPendingReviewCount(total);
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setPendingReviewCount(0);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [isFullAdmin]);
 
   return (
     <>
@@ -40,7 +84,7 @@ export default function Header() {
         <HeaderRouteWatcher onRouteChange={handleRouteChange} />
       </Suspense>
 
-      <header className="header">
+      <header className={styles.siteHeader}>
         <nav className={`${styles.mainNav} pageInline`}>
           <Link href="/">
             <div className={styles.logoContainer}>
@@ -50,15 +94,30 @@ export default function Header() {
 
           {!mobileMenuOpen && (
             <button
+              type="button"
               className={styles.hamburgerBtn}
               aria-label="Отвори менюто"
               onClick={() => setMobileMenuOpen(true)}
             >
-              <Image src="/hamburger.svg" alt="Меню" width={64} height={64} />
+              <Menu aria-hidden="true" size={32} strokeWidth={1.8} />
             </button>
           )}
 
-          <ul className={`${styles.mainNavList} ${mobileMenuOpen ? styles.showMenu : ''}`}>
+          {mobileMenuOpen && (
+            <button
+              type="button"
+              className={styles.closeMenuBtn}
+              aria-label="Затвори менюто"
+              onClick={closeMobileMenu}
+            >
+              <X aria-hidden="true" size={24} strokeWidth={1.8} />
+            </button>
+          )}
+
+          <ul
+            className={`${styles.mainNavList} ${mobileMenuOpen ? styles.showMenu : ''}`}
+            onClick={handleMainNavListClick}
+          >
             <li><Link href="/">Начало</Link></li>
 
             <li className={styles.hasSubmenu}>
@@ -112,19 +171,34 @@ export default function Header() {
             </Link>
           )}
         </nav>
-      </header>
 
-      {user ? (
+      {canCreateProduct ? (
       <ul className={userNavClassName}>
-        <li><Link href="/products/create">Създай продукт</Link></li>
+        {canCreateProduct && (
+          <li><Link href="/products/create">Създай продукт</Link></li>
+        )}
+        {isFullAdmin && (
+          <>
         <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
         <li><Link href="/homepage-featured">Избери любими продукти</Link></li>
         <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
-        <li><Link href="/newsletter/send">Изпрати къстъм мейл до абонатите</Link></li>
+        <li><Link href="/analytics">Анализи</Link></li>
+        <li>
+          <Link
+            href="/users/admin"
+            className={pendingReviewCount > 0 ? styles.pendingAdminLink : undefined}
+          >
+            Потребители
+          </Link>
+        </li>
+        <li><Link href="/newsletter/send">Newsletter</Link></li>
+          </>
+        )}
       </ul>
       ) : null}
+      </header>
     </>
   );
 }

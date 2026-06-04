@@ -1,5 +1,6 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import { buildPublicProductFilter } from '../utils/productPublication.js';
 import { sendEmail } from '../helpers/sendEmail.js';
 
 class OrderError extends Error {
@@ -106,7 +107,10 @@ async function buildOrderItemsFromDatabase(cartItems) {
 
   const uniqueProductIds = [...new Set(normalizedItems.map((item) => item.productId))];
 
-  const products = await Product.find({ _id: { $in: uniqueProductIds } }).lean();
+  const products = await Product.find({
+    ...buildPublicProductFilter(),
+    _id: { $in: uniqueProductIds },
+  }).lean();
 
   if (products.length !== uniqueProductIds.length) {
     throw new OrderError('Един или повече продукти не съществуват.', 404);
