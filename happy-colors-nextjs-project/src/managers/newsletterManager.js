@@ -36,6 +36,25 @@ export async function subscribeToNewsletter(data) {
   return responseData;
 }
 
+export async function confirmNewsletterSubscription(token) {
+  const res = await fetch(`${baseURL}/newsletter/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+
+  const responseData = await readResponseJsonSafely(res);
+
+  if (!res.ok) {
+    throw createResponseError(
+      responseData?.message || 'Не успяхме да потвърдим абонамента.',
+      responseData
+    );
+  }
+
+  return responseData;
+}
+
 export async function unsubscribeFromNewsletter(token) {
   const res = await fetch(`${baseURL}/newsletter/unsubscribe`, {
     method: 'POST',

@@ -36,9 +36,11 @@ describe('newsletter lifecycle backfill script', () => {
 
     expect(reactivated.firstSubscribedAt.toISOString()).toBe(createdAt.toISOString());
     expect(reactivated.lastSubscribedAt.toISOString()).toBe(consentGivenAt.toISOString());
+    expect(reactivated.confirmedAt.toISOString()).toBe(consentGivenAt.toISOString());
     expect(reactivated.subscribeCount).toBe(1);
     expect(reactivated.hasEverUnsubscribed).toBe(true);
     expect(unsubscribed.hasEverUnsubscribed).toBe(true);
+    expect(unsubscribed.confirmedAt.toISOString()).toBe(createdAt.toISOString());
     expect(unsubscribed.lastStatusChangedAt.toISOString()).toBe(consentGivenAt.toISOString());
   });
 });

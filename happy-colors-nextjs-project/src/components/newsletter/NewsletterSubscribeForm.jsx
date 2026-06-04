@@ -95,7 +95,7 @@ export default function NewsletterSubscribeForm() {
       }
 
       setFormValues(initialFormState);
-      setMessage(result?.message || 'Успешно се абонирахте.');
+      setMessage(result?.message || 'Благодарим ви. Ако е необходимо потвърждение, ще получите имейл с линк за абонамента.');
       setMessageType('success');
       refreshFormToken().catch(() => {
         setFormToken('');

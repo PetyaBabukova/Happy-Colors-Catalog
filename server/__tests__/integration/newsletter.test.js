@@ -2,7 +2,11 @@ import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { sendEmail } from '../../helpers/sendEmail.js';
 import NewsletterSubscriber from '../../models/NewsletterSubscriber.js';
-import { createUnsubscribeToken } from '../../services/newsletterService.js';
+import {
+  createNewsletterConfirmationToken,
+  createSubscribeFormToken,
+  createUnsubscribeToken,
+} from '../../services/newsletterService.js';
 import { createExpressApp } from '../../server.js';
 
 async function createSubscriber(overrides = {}) {
@@ -25,8 +29,27 @@ async function getSubscribeToken(app, ip = '203.0.113.200') {
   return res.body.token;
 }
 
+async function waitUntil(predicate) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error('Timed out waiting for test condition.');
+}
+
+function extractConfirmationToken() {
+  const sentText = sendEmail.mock.calls.at(-1)?.[0]?.text || '';
+  const match = sentText.match(/\/newsletter\/confirm#token=([^\s]+)/);
+
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 describe('newsletter integration', () => {
-  it('subscribes a valid email with consent and normalizes the stored address', async () => {
+  it('sends a confirmation email for a valid subscribe request without creating a subscriber first', async () => {
     const app = createExpressApp();
 
     const res = await request(app)
@@ -40,9 +63,48 @@ describe('newsletter integration', () => {
       })
       .expect(200);
 
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+
+    expect(res.body).toEqual({
+      message: 'Благодарим ви. Ако е необходимо потвърждение, ще получите имейл с линк за абонамента.',
+    });
+    expect(await NewsletterSubscriber.countDocuments()).toBe(0);
+    expect(sendEmail).toHaveBeenCalledWith({
+      to: 'petya@example.com',
+      subject: 'Потвърдете абонамента си за новини от Happy Colors',
+      text: expect.stringContaining('Получихме заявка за абонамент за новини от Happy Colors.'),
+    });
+    expect(sendEmail.mock.calls[0][0].text).toContain('/newsletter/confirm#token=');
+    expect(sendEmail.mock.calls[0][0].text).toContain('https://happycolors.eu/newsletter/confirm#token=');
+    expect(sendEmail.mock.calls[0][0].text).not.toContain('/newsletter/confirm?token=');
+  });
+
+  it('confirms a valid token and creates an active subscriber with welcome email sent', async () => {
+    const app = createExpressApp();
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.120')
+      .send({
+        email: '  Petya@Example.COM ',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.121'),
+      })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+    const token = extractConfirmationToken();
+
+    const res = await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.122')
+      .send({ token })
+      .expect(200);
+
     const subscriber = await NewsletterSubscriber.findOne({ email: 'petya@example.com' });
 
-    expect(res.body.message).toBeTruthy();
+    expect(res.body).toEqual({ message: 'Абонаментът ви е потвърден успешно.' });
     expect(subscriber).toMatchObject({
       email: 'petya@example.com',
       status: 'active',
@@ -52,17 +114,58 @@ describe('newsletter integration', () => {
       hasEverUnsubscribed: false,
     });
     expect(subscriber.consentGivenAt).toBeInstanceOf(Date);
+    expect(subscriber.confirmedAt).toBeInstanceOf(Date);
     expect(subscriber.firstSubscribedAt).toBeInstanceOf(Date);
     expect(subscriber.lastSubscribedAt).toBeInstanceOf(Date);
     expect(subscriber.lastStatusChangedAt).toBeInstanceOf(Date);
     expect(subscriber.welcomeEmailSentAt).toBeInstanceOf(Date);
-    expect(sendEmail).toHaveBeenCalledWith({
+    expect(sendEmail).toHaveBeenLastCalledWith({
       to: 'petya@example.com',
       subject: 'Абонамент за новини от Happy Colors',
       text: expect.stringContaining('Вие се абонирахте за новини от Happy Colors.'),
     });
-    expect(sendEmail.mock.calls[0][0].text).toContain('/newsletter/unsubscribe?token=');
-    expect(sendEmail.mock.calls[0][0].text).toContain('https://happycolors.eu/newsletter/unsubscribe?token=');
+    expect(sendEmail.mock.calls.at(-1)[0].text).toContain('/newsletter/unsubscribe?token=');
+  });
+
+  it('keeps repeated confirmation idempotent for active subscribers', async () => {
+    const app = createExpressApp();
+    const token = createNewsletterConfirmationToken('repeat@example.com');
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.123')
+      .send({ token })
+      .expect(200);
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.124')
+      .send({ token })
+      .expect(200);
+
+    const subscriber = await NewsletterSubscriber.findOne({ email: 'repeat@example.com' });
+
+    expect(subscriber.subscribeCount).toBe(1);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries welcome email when confirming an active subscriber whose welcome is still pending', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({ email: 'pending-welcome@example.com', welcomeEmailSentAt: null });
+    const token = createNewsletterConfirmationToken('pending-welcome@example.com', subscriber);
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.125')
+      .send({ token })
+      .expect(200);
+
+    const updated = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(updated.status).toBe('active');
+    expect(updated.subscribeCount).toBe(1);
+    expect(updated.welcomeEmailSentAt).toBeInstanceOf(Date);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
   it('rejects invalid subscribe payloads before creating subscribers', async () => {
@@ -97,6 +200,13 @@ describe('newsletter integration', () => {
       .set('x-forwarded-for', '203.0.113.32')
       .set('Content-Type', 'text/plain')
       .send('email=petya@example.com')
+      .expect(415);
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.132')
+      .set('Content-Type', 'text/plain')
+      .send('token=abc')
       .expect(415);
   });
 
@@ -143,6 +253,46 @@ describe('newsletter integration', () => {
     expect(await NewsletterSubscriber.countDocuments()).toBe(0);
   });
 
+  it('rejects missing, malformed, subscribe-form, and unsubscribe tokens at confirmation', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber();
+
+    for (const [token, ip] of [
+      [undefined, '203.0.113.230'],
+      ['not-a-token', '203.0.113.231'],
+      [createSubscribeFormToken(), '203.0.113.232'],
+      [createUnsubscribeToken(subscriber), '203.0.113.233'],
+    ]) {
+      const res = await request(app)
+        .post('/newsletter/confirm')
+        .set('x-forwarded-for', ip)
+        .send(token === undefined ? {} : { token })
+        .expect(400);
+
+      expect(res.body.code).toBe('invalid_confirmation_token');
+    }
+  });
+
+  it('rejects expired confirmation tokens with a non-enumerating code', async () => {
+    const app = createExpressApp();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2000-01-01T00:00:00.000Z'));
+    const expiredToken = createNewsletterConfirmationToken('expired@example.com');
+    vi.useRealTimers();
+
+    try {
+      const res = await request(app)
+        .post('/newsletter/confirm')
+        .set('x-forwarded-for', '203.0.113.234')
+        .send({ token: expiredToken })
+        .expect(400);
+
+      expect(res.body.code).toBe('expired_confirmation_token');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not consume the same-email quota when token validation rejects first', async () => {
     const app = createExpressApp();
 
@@ -170,7 +320,8 @@ describe('newsletter integration', () => {
       })
       .expect(200);
 
-    expect(await NewsletterSubscriber.countDocuments({ email: 'token-retry@example.com' })).toBe(1);
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+    expect(await NewsletterSubscriber.countDocuments({ email: 'token-retry@example.com' })).toBe(0);
   });
 
   it('treats honeypot submissions as generic success without creating a subscriber', async () => {
@@ -217,7 +368,8 @@ describe('newsletter integration', () => {
       })
       .expect(200);
 
-    expect(await NewsletterSubscriber.countDocuments({ email: 'honeypot-quota@example.com' })).toBe(1);
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+    expect(await NewsletterSubscriber.countDocuments({ email: 'honeypot-quota@example.com' })).toBe(0);
   });
 
   it('rate limits repeated attempts for the same email after token validation', async () => {
@@ -281,6 +433,7 @@ describe('newsletter integration', () => {
       .send({ email: 'petya@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.225') })
       .expect(200);
 
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
     const updated = await NewsletterSubscriber.findById(subscriber._id);
 
     expect(sendEmail).toHaveBeenCalledWith(
@@ -293,17 +446,26 @@ describe('newsletter integration', () => {
     expect(res.body.message).toBeTruthy();
   });
 
-  it('leaves welcome email pending when delivery fails so a later submit can retry it', async () => {
+  it('confirms successfully when welcome delivery fails and allows a later active submit to retry it', async () => {
     const app = createExpressApp();
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    sendEmail.mockRejectedValueOnce(new Error('smtp down'));
 
     try {
       await request(app)
         .post('/newsletter/subscribe')
         .set('x-forwarded-for', '203.0.113.35')
         .send({ email: 'retry@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.226') })
-        .expect(500);
+        .expect(200);
+
+      await waitUntil(() => sendEmail.mock.calls.length === 1);
+      const token = extractConfirmationToken();
+      sendEmail.mockRejectedValueOnce(new Error('smtp down'));
+
+      await request(app)
+        .post('/newsletter/confirm')
+        .set('x-forwarded-for', '203.0.113.136')
+        .send({ token })
+        .expect(200);
     } finally {
       consoleErrorSpy.mockRestore();
     }
@@ -318,12 +480,13 @@ describe('newsletter integration', () => {
       .send({ email: 'retry@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.227') })
       .expect(200);
 
+    await waitUntil(() => sendEmail.mock.calls.length === 3);
     const updated = await NewsletterSubscriber.findById(pending._id);
     expect(updated.welcomeEmailSentAt).toBeInstanceOf(Date);
-    expect(sendEmail).toHaveBeenCalledTimes(2);
+    expect(sendEmail).toHaveBeenCalledTimes(3);
   });
 
-  it('reactivates an unsubscribed address with new consent and invalidates old tokens', async () => {
+  it('reactivates an unsubscribed address only after confirmation and invalidates old tokens', async () => {
     const app = createExpressApp();
     const unsubscribedAt = new Date('2026-01-01T00:00:00.000Z');
     const subscriber = await createSubscriber({
@@ -340,7 +503,17 @@ describe('newsletter integration', () => {
       .send({ email: 'petya@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.228') })
       .expect(200);
 
-    const reactivated = await NewsletterSubscriber.findById(subscriber._id);
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+    let reactivated = await NewsletterSubscriber.findById(subscriber._id);
+    expect(reactivated.status).toBe('unsubscribed');
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.126')
+      .send({ token: extractConfirmationToken() })
+      .expect(200);
+
+    reactivated = await NewsletterSubscriber.findById(subscriber._id);
 
     expect(reactivated.status).toBe('active');
     expect(reactivated.unsubscribedAt).toBeNull();
@@ -350,7 +523,7 @@ describe('newsletter integration', () => {
     expect(reactivated.lastSubscribedAt).toBeInstanceOf(Date);
     expect(reactivated.lastStatusChangedAt).toBeInstanceOf(Date);
     expect(reactivated.consentGivenAt.getTime()).toBeGreaterThan(unsubscribedAt.getTime());
-    expect(sendEmail).toHaveBeenCalledWith(
+    expect(sendEmail).toHaveBeenLastCalledWith(
       expect.objectContaining({
         to: 'petya@example.com',
         subject: 'Абонамент за новини от Happy Colors',
@@ -365,6 +538,103 @@ describe('newsletter integration', () => {
 
     const afterStaleToken = await NewsletterSubscriber.findById(subscriber._id);
     expect(afterStaleToken.status).toBe('active');
+  });
+
+  it('rejects replay of an existing-subscriber confirmation token after a later unsubscribe', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({
+      status: 'unsubscribed',
+      unsubscribedAt: new Date('2026-01-01T00:00:00.000Z'),
+      unsubscribeTokenVersion: 2,
+      welcomeEmailSentAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.240')
+      .send({ email: 'petya@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.241') })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+    const token = extractConfirmationToken();
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.242')
+      .send({ token })
+      .expect(200);
+
+    const unsubscribeToken = createUnsubscribeToken(await NewsletterSubscriber.findById(subscriber._id));
+
+    await request(app)
+      .post('/newsletter/unsubscribe')
+      .set('x-forwarded-for', '203.0.113.243')
+      .send({ token: unsubscribeToken })
+      .expect(200);
+
+    const replay = await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.244')
+      .send({ token })
+      .expect(400);
+
+    const afterReplay = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(replay.body.code).toBe('invalid_confirmation_token');
+    expect(afterReplay.status).toBe('unsubscribed');
+  });
+
+  it('rejects replay of a new-email confirmation token after a later unsubscribe through timestamp fallback', async () => {
+    const app = createExpressApp();
+    const token = createNewsletterConfirmationToken('fallback@example.com');
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.245')
+      .send({ token })
+      .expect(200);
+
+    const subscriber = await NewsletterSubscriber.findOne({ email: 'fallback@example.com' });
+    const unsubscribeToken = createUnsubscribeToken(subscriber);
+
+    await request(app)
+      .post('/newsletter/unsubscribe')
+      .set('x-forwarded-for', '203.0.113.246')
+      .send({ token: unsubscribeToken })
+      .expect(200);
+
+    const replay = await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.247')
+      .send({ token })
+      .expect(400);
+
+    const afterReplay = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(replay.body.code).toBe('invalid_confirmation_token');
+    expect(afterReplay.status).toBe('unsubscribed');
+  });
+
+  it('rejects no-version confirmation tokens for unsubscribed records without an unsubscribe timestamp', async () => {
+    const app = createExpressApp();
+    await createSubscriber({
+      email: 'missing-unsubscribed-at@example.com',
+      status: 'unsubscribed',
+      unsubscribedAt: null,
+      unsubscribeTokenVersion: 2,
+    });
+    const token = createNewsletterConfirmationToken('missing-unsubscribed-at@example.com');
+
+    const res = await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.249')
+      .send({ token })
+      .expect(400);
+
+    const afterConfirm = await NewsletterSubscriber.findOne({ email: 'missing-unsubscribed-at@example.com' });
+
+    expect(res.body.code).toBe('invalid_confirmation_token');
+    expect(afterConfirm.status).toBe('unsubscribed');
   });
 
   it('rate limits newsletter subscribe without consuming the contacts quota', async () => {
@@ -492,6 +762,27 @@ describe('newsletter integration', () => {
 
     const res = await request(app)
       .post('/newsletter/unsubscribe')
+      .set('x-forwarded-for', ip)
+      .send({ token: 'not-a-valid-token' })
+      .expect(429);
+
+    expect(res.headers['retry-after']).toBeTruthy();
+  });
+
+  it('rate limits confirmation attempts separately', async () => {
+    const app = createExpressApp();
+    const ip = '203.0.113.248';
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app)
+        .post('/newsletter/confirm')
+        .set('x-forwarded-for', ip)
+        .send({ token: 'not-a-valid-token' })
+        .expect(400);
+    }
+
+    const res = await request(app)
+      .post('/newsletter/confirm')
       .set('x-forwarded-for', ip)
       .send({ token: 'not-a-valid-token' })
       .expect(429);

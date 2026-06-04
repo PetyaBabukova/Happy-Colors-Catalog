@@ -2,10 +2,11 @@ import crypto from 'crypto';
 import express from 'express';
 import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
+  confirmNewsletterSubscription,
   createSubscribeFormToken,
   createUnsubscribePageUrl,
   isHoneypotSubscribePayload,
-  subscribeToNewsletter,
+  requestNewsletterSubscription,
   unsubscribeFromNewsletter,
   verifySubscribeFormToken,
 } from '../services/newsletterService.js';
@@ -25,6 +26,13 @@ const subscribeTokenLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
   max: 30,
   message: subscribeRateLimitMessage,
+});
+
+const confirmLimiter = createRateLimiter({
+  keyPrefix: 'newsletter-confirm',
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: 'Твърде много опити за потвърждение. Моля, опитайте отново след малко.',
 });
 
 const subscribeEmailLimiter = createRateLimiter({
@@ -74,6 +82,13 @@ function sendError(res, error) {
   return res.status(statusCode).json({ message: error.message, code: error.code });
 }
 
+function logNewsletterSideEffectFailure(event, error) {
+  console.error(event, {
+    message: error?.message || 'Unknown error',
+    name: error?.name || 'Error',
+  });
+}
+
 router.get('/subscribe-token', subscribeTokenLimiter, (req, res) => {
   try {
     res.setHeader('Cache-Control', 'private, max-age=0, no-store');
@@ -87,7 +102,7 @@ router.get('/subscribe-token', subscribeTokenLimiter, (req, res) => {
 router.post('/subscribe', subscribeLimiter, requireJson, async (req, res) => {
   try {
     if (isHoneypotSubscribePayload(req.body)) {
-      const result = await subscribeToNewsletter(req.body);
+      const result = await requestNewsletterSubscription(req.body);
 
       return res.status(200).json({ message: result.message });
     }
@@ -96,13 +111,30 @@ router.post('/subscribe', subscribeLimiter, requireJson, async (req, res) => {
 
     return subscribeEmailLimiter(req, res, async () => {
       try {
-        const result = await subscribeToNewsletter(req.body);
+        const result = await requestNewsletterSubscription(req.body);
+        res.status(200).json({ message: result.message });
 
-        return res.status(200).json({ message: result.message });
+        if (typeof result.afterResponse === 'function') {
+          result.afterResponse().catch((error) => {
+            logNewsletterSideEffectFailure('Newsletter subscribe side effect failed.', error);
+          });
+        }
+
+        return undefined;
       } catch (error) {
         return sendError(res, error);
       }
     });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/confirm', confirmLimiter, requireJson, async (req, res) => {
+  try {
+    const result = await confirmNewsletterSubscription(req.body);
+
+    return res.status(200).json({ message: result.message });
   } catch (error) {
     return sendError(res, error);
   }

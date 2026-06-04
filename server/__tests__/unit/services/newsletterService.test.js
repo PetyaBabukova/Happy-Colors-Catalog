@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  createNewsletterConfirmationPageUrl,
+  createNewsletterConfirmationToken,
   createSubscribeFormToken,
   createUnsubscribeToken,
+  verifyNewsletterConfirmationToken,
   verifySubscribeFormToken,
   verifyUnsubscribeToken,
 } from '../../../services/newsletterService.js';
@@ -123,5 +126,126 @@ describe('newsletterService token helpers', () => {
     }
 
     expect(error?.code).toBe('invalid_form_token');
+  });
+
+  it('creates unique confirmation tokens with normalized email, purpose, nonce, and optional subscriber version', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const subscriber = buildSubscriber({ unsubscribeTokenVersion: 4 });
+
+    const firstToken = createNewsletterConfirmationToken(' Petya@Example.COM ', subscriber);
+    const secondToken = createNewsletterConfirmationToken('petya@example.com', subscriber);
+    const decoded = verifyNewsletterConfirmationToken(firstToken);
+
+    expect(firstToken).not.toBe(secondToken);
+    expect(decoded).toEqual({
+      purpose: 'newsletter-confirm',
+      email: 'petya@example.com',
+      iat: expect.any(Number),
+      nonce: expect.any(String),
+      ver: 4,
+    });
+  });
+
+  it('rejects tampered, expired, wrong-purpose, unsubscribe, and subscribe form tokens at confirmation verification', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const confirmationToken = createNewsletterConfirmationToken('petya@example.com');
+    const [payload, signature] = confirmationToken.split('.');
+    const decoded = decodePayload(confirmationToken);
+    const tamperedPayload = Buffer.from(
+      JSON.stringify({ ...decoded, email: 'other@example.com' })
+    ).toString('base64url');
+    const wrongPurposePayload = Buffer.from(
+      JSON.stringify({ ...decoded, purpose: 'newsletter-subscribe' })
+    ).toString('base64url');
+    const wrongPurposeToken = `${wrongPurposePayload}.${Buffer.from('bad').toString('base64url')}`;
+    const subscribeToken = createSubscribeFormToken();
+    const unsubscribeToken = createUnsubscribeToken(buildSubscriber());
+
+    let tamperedError;
+    let expiredError;
+    let wrongPurposeError;
+    let subscribeTokenError;
+    let unsubscribeTokenError;
+
+    try {
+      verifyNewsletterConfirmationToken(`${tamperedPayload}.${signature}`);
+    } catch (error) {
+      tamperedError = error;
+    }
+
+    try {
+      verifyNewsletterConfirmationToken(confirmationToken, { nowSeconds: decoded.iat + 25 * 60 * 60 });
+    } catch (error) {
+      expiredError = error;
+    }
+
+    try {
+      verifyNewsletterConfirmationToken(wrongPurposeToken);
+    } catch (error) {
+      wrongPurposeError = error;
+    }
+
+    try {
+      verifyNewsletterConfirmationToken(subscribeToken);
+    } catch (error) {
+      subscribeTokenError = error;
+    }
+
+    try {
+      verifyNewsletterConfirmationToken(unsubscribeToken);
+    } catch (error) {
+      unsubscribeTokenError = error;
+    }
+
+    expect(tamperedError?.code).toBe('invalid_confirmation_token');
+    expect(expiredError?.code).toBe('expired_confirmation_token');
+    expect(wrongPurposeError?.code).toBe('invalid_confirmation_token');
+    expect(subscribeTokenError?.code).toBe('invalid_confirmation_token');
+    expect(unsubscribeTokenError?.code).toBe('invalid_confirmation_token');
+  });
+
+  it('builds confirmation page URLs with a fragment token and without CLIENT_URL fallback', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const previousClientUrl = process.env.CLIENT_URL;
+    const previousPublicSiteUrl = process.env.NEWSLETTER_PUBLIC_SITE_URL;
+    const previousNextPublicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    process.env.CLIENT_URL = 'http://localhost:3000';
+    delete process.env.NEWSLETTER_PUBLIC_SITE_URL;
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+
+    try {
+      const token = createNewsletterConfirmationToken('petya@example.com');
+      const url = createNewsletterConfirmationPageUrl(token);
+
+      expect(url).toBe(`https://happycolors.eu/newsletter/confirm#token=${encodeURIComponent(token)}`);
+      expect(url).not.toContain('?token=');
+      process.env.NEWSLETTER_PUBLIC_SITE_URL = 'https://newsletter.example';
+      expect(createNewsletterConfirmationPageUrl(token)).toBe(
+        `https://newsletter.example/newsletter/confirm#token=${encodeURIComponent(token)}`
+      );
+    } finally {
+      process.env.CLIENT_URL = previousClientUrl;
+      process.env.NEWSLETTER_PUBLIC_SITE_URL = previousPublicSiteUrl;
+      process.env.NEXT_PUBLIC_SITE_URL = previousNextPublicSiteUrl;
+    }
+  });
+
+  it('rejects local-looking confirmation URL configuration outside development and test', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousPublicSiteUrl = process.env.NEWSLETTER_PUBLIC_SITE_URL;
+    process.env.NODE_ENV = '';
+    process.env.NEWSLETTER_PUBLIC_SITE_URL = 'http://localhost:3000';
+
+    try {
+      const token = createNewsletterConfirmationToken('petya@example.com');
+
+      expect(() => createNewsletterConfirmationPageUrl(token)).toThrow(
+        'Newsletter public site URL is not configured for confirmation links.'
+      );
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      process.env.NEWSLETTER_PUBLIC_SITE_URL = previousPublicSiteUrl;
+    }
   });
 });

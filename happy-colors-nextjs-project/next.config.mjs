@@ -19,6 +19,23 @@ const gcsBucketName = String(
 const nextConfig = {
   outputFileTracingRoot: path.join(__dirname, '..'),
   serverExternalPackages: ['mongoose', 'mongodb'],
+  async headers() {
+    return [
+      {
+        source: '/newsletter/confirm',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, max-age=0, no-store',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'no-referrer',
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

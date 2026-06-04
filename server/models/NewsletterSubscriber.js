@@ -25,6 +25,10 @@ const newsletterSubscriberSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    confirmedAt: {
+      type: Date,
+      default: null,
+    },
     firstSubscribedAt: {
       type: Date,
       default: null,

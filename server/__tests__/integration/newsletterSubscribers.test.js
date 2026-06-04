@@ -11,6 +11,7 @@ async function createSubscriber(overrides = {}) {
     email: 'subscriber@example.com',
     status: 'active',
     consentGivenAt: now,
+    confirmedAt: now,
     firstSubscribedAt: now,
     lastSubscribedAt: now,
     lastStatusChangedAt: now,

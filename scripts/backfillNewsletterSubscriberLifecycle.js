@@ -14,6 +14,7 @@ function buildLifecyclePatch(subscriber) {
   const updatedAt = dateOrNull(subscriber.updatedAt);
   const firstSubscribedAt = dateOrNull(subscriber.firstSubscribedAt) || createdAt || consentGivenAt;
   const lastSubscribedAt = dateOrNull(subscriber.lastSubscribedAt) || consentGivenAt || createdAt;
+  const confirmedAt = dateOrNull(subscriber.confirmedAt) || consentGivenAt || firstSubscribedAt || createdAt;
   const subscribeCount = Math.max(1, Number(subscriber.subscribeCount || 1));
   const hasEverUnsubscribed =
     Boolean(subscriber.hasEverUnsubscribed) ||
@@ -30,6 +31,7 @@ function buildLifecyclePatch(subscriber) {
   return {
     firstSubscribedAt,
     lastSubscribedAt,
+    confirmedAt,
     subscribeCount,
     hasEverUnsubscribed,
     lastStatusChangedAt,
@@ -38,7 +40,7 @@ function buildLifecyclePatch(subscriber) {
 
 export async function backfillNewsletterSubscriberLifecycle() {
   const subscribers = await NewsletterSubscriber.find({}).select(
-    'status consentGivenAt firstSubscribedAt lastSubscribedAt subscribeCount hasEverUnsubscribed lastStatusChangedAt unsubscribedAt createdAt updatedAt'
+    'status consentGivenAt confirmedAt firstSubscribedAt lastSubscribedAt subscribeCount hasEverUnsubscribed lastStatusChangedAt unsubscribedAt createdAt updatedAt'
   );
   let modifiedCount = 0;
 
@@ -47,6 +49,7 @@ export async function backfillNewsletterSubscriberLifecycle() {
 
     subscriber.firstSubscribedAt = patch.firstSubscribedAt;
     subscriber.lastSubscribedAt = patch.lastSubscribedAt;
+    subscriber.confirmedAt = patch.confirmedAt;
     subscriber.subscribeCount = patch.subscribeCount;
     subscriber.hasEverUnsubscribed = patch.hasEverUnsubscribed;
     subscriber.lastStatusChangedAt = patch.lastStatusChangedAt;

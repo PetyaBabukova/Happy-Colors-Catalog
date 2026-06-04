@@ -11,7 +11,7 @@ vi.mock('@/managers/newsletterManager', () => ({
   subscribeToNewsletter: vi.fn(),
 }));
 
-const successMessage = 'Успешно се абонирахте.';
+const successMessage = 'Благодарим ви. Ако е необходимо потвърждение, ще получите имейл с линк за абонамента.';
 
 function fillValidForm(container, email = 'petya@example.com') {
   fireEvent.change(screen.getByLabelText('Email'), {
@@ -85,7 +85,7 @@ describe('NewsletterSubscribeForm', () => {
     expect(screen.getByRole('checkbox')).toBeChecked();
   });
 
-  it('shows duplicate subscription responses with success styling', async () => {
+  it('shows check-your-email responses with success styling', async () => {
     subscribeToNewsletter.mockResolvedValueOnce({ message: successMessage });
     const { container } = render(<NewsletterSubscribeForm />);
 

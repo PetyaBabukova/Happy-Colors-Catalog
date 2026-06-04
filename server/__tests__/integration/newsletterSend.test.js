@@ -31,6 +31,7 @@ async function createSubscriber(overrides = {}) {
     email: 'subscriber@example.com',
     status: 'active',
     consentGivenAt: new Date(),
+    confirmedAt: new Date(),
     welcomeEmailSentAt: new Date(),
     ...overrides,
   });
@@ -82,6 +83,32 @@ describe('newsletter send integration', () => {
 
     expect(res.body).toEqual({ activeSubscribers: 1 });
     expect(JSON.stringify(res.body)).not.toContain('active@example.com');
+  });
+
+  it('excludes unconfirmed subscribe attempts from newsletter send targets', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.210')
+      .send({
+        email: 'unconfirmed@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.211'),
+      })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+
+    const res = await request(app)
+      .get('/newsletter/send/status')
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toEqual({ activeSubscribers: 0 });
+    expect(await NewsletterSubscriber.countDocuments()).toBe(0);
   });
 
   it('sends test emails to configured recipients without subscriber data', async () => {

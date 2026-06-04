@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  confirmNewsletterSubscription,
   getNewsletterSubscribeToken,
   subscribeToNewsletter,
   unsubscribeFromNewsletter,
@@ -47,6 +48,21 @@ describe('newsletterManager', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+      })
+    );
+  });
+
+  it('posts newsletter confirmation tokens and returns parsed responses', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { message: 'confirmed' } }));
+
+    await expect(confirmNewsletterSubscription('token-1')).resolves.toEqual({ message: 'confirmed' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/newsletter/confirm',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: 'token-1' }),
       })
     );
   });
