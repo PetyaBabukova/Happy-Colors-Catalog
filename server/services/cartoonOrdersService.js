@@ -232,7 +232,7 @@ function validateBasicPayload(rawData = {}) {
     return { honeypot: true };
   }
 
-  if (!name || !email || !message || !productId) {
+  if (!name || !email || !message) {
     throw createValidationError('Missing required fields.');
   }
 
@@ -256,7 +256,8 @@ function validateBasicPayload(rawData = {}) {
     throw createValidationError('Consent is required.');
   }
 
-  if (!mongoose.Types.ObjectId.isValid(productId)) {
+  // productId е опционален; валидираме формата само ако е подаден.
+  if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
     throw createValidationError('Invalid product.', 404);
   }
 
@@ -464,6 +465,7 @@ async function releaseSessionPhotoClaims({ sessionId, objectNames, orderId }) {
 
 function buildAdminEmailText(order, photoReadUrls = new Map()) {
   const product = order.productSnapshot;
+  const hasProduct = Boolean(product && product.productId);
   const photos = order.photos
     .map((photo) => {
       const readUrl = photoReadUrls.get(photo.objectName);
@@ -485,9 +487,9 @@ function buildAdminEmailText(order, photoReadUrls = new Map()) {
     `Email: ${order.customer.email}`,
     `Phone: ${order.customer.phone || '-'}`,
     '',
-    `Product: ${product.title}`,
-    `Product ID: ${product.productId}`,
-    `Price snapshot: ${Number(product.price).toFixed(2)}`,
+    hasProduct ? `Product: ${product.title}` : 'Product: General inquiry (no specific product)',
+    hasProduct ? `Product ID: ${product.productId}` : null,
+    hasProduct ? `Price snapshot: ${Number(product.price).toFixed(2)}` : null,
     '',
     'Message:',
     order.customer.message,
@@ -534,7 +536,9 @@ export async function createCartoonOrder(rawData) {
   const photosWithTokens = verifyPhotoTokens(validateAndNormalizePhotos(rawData.photos), now.getTime());
   const sessionId = photosWithTokens[0]?.sessionId;
   const [productSnapshot, photos] = await Promise.all([
-    getPublishedProductSnapshot(basicPayload.productId),
+    basicPayload.productId
+      ? getPublishedProductSnapshot(basicPayload.productId)
+      : Promise.resolve(null),
     validateUploadSessionPhotos(photosWithTokens, now),
   ]);
   const objectNames = photos.map((photo) => photo.objectName);
@@ -557,7 +561,7 @@ export async function createCartoonOrder(rawData) {
     order = await CartoonOrder.create({
       _id: orderId,
       customer: basicPayload.customer,
-      productSnapshot,
+      ...(productSnapshot ? { productSnapshot } : {}),
       photos,
       statuses: { ordered: true },
       consentAccepted: true,

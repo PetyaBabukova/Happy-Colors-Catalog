@@ -30,8 +30,10 @@ function buildCardMediaSlides(product) {
 function buildProductHref(product, serviceContext) {
   const baseHref = `/products/${product._id}`;
 
+  // Шарж галерията е витрина: картите водят към обикновено запитване,
+  // не към cartoon order flow-а.
   if (serviceContext === 'cartoons') {
-    return `${baseHref}?service=cartoons`;
+    return '/contacts';
   }
 
   return baseHref;

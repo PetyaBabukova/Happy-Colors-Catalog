@@ -390,6 +390,26 @@ function buildEditProductData(data) {
   return normalizedFields;
 }
 
+function toStrictBoolean(value) {
+  return value === true || value === 'true';
+}
+
+// Прилага галерийните флагове само по admin път.
+// Artist create → форсира каталог; artist edit → не пипа флаговете.
+// mode: 'create' | 'edit'
+function applyGalleryFlags(target, data = {}, user, mode) {
+  if (isFullAdmin(user)) {
+    target.isInCatalog = toStrictBoolean(data.isInCatalog);
+    target.isCartoonGallery = toStrictBoolean(data.isCartoonGallery);
+    return;
+  }
+
+  if (mode === 'create') {
+    target.isInCatalog = true;
+    target.isCartoonGallery = false;
+  }
+}
+
 function collectVideoAssetsForCleanup(currentVideos, nextVideos) {
   if (!Array.isArray(nextVideos)) {
     return [];
@@ -539,7 +559,15 @@ async function deleteAssetsFromStorage(
 }
 
 export async function getAllProducts(categoryName) {
-  const products = await Product.find(buildPublicProductFilter())
+  const products = await Product.find({
+    // $and, защото buildPublicProductFilter() сам ползва $or за publicationStatus.
+    // Legacy handling: продукти без isInCatalog се третират като каталожни.
+    // Вторият клон се маха в cleanup deploy след migration.
+    $and: [
+      buildPublicProductFilter(),
+      { $or: [{ isInCatalog: true }, { isInCatalog: { $exists: false } }] },
+    ],
+  })
     .populate('category', 'name')
     .lean();
 
@@ -560,6 +588,18 @@ export async function getHomepageFeaturedProducts() {
   })
     .sort({ homepageFeaturedOrder: 1, _id: 1 })
     .limit(HOMEPAGE_FEATURED_PRODUCTS_LIMIT)
+    .populate('category', 'name')
+    .lean();
+
+  return products.map(normalizeProductMedia);
+}
+
+export async function getCartoonGalleryProducts() {
+  const products = await Product.find({
+    ...buildPublicProductFilter(),
+    isCartoonGallery: true,
+    availability: { $ne: 'unavailable' },
+  })
     .populate('category', 'name')
     .lean();
 
@@ -660,6 +700,8 @@ export async function createProduct(data, user) {
 
   const productData = buildCreateProductData(data, user);
 
+  applyGalleryFlags(productData, data, user, 'create');
+
   await assertVideoAssetsNotAttachedToOtherProduct(productData.videos);
 
   const product = new Product(productData);
@@ -693,7 +735,13 @@ export async function getManagedProductById(productId, user) {
     return null;
   }
 
-  return normalizeProductMedia(product);
+  const normalized = normalizeProductMedia(product);
+
+  // Гарантира boolean стойности за edit формата (стари продукти без полетата).
+  normalized.isInCatalog = Boolean(normalized.isInCatalog);
+  normalized.isCartoonGallery = Boolean(normalized.isCartoonGallery);
+
+  return normalized;
 }
 
 export async function getMyProducts(user, { page = 1, limit = 50 } = {}) {
@@ -860,6 +908,8 @@ export async function editProduct(productId, productData, user) {
     product.draftSubmittedAt = new Date();
     product.draftSubmittedBy = user._id;
   }
+
+  applyGalleryFlags(product, productData, user, 'edit');
 
   await product.save();
   await deleteAssetsFromStorage(videoAssetsToDelete, { excludeProductId: product._id });

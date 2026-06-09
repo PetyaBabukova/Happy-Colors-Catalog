@@ -4,6 +4,7 @@ import {
   archiveProduct,
   createProduct,
   getAllProducts,
+  getCartoonGalleryProducts,
   getManagedProductById,
   getMyProducts,
   getHomepageFeaturedProducts,
@@ -45,6 +46,15 @@ router.get('/homepage-featured', async (req, res) => {
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: 'Грешка при зареждане на продуктите за началната страница.' });
+  }
+});
+
+router.get('/cartoon-gallery', async (req, res) => {
+  try {
+    const products = await getCartoonGalleryProducts();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Грешка при зареждане на шарж галерията.' });
   }
 });
 

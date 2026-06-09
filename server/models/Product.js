@@ -112,6 +112,16 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isInCatalog: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isCartoonGallery: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     feedback: [
       {
         name: String,

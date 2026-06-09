@@ -52,10 +52,10 @@ describe('ProductCard', () => {
     expect(screen.getByText('Налично')).toBeInTheDocument();
   });
 
-  it('preserves cartoon service context only when requested', () => {
+  it('links cartoon gallery cards to the contact form, products otherwise', () => {
     const { rerender } = render(<ProductCard product={product} serviceContext="cartoons" />);
 
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1?service=cartoons');
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/contacts');
 
     rerender(<ProductCard product={product} serviceContext="other" />);
 

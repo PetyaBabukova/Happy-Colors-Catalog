@@ -44,14 +44,15 @@ const cartoonOrderSchema = new mongoose.Schema(
       phone: { type: String, default: '', trim: true },
       message: { type: String, required: true, trim: true },
     },
+    // Опционален: общите запитвания нямат конкретен продукт.
     productSnapshot: {
       productId: {
         type: mongoose.Schema.Types.ObjectId,
-        required: true,
         ref: 'Product',
+        default: null,
       },
-      title: { type: String, required: true, trim: true },
-      price: { type: Number, required: true, min: 0 },
+      title: { type: String, default: '', trim: true },
+      price: { type: Number, min: 0, default: null },
       imageUrl: { type: String, default: '', trim: true },
     },
     photos: {

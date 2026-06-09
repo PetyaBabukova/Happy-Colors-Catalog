@@ -185,7 +185,7 @@ describe('ContactForm', () => {
     await waitFor(() => expect(container.textContent).toContain('поне една'));
   });
 
-  it('blocks cartoon order submission when no productId is available', async () => {
+  it('submits a general cartoon inquiry without a specific product', async () => {
     const { container } = render(<ContactForm serviceContext="cartoons" />);
 
     fillContactFields(container);
@@ -193,8 +193,8 @@ describe('ContactForm', () => {
     fireEvent.click(container.querySelector('#cartoonConsent'));
     fireEvent.submit(container.querySelector('form'));
 
-    expect(createCartoonOrder).not.toHaveBeenCalled();
-    await waitFor(() => expect(container.textContent).toContain('конкретен'));
+    await waitFor(() => expect(createCartoonOrder).toHaveBeenCalled());
+    expect(createCartoonOrder.mock.calls[0][0]).toMatchObject({ productId: null });
   });
 
   it('rejects more than five selected cartoon photos before upload', async () => {

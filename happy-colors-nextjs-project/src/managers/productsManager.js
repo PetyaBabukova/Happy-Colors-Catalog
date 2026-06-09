@@ -1,7 +1,6 @@
 // happy-colors-nextjs-project/src/managers/productsManager.js
 
 import baseURL from '@/config';
-import { CARTOON_GALLERY_PRODUCT_IDS } from '@/config/cartoonGalleryProducts';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 
 export async function onCreateProductSubmit(
@@ -193,47 +192,22 @@ export async function getHomepageFeaturedProducts() {
   }
 }
 
-async function getCartoonGalleryProductPool() {
-  const res = await fetch(`${baseURL}/products`, {
-    next: {
-      revalidate: 60,
-      tags: ['products', 'cartoon-gallery-products'],
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error('Failed to load cartoon gallery products.');
-  }
-
-  const data = await readResponseJsonSafely(res);
-
-  if (!Array.isArray(data)) {
-    throw new Error('Unexpected cartoon gallery products response.');
-  }
-
-  return data;
-}
-
 export async function getCartoonGalleryProducts() {
-  const configuredIds = [
-    ...new Set(
-      CARTOON_GALLERY_PRODUCT_IDS.map((productId) => String(productId || '').trim()).filter(Boolean)
-    ),
-  ];
-
-  if (configuredIds.length === 0) {
-    return [];
-  }
-
   try {
-    const products = await getCartoonGalleryProductPool();
-    const productsById = new Map(
-      products
-        .filter((product) => product?.availability !== 'unavailable')
-        .map((product) => [String(product._id), product])
-    );
+    const res = await fetch(`${baseURL}/products/cartoon-gallery`, {
+      next: {
+        revalidate: 60,
+        tags: ['products', 'cartoon-gallery-products'],
+      },
+    });
 
-    return configuredIds.map((productId) => productsById.get(productId)).filter(Boolean);
+    if (!res.ok) {
+      throw new Error('Failed to load cartoon gallery products.');
+    }
+
+    const data = await readResponseJsonSafely(res);
+
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error(err.message);
     return [];

@@ -29,7 +29,7 @@ function setupCartoonsPage({
   }));
   vi.doMock('@/app/products/ProductCard', () => ({
     default: ({ product, serviceContext }) => (
-      <a href={`/products/${product._id}?service=${serviceContext}`}>
+      <a href={serviceContext === 'cartoons' ? '/contacts' : `/products/${product._id}`}>
         {product.title}
       </a>
     ),
@@ -92,11 +92,11 @@ describe('CartoonsPage', () => {
     expect(screen.getByRole('heading', { name: 'Шарж по снимка за специален подарък' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Изпрати запитване' })).toHaveAttribute(
       'href',
-      '/contacts?service=cartoons'
+      '/contacts'
     );
     expect(screen.getByRole('link', { name: 'Cartoon Sample' })).toHaveAttribute(
       'href',
-      '/products/product-1?service=cartoons'
+      '/contacts'
     );
   });
 

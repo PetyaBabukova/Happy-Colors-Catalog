@@ -53,7 +53,7 @@ export default async function CartoonsPage() {
         <section className={`${styles.introSection} pageInline`}>
           <h1>{PAGE_TITLE}</h1>
           <p>{PAGE_DESCRIPTION}</p>
-          <Link className={styles.primaryAction} href="/contacts?service=cartoons">
+          <Link className={styles.primaryAction} href="/contacts">
             Изпрати запитване
           </Link>
         </section>

@@ -452,6 +452,32 @@ describe('cartoon orders integration', () => {
     });
   });
 
+  it('creates a cartoon order without a specific product', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const photo = buildPhoto();
+    await createUploadSession({ photos: [photo] });
+
+    const res = await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.111')
+      .send({ ...buildCartoonOrderPayload({ photos: [photo] }), productId: null })
+      .expect(201);
+    const order = await CartoonOrder.findById(res.body.orderId).lean();
+
+    expect(order.customer).toMatchObject({ name: 'Petya Babukova', email: 'petya@example.com' });
+    expect(order.productSnapshot?.productId ?? null).toBeNull();
+    expect(order.photos).toHaveLength(1);
+    expect(order.claimStatus).toBe('claimed');
+    expect(order.notificationStatus).toBe('sent');
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'New cartoon order from Petya Babukova',
+        text: expect.stringContaining('General inquiry'),
+      })
+    );
+  });
+
   it('rejects untrusted production origins before creating an order', async () => {
     process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
     process.env.NODE_ENV = 'production';

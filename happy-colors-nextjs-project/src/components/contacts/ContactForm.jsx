@@ -242,11 +242,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
     }
 
     if (isCartoonInquiry) {
-      if (!resolvedProductId) {
-        setError('Моля изберете конкретен шарж/пакет преди да изпратите заявката.');
-        return;
-      }
-
+      // productId е опционален — общите запитвания са само свободен текст + снимки.
       if (cartoonPhotos.length === 0) {
         setPhotoError('Моля качете поне една референтна снимка.');
         return;
@@ -261,7 +257,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
     const payload = isCartoonInquiry
       ? {
           ...sanitizedValues,
-          productId: resolvedProductId,
+          productId: resolvedProductId || null,
           photos: cartoonPhotos,
           consentAccepted,
           website,
