@@ -38,8 +38,17 @@ export function sanitizeText(input) {
   return String(input).replace(/<\/?[^>]+(>|$)/g, '').trim();
 }
 
+export const CONTACT_MESSAGE_MAX_LENGTH = 1000;
+export const CARTOON_CONTACT_MESSAGE_MAX_LENGTH = 1500;
+
+export function getContactMessageMaxLength(serviceContext = '') {
+  return serviceContext === 'cartoons'
+    ? CARTOON_CONTACT_MESSAGE_MAX_LENGTH
+    : CONTACT_MESSAGE_MAX_LENGTH;
+}
+
 // Проверка за дължина и валидност на контактната форма
-export function validateContactLength(values) {
+export function validateContactLength(values, { messageMaxLength = CONTACT_MESSAGE_MAX_LENGTH } = {}) {
   const errors = [];
 
   if (values.name.trim().length < 3 || values.name.trim().length > 20) {
@@ -50,7 +59,7 @@ export function validateContactLength(values) {
     errors.push('phone');
   }
 
-  if (values.message.trim().length > 200) {
+  if (values.message.trim().length > messageMaxLength) {
     errors.push('message');
   }
 

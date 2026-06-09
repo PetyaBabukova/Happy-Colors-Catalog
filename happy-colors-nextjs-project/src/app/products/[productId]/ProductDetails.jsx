@@ -69,7 +69,7 @@ function buildMediaSlides(imageUrls, videos) {
 // 	);
 // }
 
-export default function ProductDetails({ product }) {
+export default function ProductDetails({ product, serviceContext = '' }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
 	const isFullAdmin = user?.role === 'full_admin';
@@ -297,6 +297,11 @@ export default function ProductDetails({ product }) {
 	};
 
 	const handleInquiry = () => {
+		if (serviceContext === 'cartoons') {
+			router.push(`/contacts?service=cartoons&productId=${product._id}`);
+			return;
+		}
+
 		router.push(`/contacts?productId=${product._id}`);
 	};
 

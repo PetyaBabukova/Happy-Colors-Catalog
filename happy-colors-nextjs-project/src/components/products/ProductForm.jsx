@@ -103,7 +103,13 @@ function getCategoryValue(category) {
   return category._id || category.id || '';
 }
 
-export default function ProductForm({ initialValues, onSubmit, legendText, successMessage }) {
+export default function ProductForm({
+  initialValues,
+  onSubmit,
+  legendText,
+  successMessage,
+  canManageGalleryFlags = false,
+}) {
   const router = useRouter();
   const { categories } = useProducts();
   const autoUploadAttemptRef = useRef('');
@@ -129,6 +135,8 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
     imageUrls: [],
     videos: [],
     availability: 'available',
+    isInCatalog: false,
+    isCartoonGallery: false,
   });
 
   const [uploading, setUploading] = useState(false);
@@ -165,6 +173,8 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
       category: getCategoryValue(initialValues.category),
       videos: normalizeVideos(initialValues.videos),
       availability: initialValues.availability || 'available',
+      isInCatalog: Boolean(initialValues.isInCatalog),
+      isCartoonGallery: Boolean(initialValues.isCartoonGallery),
     });
   }, [initialValues, setFormValues]);
 
@@ -201,6 +211,11 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
 
   const openReplaceInput = (videoUrl, kind) => {
     replaceInputRefs.current[`${kind}:${videoUrl}`]?.click();
+  };
+
+  const handleCheckboxChange = (event) => {
+    const { name, checked } = event.target;
+    setFormValues((prev) => ({ ...prev, [name]: checked }));
   };
 
   const handleSelectedVideoChange = (event) => {
@@ -605,6 +620,30 @@ export default function ProductForm({ initialValues, onSubmit, legendText, succe
           <option value="available">Продуктът е наличен и може да го поръчате</option>
           <option value="unavailable">Продуктът не е наличен, ако желаете пратете запитване</option>
         </select>
+
+        {canManageGalleryFlags && (
+          <fieldset className={styles.galleryFlags}>
+            <legend>Къде да се показва продуктът</legend>
+            <label>
+              <input
+                type="checkbox"
+                name="isInCatalog"
+                checked={Boolean(formValues.isInCatalog)}
+                onChange={handleCheckboxChange}
+              />
+              Покажи в Каталог
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                name="isCartoonGallery"
+                checked={Boolean(formValues.isCartoonGallery)}
+                onChange={handleCheckboxChange}
+              />
+              Покажи в Шаржове
+            </label>
+          </fieldset>
+        )}
 
         <label>Изображения</label>
         <input

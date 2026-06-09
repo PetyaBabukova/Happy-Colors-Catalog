@@ -192,6 +192,28 @@ export async function getHomepageFeaturedProducts() {
   }
 }
 
+export async function getCartoonGalleryProducts() {
+  try {
+    const res = await fetch(`${baseURL}/products/cartoon-gallery`, {
+      next: {
+        revalidate: 60,
+        tags: ['products', 'cartoon-gallery-products'],
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to load cartoon gallery products.');
+    }
+
+    const data = await readResponseJsonSafely(res);
+
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error(err.message);
+    return [];
+  }
+}
+
 export async function updateHomepageFeaturedProducts(productIds) {
   const res = await fetch(`${baseURL}/products/homepage-featured`, {
     method: 'PUT',

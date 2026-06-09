@@ -5,13 +5,19 @@ export function resetRateLimiterState() {
 }
 
 function getClientIp(req) {
+  if (typeof req.ip === 'string' && req.ip.trim()) {
+    return req.ip.trim();
+  }
+
   const forwardedFor = req.headers['x-forwarded-for'];
 
   if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-    return forwardedFor.split(',')[0].trim();
+    const forwardedChain = forwardedFor.split(',').map((value) => value.trim()).filter(Boolean);
+
+    return forwardedChain[0] || 'unknown';
   }
 
-  return req.ip || req.socket?.remoteAddress || 'unknown';
+  return req.socket?.remoteAddress || 'unknown';
 }
 
 export function createRateLimiter({

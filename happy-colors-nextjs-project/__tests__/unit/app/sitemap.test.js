@@ -59,6 +59,7 @@ describe('sitemap', () => {
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
       next: { revalidate: 3600, tags: ['blog-articles'] },
     });
+    expect(entries.map((entry) => entry.url)).not.toContain('https://happycolors.eu/cartoons');
     expect(entries).toEqual([
       {
         url: 'https://happycolors.eu/',
@@ -121,6 +122,18 @@ describe('sitemap', () => {
         priority: 0.65,
       },
     ]);
+  });
+
+  it('adds cartoons to the production sitemap only when the release gate is enabled', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
+    vi.stubEnv('NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED', 'true');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] })));
+
+    const { default: sitemap } = await import('../../../src/app/sitemap.js');
+    const entries = await sitemap();
+
+    expect(entries.map((entry) => entry.url)).toContain('https://happycolors.eu/cartoons');
   });
 
   it('falls back to static entries when dynamic sitemap fetches fail', async () => {

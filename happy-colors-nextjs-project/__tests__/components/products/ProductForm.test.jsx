@@ -279,4 +279,65 @@ describe('ProductForm', () => {
     await waitFor(() => expect(deleteSignedUploadedFile).toHaveBeenCalledWith('products/posters/uploaded.webp', 'poster-token'));
     expect(await screen.findByText('video upload failed')).toBeInTheDocument();
   });
+
+  it('hides the gallery flag checkboxes when the user cannot manage them', async () => {
+    const { container } = render(
+      <ProductForm
+        initialValues={buildInitialValues()}
+        onSubmit={vi.fn()}
+        legendText="Edit product"
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector('input[name="title"]')).toHaveValue('Lavender Candle'));
+
+    expect(container.querySelector('input[name="isInCatalog"]')).not.toBeInTheDocument();
+    expect(container.querySelector('input[name="isCartoonGallery"]')).not.toBeInTheDocument();
+  });
+
+  it('shows and loads gallery flag values for a full admin on edit', async () => {
+    const { container } = render(
+      <ProductForm
+        initialValues={buildInitialValues({ isInCatalog: true, isCartoonGallery: true })}
+        onSubmit={vi.fn()}
+        legendText="Edit product"
+        canManageGalleryFlags
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector('input[name="isInCatalog"]')).toBeInTheDocument());
+
+    expect(container.querySelector('input[name="isInCatalog"]')).toBeChecked();
+    expect(container.querySelector('input[name="isCartoonGallery"]')).toBeChecked();
+  });
+
+  it('submits toggled gallery flag values', async () => {
+    const onSubmit = vi.fn();
+
+    const { container } = render(
+      <ProductForm
+        initialValues={buildInitialValues({ isInCatalog: false, isCartoonGallery: false })}
+        onSubmit={onSubmit}
+        legendText="Edit product"
+        canManageGalleryFlags
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector('input[name="isCartoonGallery"]')).toBeInTheDocument());
+
+    fireEvent.click(container.querySelector('input[name="isInCatalog"]'));
+    fireEvent.click(container.querySelector('input[name="isCartoonGallery"]'));
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isInCatalog: true,
+        isCartoonGallery: true,
+      }),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Object)
+    );
+  });
 });

@@ -37,9 +37,22 @@ function sendError(res, error, fallbackStatus = 500) {
   return res.status(statusCode).json({ message: error.message });
 }
 
+function getPlacementQuery(req) {
+  if (
+    typeof req.query.placement === 'undefined' &&
+    Object.keys(req.query || {}).some((key) => key.startsWith('placement['))
+  ) {
+    const error = new Error('Invalid banner placement.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return req.query.placement;
+}
+
 router.get('/', async (req, res) => {
   try {
-    const banners = await getActiveHomeBanners();
+    const banners = await getActiveHomeBanners({ placement: getPlacementQuery(req) });
 
     res.json(banners);
   } catch (error) {

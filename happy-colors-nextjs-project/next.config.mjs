@@ -67,6 +67,26 @@ const nextConfig = {
         destination: `${backendBaseUrl}/contacts/:path*`,
       },
       {
+        source: '/api/cartoon-orders',
+        destination: `${backendBaseUrl}/cartoon-orders`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/statuses',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/statuses`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/admin-notes',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/admin-notes`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/complete',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/complete`,
+      },
+      {
         source: '/api/newsletter/:path*',
         destination: `${backendBaseUrl}/newsletter/:path*`,
       },

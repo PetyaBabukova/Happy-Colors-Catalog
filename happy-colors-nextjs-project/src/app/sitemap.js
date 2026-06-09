@@ -4,6 +4,7 @@ import {
   PROD_SITE_URL,
   shouldExposeSitemap,
 } from '@/config/siteSeo';
+import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
 
 export const revalidate = 3600;
 
@@ -78,6 +79,16 @@ export default async function sitemap() {
       changeFrequency: 'daily',
       priority: 0.9,
     },
+    ...(isCartoonsServiceEnabled
+      ? [
+          {
+            url: `${PROD_SITE_URL}/cartoons`,
+            lastModified: now,
+            changeFrequency: 'weekly',
+            priority: 0.8,
+          },
+        ]
+      : []),
     {
       url: `${PROD_SITE_URL}/aboutus`,
       lastModified: now,

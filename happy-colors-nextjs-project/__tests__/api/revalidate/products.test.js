@@ -43,8 +43,10 @@ describe('/api/revalidate/products', () => {
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('products');
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
+    expect(revalidateTag).toHaveBeenCalledWith('cartoon-gallery-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/cartoons');
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
     expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
   });
@@ -84,8 +86,10 @@ describe('/api/revalidate/products', () => {
     expect(response.status).toBe(200);
     expect(revalidateTag).toHaveBeenCalledWith('products');
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
+    expect(revalidateTag).toHaveBeenCalledWith('cartoon-gallery-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/cartoons');
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
     expect(revalidatePath).not.toHaveBeenCalledWith('/products/undefined');
   });

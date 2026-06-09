@@ -717,4 +717,166 @@ describe('products integration', () => {
     await expect(Product.findById(draft._id).lean()).resolves.toMatchObject({ publicationStatus: 'draft' });
     await expect(Product.findById(published._id).lean()).resolves.toMatchObject({ publicationStatus: 'published' });
   });
+
+  it('applies gallery flags for a full admin on create', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'gallery-admin@example.com' });
+    const category = await createCategory();
+
+    const res = await request(app)
+      .post('/products')
+      .set('Cookie', authCookie(admin))
+      .send(buildProduct({ category, title: 'Admin cartoon', isInCatalog: false, isCartoonGallery: true }))
+      .expect(201);
+
+    expect(res.body).toMatchObject({
+      title: 'Admin cartoon',
+      isInCatalog: false,
+      isCartoonGallery: true,
+    });
+  });
+
+  it('forces catalog placement and ignores gallery flags for an artist create', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'gallery-artist@example.com' });
+    await createFullAdmin({ email: 'gallery-artist-review@example.com' });
+    const category = await createCategory();
+
+    const res = await request(app)
+      .post('/products')
+      .set('Cookie', authCookie(artist))
+      .send(buildProduct({ category, title: 'Artist abuse', isInCatalog: false, isCartoonGallery: true }))
+      .expect(201);
+
+    // Артист не може да сложи продукт в шаржове през payload; продуктът отива в каталога.
+    expect(res.body.isCartoonGallery).toBe(false);
+    expect(res.body.isInCatalog).toBe(true);
+
+    const stored = await Product.findById(res.body._id).lean();
+    expect(stored.isCartoonGallery).toBe(false);
+    expect(stored.isInCatalog).toBe(true);
+  });
+
+  it('ignores artist gallery flag changes on edit', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'gallery-edit-artist@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: artist,
+      category,
+      title: 'Artist draft',
+      publicationStatus: 'draft',
+      isInCatalog: true,
+      isCartoonGallery: false,
+    });
+
+    await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(artist))
+      .send({ title: 'Artist draft edited', isCartoonGallery: true, isInCatalog: false })
+      .expect(200);
+
+    const stored = await Product.findById(product._id).lean();
+    expect(stored.isCartoonGallery).toBe(false);
+    expect(stored.isInCatalog).toBe(true);
+  });
+
+  it('lets a full admin toggle gallery flags on edit', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin({ email: 'gallery-edit-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: admin,
+      category,
+      title: 'Admin toggling',
+      isInCatalog: true,
+      isCartoonGallery: false,
+    });
+
+    await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(admin))
+      .send({ isInCatalog: false, isCartoonGallery: true })
+      .expect(200);
+
+    const stored = await Product.findById(product._id).lean();
+    expect(stored.isInCatalog).toBe(false);
+    expect(stored.isCartoonGallery).toBe(true);
+  });
+
+  it('serves only cartoon-flagged published products from the cartoon gallery endpoint', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin({ email: 'cartoon-gallery-owner@example.com' });
+    const category = await createCategory();
+    await createProduct({ owner, category, title: 'Catalog only', isInCatalog: true, isCartoonGallery: false });
+    const cartoon = await createProduct({
+      owner,
+      category,
+      title: 'Cartoon shown',
+      isInCatalog: false,
+      isCartoonGallery: true,
+    });
+    await createProduct({
+      owner,
+      category,
+      title: 'Cartoon hidden draft',
+      publicationStatus: 'draft',
+      isCartoonGallery: true,
+    });
+    await createProduct({
+      owner,
+      category,
+      title: 'Cartoon unavailable',
+      availability: 'unavailable',
+      isCartoonGallery: true,
+    });
+
+    const res = await request(app).get('/products/cartoon-gallery').expect(200);
+
+    expect(res.body.map((product) => product._id)).toEqual([String(cartoon._id)]);
+  });
+
+  it('preserves gallery flags through an admin review approval', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'gallery-review-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'gallery-review-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: artist,
+      category,
+      title: 'Pending cartoon',
+      publicationStatus: 'pending_review',
+      isInCatalog: false,
+      isCartoonGallery: true,
+    });
+
+    await request(app)
+      .patch(`/products/${product._id}/approve`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    const stored = await Product.findById(product._id).lean();
+    expect(stored.publicationStatus).toBe('published');
+    expect(stored.isInCatalog).toBe(false);
+    expect(stored.isCartoonGallery).toBe(true);
+  });
+
+  it('shows a product flagged for both galleries in catalog and cartoon gallery', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin({ email: 'both-galleries-owner@example.com' });
+    const category = await createCategory();
+    const shared = await createProduct({
+      owner,
+      category,
+      title: 'In both galleries',
+      isInCatalog: true,
+      isCartoonGallery: true,
+    });
+
+    const catalogRes = await request(app).get('/products').expect(200);
+    const cartoonRes = await request(app).get('/products/cartoon-gallery').expect(200);
+
+    expect(catalogRes.body.map((product) => product._id)).toContain(String(shared._id));
+    expect(cartoonRes.body.map((product) => product._id)).toContain(String(shared._id));
+  });
 });

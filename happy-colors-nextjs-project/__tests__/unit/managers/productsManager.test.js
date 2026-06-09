@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteProductImage,
   deleteProductVideo,
+  getCartoonGalleryProducts,
   getHomepageFeaturedProducts,
   getProducts,
   onCreateProductSubmit,
@@ -69,6 +70,38 @@ describe('productsManager', () => {
         },
       })
     );
+  });
+
+  it('loads cartoon gallery products from the dedicated endpoint with the cartoon cache tag', async () => {
+    const products = [
+      { _id: 'product-1', title: 'First' },
+      { _id: 'product-2', title: 'Second' },
+    ];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getCartoonGalleryProducts()).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/products/cartoon-gallery',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'cartoon-gallery-products'],
+        },
+      })
+    );
+  });
+
+  it('returns an empty cartoon gallery when the response is not an array', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { message: 'unexpected' } }));
+
+    await expect(getCartoonGalleryProducts()).resolves.toEqual([]);
+  });
+
+  it('returns an empty cartoon gallery instead of leaking product load failures', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
+
+    await expect(getCartoonGalleryProducts()).resolves.toEqual([]);
   });
 
   it('returns an empty list instead of leaking homepage featured product load failures', async () => {

@@ -8,6 +8,7 @@ import { deleteSignedUploadedFile, uploadSignedFile } from '@/managers/uploadMan
 import styles from './HomeBannerForm.module.css';
 
 const INITIAL_VALUES = {
+  placement: 'home',
   title: '',
   description: '',
   ctaLabel: '',
@@ -17,6 +18,10 @@ const INITIAL_VALUES = {
   sortOrder: 0,
   isActive: true,
 };
+const PLACEMENT_OPTIONS = [
+  { value: 'home', label: 'Начална страница' },
+  { value: 'cartoons', label: 'Шаржове' },
+];
 const FIELD_LIMITS = {
   title: 120,
   description: 600,
@@ -24,8 +29,16 @@ const FIELD_LIMITS = {
   ctaHref: 300,
 };
 
+function getBannerPlacement(values) {
+  return values?.placement === 'cartoons' ? 'cartoons' : 'home';
+}
+
 function getRequiredMissingFields(values) {
-  return ['title', 'ctaLabel', 'ctaHref', 'imageUrl'].filter((field) => {
+  const requiredFields = getBannerPlacement(values) === 'home'
+    ? ['title', 'ctaLabel', 'ctaHref', 'imageUrl']
+    : ['imageUrl'];
+
+  return requiredFields.filter((field) => {
     const value = values[field];
 
     return typeof value !== 'string' || value.trim() === '';
@@ -48,6 +61,7 @@ function normalizeInitialValues(initialValues) {
   return {
     ...INITIAL_VALUES,
     ...initialValues,
+    placement: getBannerPlacement(initialValues),
     title: initialValues?.title || '',
     description: initialValues?.description || '',
     ctaLabel: initialValues?.ctaLabel || '',
@@ -82,6 +96,8 @@ export default function HomeBannerForm({
   const [uploadErrors, setUploadErrors] = useState({});
   const [uploadedImages, setUploadedImages] = useState({});
   const uploading = Object.keys(uploadingFields).length > 0;
+  const bannerPlacement = getBannerPlacement(formValues);
+  const isCartoonPlacement = bannerPlacement === 'cartoons';
 
   useEffect(() => {
     setFormValues(normalizeInitialValues(initialValues));
@@ -212,7 +228,9 @@ export default function HomeBannerForm({
       return;
     }
 
-    if (!validateCtaHref(formValues.ctaHref)) {
+    const ctaHref = String(formValues.ctaHref || '').trim();
+
+    if ((!isCartoonPlacement || ctaHref) && !validateCtaHref(ctaHref)) {
       setInvalidFields(['ctaHref']);
       setError('CTA линкът трябва да бъде вътрешен път, например /search?q=животинки.');
       return;
@@ -231,6 +249,7 @@ export default function HomeBannerForm({
       setInvalidFields([]);
       await onSubmit({
         ...formValues,
+        placement: bannerPlacement,
         title: formValues.title.trim(),
         description: formValues.description.trim(),
         ctaLabel: formValues.ctaLabel.trim(),
@@ -272,6 +291,21 @@ export default function HomeBannerForm({
       <h2 className={styles.formTitle}>{legendText}</h2>
 
       <form className={styles.form} onSubmit={handleSubmit}>
+        <label htmlFor="placement">Позиция на банера</label>
+        <select
+          id="placement"
+          name="placement"
+          value={bannerPlacement}
+          onChange={handleChange}
+          className={invalidFields.includes('placement') ? styles.invalidField : ''}
+        >
+          {PLACEMENT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
         <label htmlFor="title">Заглавие</label>
         <input
           id="title"
@@ -312,7 +346,11 @@ export default function HomeBannerForm({
           maxLength={FIELD_LIMITS.ctaHref}
           className={invalidFields.includes('ctaHref') ? styles.invalidField : ''}
         />
-        <p className={styles.fieldHint}>Използвайте вътрешен линк, например /products или /search?q=животинки.</p>
+        <p className={styles.fieldHint}>
+          {isCartoonPlacement
+            ? 'Полето е по желание за шарж банери.'
+            : 'Използвайте вътрешен линк, например /products или /search?q=животинки.'}
+        </p>
 
         <label htmlFor="imageFile">Desktop image</label>
         <p className={styles.fieldHint}>Wide image for laptop and desktop layouts.</p>
@@ -379,15 +417,17 @@ export default function HomeBannerForm({
           className={invalidFields.includes('sortOrder') ? styles.invalidField : ''}
         />
 
-        <label className={styles.checkboxLabel}>
-          <input
-            type="checkbox"
-            name="isActive"
-            checked={Boolean(formValues.isActive)}
-            onChange={handleCheckboxChange}
-          />
-          Активен банер
-        </label>
+        {!isCartoonPlacement && (
+          <label className={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              name="isActive"
+              checked={Boolean(formValues.isActive)}
+              onChange={handleCheckboxChange}
+            />
+            Активен банер
+          </label>
+        )}
 
         <button type="submit" className={styles.submitButton} disabled={uploading || submitting}>
           Запази

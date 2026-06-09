@@ -7,6 +7,9 @@ import { fireEvent, render, screen } from '../test-utils.jsx';
 const catalogModeState = vi.hoisted(() => ({
   value: false,
 }));
+const cartoonsFeatureState = vi.hoisted(() => ({
+  enabled: false,
+}));
 
 vi.mock('@/context/ProductContext', () => ({
   useProducts: vi.fn(),
@@ -22,6 +25,12 @@ vi.mock('@/utils/catalogMode', () => ({
   },
 }));
 
+vi.mock('@/config/cartoonsFeature', () => ({
+  get isCartoonsServiceEnabled() {
+    return cartoonsFeatureState.enabled;
+  },
+}));
+
 function getUserNavLinks(container) {
   return [...container.querySelectorAll('ul[class*="userNav"] a')].map((link) =>
     link.getAttribute('href')
@@ -31,6 +40,7 @@ function getUserNavLinks(container) {
 describe('Header', () => {
   beforeEach(() => {
     catalogModeState.value = false;
+    cartoonsFeatureState.enabled = false;
     useProducts.mockReturnValue({
       visibleCategories: [
         { _id: 'cat-1', name: 'Candles' },
@@ -58,11 +68,12 @@ describe('Header', () => {
     expect(container.querySelector('header ul[class*="userNav"]')).toBeInTheDocument();
     expect(getUserNavLinks(container)).toEqual([
       '/products/create',
-      '/home-banners/create',
       '/homepage-featured',
-      '/blog/create',
       '/categories/create',
       '/categories',
+      '/home-banners/create',
+      '/cartoon-orders',
+      '/blog/create',
       '/analytics',
       '/users/admin',
       '/newsletter/send',
@@ -114,6 +125,19 @@ describe('Header', () => {
     expect(container.querySelector('ul[class*="userNav"]')).not.toBeInTheDocument();
     expect(container.querySelector('a[href="/products/create"]')).not.toBeInTheDocument();
     expect(container.querySelector('a[href="/newsletter/send"]')).not.toBeInTheDocument();
+  });
+
+  it('hides the cartoons public link until the release gate is enabled', () => {
+    const hiddenRender = render(<Header />);
+
+    expect(hiddenRender.container.querySelector('a[href="/cartoons"]')).not.toBeInTheDocument();
+
+    hiddenRender.unmount();
+    cartoonsFeatureState.enabled = true;
+
+    render(<Header />);
+
+    expect(screen.getByRole('link', { name: 'Шаржове' })).toHaveAttribute('href', '/cartoons');
   });
 
   it('hides the cart link in catalog mode', () => {

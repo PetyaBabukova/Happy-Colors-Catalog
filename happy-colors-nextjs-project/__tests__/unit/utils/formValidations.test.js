@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CARTOON_CONTACT_MESSAGE_MAX_LENGTH,
+  CONTACT_MESSAGE_MAX_LENGTH,
+  getContactMessageMaxLength,
   passwordsMatchValidator,
   sanitizeText,
   validateContactForm,
@@ -58,7 +61,7 @@ describe('formValidations', () => {
     expect(validateContactLength({
       name: 'Pe',
       phone: '1'.repeat(21),
-      message: 'x'.repeat(201),
+      message: 'x'.repeat(CONTACT_MESSAGE_MAX_LENGTH + 1),
       email: 'bad-email',
     })).toEqual(['name', 'phone', 'message', 'email']);
 
@@ -68,6 +71,33 @@ describe('formValidations', () => {
       message: 'Hello',
       email: 'petya@example.com',
     })).toEqual([]);
+  });
+
+  it('uses synchronized contact message limits for normal and cartoon contexts', () => {
+    expect(getContactMessageMaxLength()).toBe(CONTACT_MESSAGE_MAX_LENGTH);
+    expect(getContactMessageMaxLength('cartoons')).toBe(CARTOON_CONTACT_MESSAGE_MAX_LENGTH);
+
+    const baseValues = {
+      name: 'Petya',
+      phone: '',
+      email: 'petya@example.com',
+    };
+
+    expect(validateContactLength({
+      ...baseValues,
+      message: 'x'.repeat(CONTACT_MESSAGE_MAX_LENGTH),
+    })).toEqual([]);
+    expect(validateContactLength({
+      ...baseValues,
+      message: 'x'.repeat(CONTACT_MESSAGE_MAX_LENGTH + 1),
+    })).toEqual(['message']);
+    expect(validateContactLength(
+      {
+        ...baseValues,
+        message: 'x'.repeat(CARTOON_CONTACT_MESSAGE_MAX_LENGTH),
+      },
+      { messageMaxLength: CARTOON_CONTACT_MESSAGE_MAX_LENGTH }
+    )).toEqual([]);
   });
 
   it('validates positive prices only', () => {

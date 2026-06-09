@@ -12,3 +12,12 @@ export const ALLOWED_IMAGE_UPLOAD_MIME_TYPES = [
 ];
 
 export const MAX_IMAGE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+
+export const MAX_CARTOON_ORDER_PHOTOS = 5;
+export const MAX_CARTOON_ORDER_PHOTO_SIZE_BYTES = 3 * 1024 * 1024;
+export const ALLOWED_CARTOON_ORDER_PHOTO_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+export const CARTOON_ORDER_PHOTO_PREFIX = 'cartoon-orders/reference-photos';
