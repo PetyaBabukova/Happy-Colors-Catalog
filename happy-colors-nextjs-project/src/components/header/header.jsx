@@ -181,10 +181,10 @@ export default function Header() {
         )}
         {isFullAdmin && (
           <>
-        <li><Link href="/homepage-featured">Избери любими продукти</Link></li>
+        <li><Link href="/homepage-featured">Любими продукти</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
-        <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
+        <li><Link href="/home-banners/create">Създай хиро банер</Link></li>
         <li><Link href="/cartoon-orders">Шарж поръчки</Link></li>
         <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/analytics">Анализи</Link></li>
