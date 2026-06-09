@@ -100,7 +100,7 @@ describe('HomeHeroCarousel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Изтрий банера' }));
 
     await waitFor(() => {
-      expect(deleteHomeBanner).toHaveBeenCalledWith('banner-1');
+      expect(deleteHomeBanner).toHaveBeenCalledWith('banner-1', { placement: 'home' });
     });
     expect(mockRouterPush).not.toHaveBeenCalled();
   });

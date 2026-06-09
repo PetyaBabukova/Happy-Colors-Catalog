@@ -9,6 +9,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { isCatalogMode } from '@/utils/catalogMode';
+import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
 import { fetchAdminUsers } from '@/managers/usersAdminManager';
 import { Menu, X } from 'lucide-react';
 
@@ -140,9 +141,10 @@ export default function Header() {
               )}
             </li>
 
-            <li><Link href="/aboutus">За Happy Colors</Link></li>
-            <li><Link href="/faq">ЧЗВ</Link></li>
+            {isCartoonsServiceEnabled && <li><Link href="/cartoons">Шаржове</Link></li>}
             <li><Link href="/blog">Блог</Link></li>
+            <li><Link href="/aboutus">За Happy Colors</Link></li>
+            <li><Link href="/faq">Въпроси</Link></li>
             {/* <li><Link href="/partners">За партньори</Link></li> */}
             <li><Link href="/contacts">Контакти</Link></li>
           </ul>
@@ -179,11 +181,12 @@ export default function Header() {
         )}
         {isFullAdmin && (
           <>
-        <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
         <li><Link href="/homepage-featured">Избери любими продукти</Link></li>
-        <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/categories/create">Създай категория</Link></li>
         <li><Link href="/categories">Категории</Link></li>
+        <li><Link href="/home-banners/create">Създай хоум банер</Link></li>
+        <li><Link href="/cartoon-orders">Шарж поръчки</Link></li>
+        <li><Link href="/blog/create">Създай блог статия</Link></li>
         <li><Link href="/analytics">Анализи</Link></li>
         <li>
           <Link

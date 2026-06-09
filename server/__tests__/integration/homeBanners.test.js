@@ -41,6 +41,181 @@ describe('home banners integration', () => {
     expect(res.body.map((banner) => banner.title)).toEqual(['First', 'Second']);
   });
 
+  it('lists home banners by default while preserving legacy banners without placement', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const legacyBanner = await createHomeBanner({
+      owner,
+      title: 'Legacy home banner',
+      sortOrder: 1,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/legacy.webp',
+    });
+    await HomeBanner.collection.updateOne(
+      { _id: legacyBanner._id },
+      { $unset: { placement: '' } }
+    );
+    await createHomeBanner({
+      owner,
+      title: 'Placed home banner',
+      sortOrder: 2,
+      placement: 'home',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/placed-home.webp',
+    });
+    await createHomeBanner({
+      owner,
+      title: 'Cartoon banner',
+      sortOrder: 0,
+      placement: 'cartoons',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoons.webp',
+    });
+
+    const res = await request(app).get('/home-banners').expect(200);
+
+    expect(res.body.map((banner) => banner.title)).toEqual([
+      'Legacy home banner',
+      'Placed home banner',
+    ]);
+    expect(res.body.map((banner) => banner.placement)).toEqual(['home', 'home']);
+  });
+
+  it('lists legacy home banners with null or blank placement values', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const nullPlacementBanner = await createHomeBanner({
+      owner,
+      title: 'Legacy null placement banner',
+      sortOrder: 1,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/legacy-null.webp',
+    });
+    const blankPlacementBanner = await createHomeBanner({
+      owner,
+      title: 'Legacy blank placement banner',
+      sortOrder: 2,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/legacy-blank.webp',
+    });
+    await HomeBanner.collection.updateOne(
+      { _id: nullPlacementBanner._id },
+      { $set: { placement: null } }
+    );
+    await HomeBanner.collection.updateOne(
+      { _id: blankPlacementBanner._id },
+      { $set: { placement: '' } }
+    );
+
+    const res = await request(app).get('/home-banners').expect(200);
+
+    expect(res.body.map((banner) => banner.title)).toEqual([
+      'Legacy null placement banner',
+      'Legacy blank placement banner',
+    ]);
+    expect(res.body.map((banner) => banner.placement)).toEqual(['home', 'home']);
+  });
+
+  it('lists home banners explicitly while preserving legacy banners without placement', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const legacyBanner = await createHomeBanner({
+      owner,
+      title: 'Legacy explicit home banner',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/legacy-explicit.webp',
+    });
+    await HomeBanner.collection.updateOne(
+      { _id: legacyBanner._id },
+      { $unset: { placement: '' } }
+    );
+    await createHomeBanner({
+      owner,
+      title: 'Cartoon banner',
+      placement: 'cartoons',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/explicit-cartoon.webp',
+    });
+
+    const res = await request(app).get('/home-banners?placement=home').expect(200);
+
+    expect(res.body.map((banner) => banner.title)).toEqual(['Legacy explicit home banner']);
+    expect(res.body[0].placement).toBe('home');
+  });
+
+  it('lists only cartoon banners when placement is cartoons', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const legacyBanner = await createHomeBanner({
+      owner,
+      title: 'Legacy banner',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/legacy-cartoon-query.webp',
+    });
+    await HomeBanner.collection.updateOne(
+      { _id: legacyBanner._id },
+      { $unset: { placement: '' } }
+    );
+    await createHomeBanner({
+      owner,
+      title: 'Home banner',
+      placement: 'home',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/home-only.webp',
+    });
+    await createHomeBanner({
+      owner,
+      title: 'Inactive cartoon banner',
+      placement: 'cartoons',
+      isActive: false,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/inactive-cartoon.webp',
+    });
+    await createHomeBanner({
+      owner,
+      title: 'Cartoon banner',
+      placement: 'cartoons',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoon-only.webp',
+    });
+
+    const res = await request(app).get('/home-banners?placement=cartoons').expect(200);
+
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({
+      title: 'Cartoon banner',
+      placement: 'cartoons',
+    });
+  });
+
+  it('rejects invalid banner placement filters', async () => {
+    const app = createExpressApp();
+
+    const res = await request(app).get('/home-banners?placement=products').expect(400);
+
+    expect(res.body.message).toBe('Invalid banner placement.');
+  });
+
+  it('rejects empty or object-shaped banner placement filters', async () => {
+    const app = createExpressApp();
+
+    await request(app).get('/home-banners?placement=').expect(400);
+    await request(app).get('/home-banners?placement[$ne]=cartoons').expect(400);
+  });
+
+  it('normalizes legacy placement on single banner reads', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Legacy read banner',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/legacy-read.webp',
+    });
+    await HomeBanner.collection.updateOne(
+      { _id: banner._id },
+      { $unset: { placement: '' } }
+    );
+
+    const res = await request(app)
+      .get(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      title: 'Legacy read banner',
+      placement: 'home',
+    });
+  });
+
   it('requires authentication for single banner reads and mutations', async () => {
     const app = createExpressApp();
     const banner = await createHomeBanner();
@@ -84,6 +259,93 @@ describe('home banners integration', () => {
       owner: String(owner._id),
     });
     expect(res.body).not.toHaveProperty('unexpectedField');
+  });
+
+  it('keeps home banner required fields strict by default', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    const res = await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/missing-home-fields.webp',
+      })
+      .expect(400);
+
+    expect(res.body.message).toBe('Title is required.');
+  });
+
+  it('creates image-only cartoon banners and forces active behavior', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    const res = await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: 'cartoons',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoons-image-only.webp',
+        isActive: false,
+        unexpectedField: 'ignored',
+      })
+      .expect(201);
+
+    expect(res.body).toMatchObject({
+      placement: 'cartoons',
+      title: '',
+      ctaLabel: '',
+      ctaHref: '',
+      isActive: true,
+      owner: String(owner._id),
+    });
+    expect(res.body).not.toHaveProperty('unexpectedField');
+  });
+
+  it('rejects explicit empty placement values on create', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: '',
+        title: 'Empty placement',
+        ctaLabel: 'Open',
+        ctaHref: '/products',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/empty-placement.webp',
+      })
+      .expect(400);
+
+    await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: null,
+        title: 'Null placement',
+        ctaLabel: 'Open',
+        ctaHref: '/products',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/null-placement.webp',
+      })
+      .expect(400);
+  });
+
+  it('rejects unsafe optional CTA hrefs for cartoon banners', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    const res = await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: 'cartoons',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoon-unsafe-cta.webp',
+        ctaHref: 'javascript:alert(1)',
+      })
+      .expect(400);
+
+    expect(res.body.message).toBe('CTA link must be an internal path.');
   });
 
   it('creates a banner with an optional mobile image URL', async () => {
@@ -216,6 +478,212 @@ describe('home banners integration', () => {
     expect(deleteImageFromGCS).not.toHaveBeenCalled();
   });
 
+  it('allows home banners to be deactivated without affecting cartoon forced-active behavior', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Deactivate home',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/deactivate-home.webp',
+    });
+
+    const editRes = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ isActive: false })
+      .expect(200);
+
+    expect(editRes.body).toMatchObject({
+      placement: 'home',
+      isActive: false,
+    });
+
+    const listRes = await request(app).get('/home-banners').expect(200);
+
+    expect(listRes.body.map((item) => item._id)).not.toContain(String(banner._id));
+  });
+
+  it('rejects explicit empty placement values on edit', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Edit empty placement',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/edit-empty-placement.webp',
+    });
+
+    const res = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ placement: '' })
+      .expect(400);
+
+    expect(res.body.message).toBe('Invalid banner placement.');
+  });
+
+  it('repairs a persisted invalid placement when an explicit valid placement is submitted', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Repair invalid placement',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/repair-placement.webp',
+    });
+    await HomeBanner.collection.updateOne(
+      { _id: banner._id },
+      { $set: { placement: 'products' } }
+    );
+
+    const res = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ placement: 'home' })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      title: 'Repair invalid placement',
+      placement: 'home',
+    });
+  });
+
+  it('edits home banners without spurious required-field checks when placement is omitted', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Sort only edit',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/sort-only-edit.webp',
+    });
+
+    const res = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ sortOrder: 7 })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      title: 'Sort only edit',
+      placement: 'home',
+      sortOrder: 7,
+    });
+  });
+
+  it('moves home banners to cartoons without requiring empty CTA fields in the payload', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Home to cartoon minimal',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/home-to-cartoon-minimal.webp',
+    });
+
+    const res = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ placement: 'cartoons', isActive: false })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      placement: 'cartoons',
+      title: 'Home to cartoon minimal',
+      isActive: true,
+    });
+  });
+
+  it('moves home banners to cartoons and keeps them active even when inactive is submitted', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Home to cartoon',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/home-to-cartoon.webp',
+    });
+
+    const res = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: 'cartoons',
+        title: '',
+        ctaLabel: '',
+        ctaHref: '',
+        isActive: false,
+      })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      placement: 'cartoons',
+      title: '',
+      ctaLabel: '',
+      ctaHref: '',
+      isActive: true,
+    });
+  });
+
+  it('forces active behavior when editing an existing cartoon banner', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const createRes = await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: 'cartoons',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/edit-cartoon.webp',
+      })
+      .expect(201);
+
+    const editRes = await request(app)
+      .put(`/home-banners/${createRes.body._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ sortOrder: 3, isActive: false })
+      .expect(200);
+
+    expect(editRes.body).toMatchObject({
+      placement: 'cartoons',
+      sortOrder: 3,
+      isActive: true,
+    });
+  });
+
+  it('requires homepage fields when moving image-only cartoon banners to home', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const createRes = await request(app)
+      .post('/home-banners')
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: 'cartoons',
+        imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoon-to-home.webp',
+      })
+      .expect(201);
+
+    const invalidMoveRes = await request(app)
+      .put(`/home-banners/${createRes.body._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ placement: 'home' })
+      .expect(400);
+
+    expect(invalidMoveRes.body.message).toBe('Title is required.');
+
+    const validMoveRes = await request(app)
+      .put(`/home-banners/${createRes.body._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        placement: 'home',
+        title: 'Now home',
+        ctaLabel: 'Open',
+        ctaHref: '/products',
+      })
+      .expect(200);
+
+    expect(validMoveRes.body).toMatchObject({
+      placement: 'home',
+      title: 'Now home',
+      ctaLabel: 'Open',
+      ctaHref: '/products',
+    });
+  });
+
   it('deletes the old image on edit when it is not referenced elsewhere', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
@@ -327,6 +795,30 @@ describe('home banners integration', () => {
       .put(`/home-banners/${banner._id}`)
       .set('Cookie', authCookie(owner))
       .send({ imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/replacement.webp' })
+      .expect(200);
+
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
+  it('does not delete an old image on edit when another banner placement still references it', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const sharedImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/edit-shared-cartoon-placement.webp';
+    const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
+    await HomeBanner.create({
+      owner: owner._id,
+      placement: 'cartoons',
+      imageUrl: sharedImageUrl,
+    });
+
+    await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        imageUrl:
+          'https://storage.googleapis.com/test-bucket/home-banners/edit-shared-replacement.webp',
+      })
       .expect(200);
 
     expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
@@ -446,6 +938,23 @@ describe('home banners integration', () => {
     await createHomeBanner({
       owner,
       title: 'Still using shared image',
+      imageUrl: sharedImageUrl,
+    });
+
+    await request(app).delete(`/home-banners/${banner._id}`).set('Cookie', authCookie(owner)).expect(204);
+
+    expect(deleteImageFromGCS.mock.calls.map(([assetUrl]) => assetUrl)).not.toContain(sharedImageUrl);
+  });
+
+  it('deletes a banner but keeps an image shared by another banner placement', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const sharedImageUrl =
+      'https://storage.googleapis.com/test-bucket/home-banners/shared-cartoon-placement.webp';
+    const banner = await createHomeBanner({ owner, imageUrl: sharedImageUrl });
+    await HomeBanner.create({
+      owner: owner._id,
+      placement: 'cartoons',
       imageUrl: sharedImageUrl,
     });
 

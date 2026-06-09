@@ -97,6 +97,7 @@ describe('createUnifiedRoutingApp', () => {
   it.each([
     '/api/revalidate/blog',
     '/api/revalidate/home-banners',
+    '/api/revalidate/cartoon-hero-banners',
     '/api/uploads/sign',
   ])('sends Next-owned JSON POST %s to Next before Express body parsing', async (path) => {
     const { expressApp, bodyParserSpy } = buildExpressApp();
@@ -129,6 +130,47 @@ describe('createUnifiedRoutingApp', () => {
       url: '/products/123',
     }));
     expect(response.body.url).toBe('/products/123');
+  });
+
+  it('keeps cartoon order creation and admin subroutes on Express without taking over Next-owned upload routes', async () => {
+    const { expressApp, handlerSpy, bodyParserSpy } = buildExpressApp();
+    const nextHandler = buildNextHandler();
+    const app = createUnifiedRoutingApp({ expressApp, nextHandler });
+
+    await request(app)
+      .post('/api/cartoon-orders')
+      .send({ ok: true })
+      .set('Content-Type', 'application/json')
+      .expect(200);
+
+    expect(nextHandler).not.toHaveBeenCalled();
+    expect(bodyParserSpy).toHaveBeenCalledWith('/api/cartoon-orders');
+    expect(handlerSpy).toHaveBeenCalledWith(expect.objectContaining({
+      body: { ok: true },
+      originalUrl: '/api/cartoon-orders',
+      url: '/cartoon-orders',
+    }));
+
+    await request(app)
+      .patch('/api/cartoon-orders/665f1f77bcf86cd799439011/statuses')
+      .send({ statuses: { paid: true } })
+      .set('Content-Type', 'application/json')
+      .expect(200);
+
+    expect(handlerSpy).toHaveBeenCalledWith(expect.objectContaining({
+      body: { statuses: { paid: true } },
+      originalUrl: '/api/cartoon-orders/665f1f77bcf86cd799439011/statuses',
+      url: '/cartoon-orders/665f1f77bcf86cd799439011/statuses',
+    }));
+
+    const uploadResponse = await request(app)
+      .post('/api/cartoon-orders/uploads')
+      .send({ ok: true })
+      .set('Content-Type', 'application/json')
+      .expect(200);
+
+    expect(nextHandler).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(uploadResponse.body.body)).toEqual({ ok: true });
   });
 
   it('keeps the bare API root on Express', async () => {

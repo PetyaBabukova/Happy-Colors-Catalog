@@ -128,6 +128,24 @@ describe('ProductDetails', () => {
     expect(routerPush).toHaveBeenCalledWith('/contacts?productId=product-1');
   });
 
+  it('preserves cartoon service context for inquiry links when provided', () => {
+    mockSlideshow({ hasMultiple: false });
+    const routerPush = vi.fn();
+    render(
+      <ProductDetails
+        product={{ ...product, availability: 'unavailable' }}
+        serviceContext="cartoons"
+      />,
+      {
+        routerOverrides: { push: routerPush },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(routerPush).toHaveBeenCalledWith('/contacts?service=cartoons&productId=product-1');
+  });
+
   it('shows owner edit and delete actions only for product owners', () => {
     const ownerRender = render(<ProductDetails product={product} />, {
       user: { _id: 'owner-1' },

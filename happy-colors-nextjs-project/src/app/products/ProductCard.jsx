@@ -27,7 +27,17 @@ function buildCardMediaSlides(product) {
   return [...imageSlides, ...videoSlides];
 }
 
-export default function ProductCard({ product }) {
+function buildProductHref(product, serviceContext) {
+  const baseHref = `/products/${product._id}`;
+
+  if (serviceContext === 'cartoons') {
+    return `${baseHref}?service=cartoons`;
+  }
+
+  return baseHref;
+}
+
+export default function ProductCard({ product, serviceContext = '' }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const mediaSlides = useMemo(() => buildCardMediaSlides(product), [product]);
@@ -66,7 +76,7 @@ export default function ProductCard({ product }) {
   const isAvailable = product?.availability !== 'unavailable';
 
   return (
-    <Link href={`/products/${product._id}`} className={styles.product}>
+    <Link href={buildProductHref(product, serviceContext)} className={styles.product}>
       <div
         ref={containerRef}
         data-testid="product-card-media"

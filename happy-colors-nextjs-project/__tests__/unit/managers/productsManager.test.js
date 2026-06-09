@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteProductImage,
   deleteProductVideo,
+  getCartoonGalleryProducts,
   getHomepageFeaturedProducts,
   getProducts,
   onCreateProductSubmit,
@@ -69,6 +70,79 @@ describe('productsManager', () => {
         },
       })
     );
+  });
+
+  it('skips cartoon gallery product loading when no curated products are configured', async () => {
+    await expect(getCartoonGalleryProducts()).resolves.toEqual([]);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads curated cartoon gallery products in configured order and ignores stale ids', async () => {
+    vi.resetModules();
+    vi.doMock('@/config/cartoonGalleryProducts', () => ({
+      CARTOON_GALLERY_PRODUCT_IDS: ['product-2', 'missing-product', 'product-1', 'product-2', ''],
+    }));
+    const { getCartoonGalleryProducts: getConfiguredCartoonGalleryProducts } = await import(
+      '../../../src/managers/productsManager.js'
+    );
+    const products = [
+      { _id: 'product-1', title: 'First' },
+      { _id: 'product-2', title: 'Second' },
+      { _id: 'product-3', title: 'Third' },
+      { _id: 'product-4', title: 'Unavailable', availability: 'unavailable' },
+    ];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getConfiguredCartoonGalleryProducts()).resolves.toEqual([
+      products[1],
+      products[0],
+    ]);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/products',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'cartoon-gallery-products'],
+        },
+      })
+    );
+    vi.doUnmock('@/config/cartoonGalleryProducts');
+  });
+
+  it('omits unavailable products from the curated cartoon gallery', async () => {
+    vi.resetModules();
+    vi.doMock('@/config/cartoonGalleryProducts', () => ({
+      CARTOON_GALLERY_PRODUCT_IDS: ['product-1', 'product-2'],
+    }));
+    const { getCartoonGalleryProducts: getConfiguredCartoonGalleryProducts } = await import(
+      '../../../src/managers/productsManager.js'
+    );
+    const products = [
+      { _id: 'product-1', title: 'Available', availability: 'available' },
+      { _id: 'product-2', title: 'Unavailable', availability: 'unavailable' },
+    ];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getConfiguredCartoonGalleryProducts()).resolves.toEqual([products[0]]);
+
+    vi.doUnmock('@/config/cartoonGalleryProducts');
+  });
+
+  it('returns an empty cartoon gallery instead of leaking product load failures', async () => {
+    vi.resetModules();
+    vi.doMock('@/config/cartoonGalleryProducts', () => ({
+      CARTOON_GALLERY_PRODUCT_IDS: ['product-1'],
+    }));
+    const { getCartoonGalleryProducts: getConfiguredCartoonGalleryProducts } = await import(
+      '../../../src/managers/productsManager.js'
+    );
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
+
+    await expect(getConfiguredCartoonGalleryProducts()).resolves.toEqual([]);
+
+    vi.doUnmock('@/config/cartoonGalleryProducts');
   });
 
   it('returns an empty list instead of leaking homepage featured product load failures', async () => {

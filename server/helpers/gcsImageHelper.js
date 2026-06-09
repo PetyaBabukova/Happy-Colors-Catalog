@@ -1,9 +1,81 @@
 import { Storage } from '@google-cloud/storage';
+import { CARTOON_ORDER_PHOTO_PREFIX } from '../config/productLimits.js';
 
 const storage = new Storage();
 
 export function getBucketName() {
   return process.env.GCS_BUCKET_NAME || '';
+}
+
+export function getCartoonOrdersBucketName() {
+  const privateBucketName = process.env.GCS_CARTOON_ORDERS_BUCKET_NAME || '';
+
+  if (privateBucketName) {
+    return privateBucketName;
+  }
+
+  // Development/test convenience only; production must use a private cartoon-orders bucket.
+  return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
+    ? getBucketName()
+    : '';
+}
+
+export function isCartoonOrderPhotoObjectName(objectName) {
+  return (
+    typeof objectName === 'string' &&
+    objectName.startsWith(`${CARTOON_ORDER_PHOTO_PREFIX}/`) &&
+    !objectName.split('/').some((part) => part === '..' || part === '.' || part.includes('\\'))
+  );
+}
+
+export async function createCartoonOrderPhotoSignedReadUrl({
+  objectName,
+  expiresInMs = 10 * 60 * 1000,
+} = {}) {
+  if (!isCartoonOrderPhotoObjectName(objectName)) {
+    throw new Error('Invalid cartoon order photo object name.');
+  }
+
+  const bucketName = getCartoonOrdersBucketName();
+
+  if (!bucketName) {
+    throw new Error('GCS_CARTOON_ORDERS_BUCKET_NAME is not configured.');
+  }
+
+  const [signedUrl] = await storage
+    .bucket(bucketName)
+    .file(objectName)
+    .getSignedUrl({
+      action: 'read',
+      expires: Date.now() + expiresInMs,
+    });
+
+  return signedUrl;
+}
+
+export async function deleteGcsObjectByName(objectName, { throwOnError = false } = {}) {
+  if (!isCartoonOrderPhotoObjectName(objectName)) {
+    throw new Error('Invalid cartoon order photo object name.');
+  }
+
+  const bucketName = getCartoonOrdersBucketName();
+
+  if (!bucketName) {
+    throw new Error('GCS_CARTOON_ORDERS_BUCKET_NAME is not configured.');
+  }
+
+  try {
+    await storage.bucket(bucketName).file(objectName).delete({ ignoreNotFound: true });
+  } catch (error) {
+    if (error.code === 404) {
+      return;
+    }
+
+    console.error('Error deleting GCS object by name:', error);
+    if (throwOnError) {
+      throw error;
+    }
+  }
 }
 
 export function extractObjectNameFromGcsUrl(assetUrl) {

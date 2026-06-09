@@ -4,7 +4,12 @@ const homeBannerSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, 'Title is required!'],
+      required: [
+        function isTitleRequired() {
+          return (this.placement || 'home') === 'home';
+        },
+        'Title is required!',
+      ],
       trim: true,
       maxlength: 120,
     },
@@ -16,13 +21,23 @@ const homeBannerSchema = new mongoose.Schema(
     },
     ctaLabel: {
       type: String,
-      required: [true, 'CTA label is required!'],
+      required: [
+        function isCtaLabelRequired() {
+          return (this.placement || 'home') === 'home';
+        },
+        'CTA label is required!',
+      ],
       trim: true,
       maxlength: 60,
     },
     ctaHref: {
       type: String,
-      required: [true, 'CTA href is required!'],
+      required: [
+        function isCtaHrefRequired() {
+          return (this.placement || 'home') === 'home';
+        },
+        'CTA href is required!',
+      ],
       trim: true,
     },
     imageUrl: {
@@ -43,6 +58,12 @@ const homeBannerSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    placement: {
+      type: String,
+      enum: ['home', 'cartoons'],
+      default: 'home',
+      trim: true,
+    },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -53,6 +74,7 @@ const homeBannerSchema = new mongoose.Schema(
 );
 
 homeBannerSchema.index({ isActive: 1, sortOrder: 1, createdAt: 1 });
+homeBannerSchema.index({ placement: 1, isActive: 1, sortOrder: 1, createdAt: 1 });
 homeBannerSchema.index({ imageUrl: 1 });
 homeBannerSchema.index({ mobileImageUrl: 1 });
 

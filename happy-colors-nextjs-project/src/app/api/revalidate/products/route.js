@@ -25,8 +25,10 @@ export async function POST(request) {
 
     revalidateTag('products');
     revalidateTag('homepage-featured-products');
+    revalidateTag('cartoon-gallery-products');
     revalidatePath('/products');
     revalidatePath('/');
+    revalidatePath('/cartoons');
     revalidatePath('/sitemap.xml');
 
     if (productId) {

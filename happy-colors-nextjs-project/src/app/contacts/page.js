@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import ContactForm from '../../components/contacts/ContactForm';
 import styles from '../../components/products/create.module.css';
 import { getProduct } from '@/lib/getProduct';
+import { getReleasedServiceContextFromSearchParams } from '@/config/cartoonsFeature';
 
 export const metadata = {
   title: 'Контакти',
@@ -27,6 +28,7 @@ async function fetchProduct(productId) {
 export default async function ContactPage({ searchParams }) {
   const params = await searchParams;
   const product = await fetchProduct(params?.productId);
+  const serviceContext = getReleasedServiceContextFromSearchParams(params);
 
   return (
     <section className={styles.createWrapper}>
@@ -37,7 +39,11 @@ export default async function ContactPage({ searchParams }) {
       <p>happy.colors.bg@gmail.com</p>
 
       <Suspense fallback={null}>
-        <ContactForm product={product} productId={params?.productId || null} />
+        <ContactForm
+          product={product}
+          productId={params?.productId || null}
+          serviceContext={serviceContext}
+        />
       </Suspense>
     </section>
   );

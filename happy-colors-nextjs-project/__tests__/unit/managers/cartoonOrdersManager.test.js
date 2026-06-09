@@ -1,0 +1,198 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  completeCartoonOrder,
+  createCartoonOrder,
+  createCartoonOrderUploadSession,
+  fetchCartoonOrders,
+  updateCartoonOrderAdminNotes,
+  updateCartoonOrderStatuses,
+  uploadCartoonOrderPhoto,
+} from '../../../src/managers/cartoonOrdersManager.js';
+
+function jsonResponse({ ok = true, status = ok ? 200 : 400, body = {} } = {}) {
+  return {
+    ok,
+    status,
+    json: vi.fn().mockResolvedValue(body),
+  };
+}
+
+describe('cartoonOrdersManager', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  it('creates an upload session through the same-origin Next API route', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: {
+        uploadSessionToken: 'session-token',
+        maxFiles: 5,
+      },
+    }));
+
+    await expect(createCartoonOrderUploadSession()).resolves.toEqual({
+      uploadSessionToken: 'session-token',
+      maxFiles: 5,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/api/cartoon-orders/upload-session', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    });
+  });
+
+  it('uploads a cartoon order photo with the upload session token', async () => {
+    const file = new File(['image-content'], 'face.webp', { type: 'image/webp' });
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: {
+        objectName: 'cartoon-orders/reference-photos/face.webp',
+        uploadConfirmationToken: 'confirmation-token',
+      },
+    }));
+
+    await expect(uploadCartoonOrderPhoto({
+      file,
+      uploadSessionToken: 'session-token',
+    })).resolves.toEqual({
+      objectName: 'cartoon-orders/reference-photos/face.webp',
+      uploadConfirmationToken: 'confirmation-token',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/cartoon-orders/uploads',
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        body: expect.any(FormData),
+      })
+    );
+
+    const formData = fetch.mock.calls[0][1].body;
+    expect(formData.get('uploadSessionToken')).toBe('session-token');
+    expect(formData.get('file')).toBe(file);
+  });
+
+  it('creates a cartoon order through the backend API', async () => {
+    const payload = {
+      name: 'Petya',
+      email: 'petya@example.com',
+      message: 'Cartoon idea',
+      productId: 'product-1',
+      photos: [],
+      consentAccepted: true,
+      website: '',
+    };
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { orderId: 'order-1' } }));
+
+    await expect(createCartoonOrder(payload)).resolves.toEqual({ orderId: 'order-1' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    );
+  });
+
+  it('surfaces backend cartoon order errors', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      ok: false,
+      status: 400,
+      body: { message: 'Consent is required.' },
+    }));
+
+    await expect(createCartoonOrder({})).rejects.toMatchObject({
+      message: 'Consent is required.',
+      status: 400,
+    });
+  });
+
+  it('fetches full-admin cartoon orders with archived filter support', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: [{ _id: 'order-1' }],
+    }));
+
+    await expect(fetchCartoonOrders({ includeArchived: true })).resolves.toEqual([
+      { _id: 'order-1' },
+    ]);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders?includeArchived=true',
+      {
+        credentials: 'include',
+        cache: 'no-store',
+      }
+    );
+  });
+
+  it('updates cartoon order statuses as a full-admin request', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { _id: 'order-1', statuses: { paid: true } },
+    }));
+
+    await expect(
+      updateCartoonOrderStatuses('order-1', { paid: true })
+    ).resolves.toEqual({ _id: 'order-1', statuses: { paid: true } });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/order-1/statuses',
+      expect.objectContaining({
+        method: 'PATCH',
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify({ statuses: { paid: true } }),
+      })
+    );
+  });
+
+  it('updates cartoon order admin notes', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { _id: 'order-1', adminNotes: 'Warm colors' },
+    }));
+
+    await expect(
+      updateCartoonOrderAdminNotes('order-1', 'Warm colors')
+    ).resolves.toEqual({ _id: 'order-1', adminNotes: 'Warm colors' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/order-1/admin-notes',
+      expect.objectContaining({
+        method: 'PATCH',
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify({ adminNotes: 'Warm colors' }),
+      })
+    );
+  });
+
+  it('completes a cartoon order', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { _id: 'order-1', completedAt: '2026-06-05T10:00:00.000Z' },
+    }));
+
+    await expect(completeCartoonOrder('order-1')).resolves.toEqual({
+      _id: 'order-1',
+      completedAt: '2026-06-05T10:00:00.000Z',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/order-1/complete',
+      {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      }
+    );
+  });
+
+  it('uses fallback errors for empty failed responses', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: null }));
+
+    await expect(createCartoonOrderUploadSession()).rejects.toThrow();
+  });
+});

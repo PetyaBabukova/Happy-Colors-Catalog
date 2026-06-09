@@ -26,6 +26,7 @@
     "test:frontend:components": "cd happy-colors-nextjs-project && npm run test:components",
     "test:frontend:coverage": "cd happy-colors-nextjs-project && npm run test:coverage",
     "test:frontend:ci": "cd happy-colors-nextjs-project && npm run test:ci",
+    "cleanup:cartoon-uploads": "node scripts/cleanupCartoonOrderUploads.js",
     "test:ci": "npm run test:server:ci && npm run test:frontend:ci"
   },
   "dependencies": {

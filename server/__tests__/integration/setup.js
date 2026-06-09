@@ -15,7 +15,17 @@ vi.mock('../../helpers/gcsImageHelper.js', () => {
 
   return {
     deleteImageFromGCS: vi.fn().mockResolvedValue(undefined),
+    deleteGcsObjectByName: vi.fn().mockResolvedValue(undefined),
     getBucketName,
+    getCartoonOrdersBucketName: vi.fn(() => 'test-bucket'),
+    isCartoonOrderPhotoObjectName: vi.fn((objectName) => (
+      typeof objectName === 'string' &&
+      objectName.startsWith('cartoon-orders/reference-photos/') &&
+      !objectName.split('/').some((part) => part === '..' || part === '.' || part.includes('\\'))
+    )),
+    createCartoonOrderPhotoSignedReadUrl: vi.fn(async ({ objectName }) => (
+      `https://signed.example.com/${encodeURIComponent(objectName)}`
+    )),
     extractObjectNameFromGcsUrl: vi.fn((assetUrl) => {
       if (!assetUrl) {
         return null;

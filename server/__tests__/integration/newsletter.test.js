@@ -31,7 +31,7 @@ async function getSubscribeToken(app, ip = '203.0.113.200') {
 
 async function waitUntil(predicate) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (predicate()) {
+    if (await predicate()) {
       return;
     }
 
@@ -46,6 +46,18 @@ function extractConfirmationToken() {
   const match = sentText.match(/\/newsletter\/confirm#token=([^\s]+)/);
 
   return match ? decodeURIComponent(match[1]) : '';
+}
+
+async function waitForWelcomeEmailSent(subscriberId) {
+  let updatedSubscriber = null;
+
+  await waitUntil(async () => {
+    updatedSubscriber = await NewsletterSubscriber.findById(subscriberId);
+
+    return updatedSubscriber?.welcomeEmailSentAt instanceof Date;
+  });
+
+  return updatedSubscriber;
 }
 
 describe('newsletter integration', () => {
@@ -433,8 +445,7 @@ describe('newsletter integration', () => {
       .send({ email: 'petya@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.225') })
       .expect(200);
 
-    await waitUntil(() => sendEmail.mock.calls.length === 1);
-    const updated = await NewsletterSubscriber.findById(subscriber._id);
+    const updated = await waitForWelcomeEmailSent(subscriber._id);
 
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -480,8 +491,7 @@ describe('newsletter integration', () => {
       .send({ email: 'retry@example.com', consent: true, website: '', formToken: await getSubscribeToken(app, '203.0.113.227') })
       .expect(200);
 
-    await waitUntil(() => sendEmail.mock.calls.length === 3);
-    const updated = await NewsletterSubscriber.findById(pending._id);
+    const updated = await waitForWelcomeEmailSent(pending._id);
     expect(updated.welcomeEmailSentAt).toBeInstanceOf(Date);
     expect(sendEmail).toHaveBeenCalledTimes(3);
   });

@@ -58,7 +58,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
 
     try {
       setDeletingBannerId(bannerId);
-      await deleteHomeBanner(bannerId);
+      await deleteHomeBanner(bannerId, { placement: currentBanner.placement || 'home' });
       router.refresh();
     } finally {
       setDeletingBannerId('');

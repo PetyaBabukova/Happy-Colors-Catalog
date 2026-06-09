@@ -1,5 +1,5 @@
 import baseURL from '@/config';
-import { readResponseJsonSafely } from '@/utils/errorHandler';
+import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 
 export async function sendContactForm(data) {
   const res = await fetch(`${baseURL}/contacts`, {
@@ -11,7 +11,10 @@ export async function sendContactForm(data) {
   const responseData = await readResponseJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(responseData?.message || 'Грешка при изпращането');
+    throw createResponseError(responseData?.message || 'Грешка при изпращането', {
+      status: res.status,
+      data: responseData,
+    });
   }
 
   return responseData;

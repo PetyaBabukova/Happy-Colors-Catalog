@@ -40,6 +40,56 @@ describe('createRateLimiter', () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  it('keys by Express req.ip instead of spoofable forwarded header values', () => {
+    const limiter = createRateLimiter({
+      keyPrefix: 'unit-rate-limit-forwarded-chain',
+      windowMs: 60_000,
+      max: 2,
+      message: 'Too many requests',
+    });
+    const next = buildNext();
+    const firstRes = buildRes();
+    const secondRes = buildRes();
+    const thirdRes = buildRes();
+
+    limiter(
+      buildReq({
+        ip: '203.0.113.40',
+        headers: {
+          'x-forwarded-for': '198.51.100.1, 203.0.113.30',
+          'x-real-ip': '203.0.113.40',
+        },
+      }),
+      firstRes,
+      next
+    );
+    limiter(
+      buildReq({
+        ip: '203.0.113.40',
+        headers: {
+          'x-forwarded-for': '198.51.100.2, 203.0.113.30',
+          'x-real-ip': '203.0.113.40',
+        },
+      }),
+      secondRes,
+      next
+    );
+    limiter(
+      buildReq({
+        ip: '203.0.113.40',
+        headers: {
+          'x-forwarded-for': '198.51.100.3, 203.0.113.30',
+          'x-real-ip': '203.0.113.40',
+        },
+      }),
+      thirdRes,
+      next
+    );
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(thirdRes.status).toHaveBeenCalledWith(429);
+  });
+
   it('uses a custom key generator when provided', () => {
     const limiter = createRateLimiter({
       keyPrefix: 'unit-rate-limit-user',

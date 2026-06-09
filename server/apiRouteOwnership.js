@@ -12,6 +12,18 @@ export const BACKEND_API_PREFIXES = Object.freeze([
   '/api/delivery',
 ]);
 
+export const BACKEND_API_EXACT_PATHS = Object.freeze([
+  '/api/cartoon-orders',
+]);
+
+export const NEXT_API_EXACT_PATHS = Object.freeze([
+  '/api/cartoon-orders/upload-session',
+  '/api/cartoon-orders/uploads',
+]);
+
+const CARTOON_ORDER_ADMIN_API_PATH_RE =
+  /^\/api\/cartoon-orders\/[a-fA-F0-9]{24}(?:\/(?:statuses|admin-notes|complete))?$/;
+
 function normalizePathname(pathname) {
   const normalized = String(pathname || '').trim() || '/';
 
@@ -42,6 +54,18 @@ export function isBackendApiPath(value = '') {
   const pathname = getRequestPathname(value);
 
   if (pathname === '/api') {
+    return true;
+  }
+
+  if (BACKEND_API_EXACT_PATHS.includes(pathname)) {
+    return true;
+  }
+
+  if (NEXT_API_EXACT_PATHS.includes(pathname)) {
+    return false;
+  }
+
+  if (CARTOON_ORDER_ADMIN_API_PATH_RE.test(pathname)) {
     return true;
   }
 

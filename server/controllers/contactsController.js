@@ -4,6 +4,17 @@ import express from 'express';
 import { handleContactForm } from '../services/contactsServices.js';
 
 const router = express.Router();
+const CONTACT_MESSAGE_MAX_LENGTH = 1000;
+const CARTOON_CONTACT_MESSAGE_MAX_LENGTH = 1500;
+const CARTOONS_SERVICE_VALUE = 'cartoons';
+
+function getReleasedContactService(value) {
+  const isCartoonServiceEnabled = process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED === 'true';
+
+  return isCartoonServiceEnabled && value === CARTOONS_SERVICE_VALUE
+    ? CARTOONS_SERVICE_VALUE
+    : '';
+}
 
 // Хелпър за премахване на HTML тагове
 function sanitizeText(input) {
@@ -36,7 +47,13 @@ router.post('/', async (req, res) => {
       productId = '',
       productTitle = '',
       productUrl = '',
+      service = '',
     } = req.body;
+    const releasedService = getReleasedContactService(service);
+    const isCartoonService = releasedService === CARTOONS_SERVICE_VALUE;
+    const messageMaxLength = isCartoonService
+      ? CARTOON_CONTACT_MESSAGE_MAX_LENGTH
+      : CONTACT_MESSAGE_MAX_LENGTH;
 
     // Задължителни полета
     if (!name || !email || !message) {
@@ -56,10 +73,10 @@ router.post('/', async (req, res) => {
         .json({ message: 'Телефонът е прекалено дълъг (макс. 20 символа).' });
     }
 
-    if (message.trim().length > 200) {
+    if (message.trim().length > messageMaxLength) {
       return res
         .status(400)
-        .json({ message: 'Съобщението е прекалено дълго (макс. 200 символа).' });
+        .json({ message: `Съобщението е прекалено дълго (макс. ${messageMaxLength} символа).` });
     }
 
     if (!isValidEmail(email)) {
@@ -67,16 +84,16 @@ router.post('/', async (req, res) => {
     }
 
     // Забранени символи (HTML/code injection)
-    const forbiddenPattern = /<[^>]*>/g;
+    const forbiddenPattern = /<[^>]*>/;
 
-    const allFields = [name, email, phone, message, productId, productTitle, productUrl];
+    const allFields = [name, email, phone, message, productId, productTitle, productUrl, service];
 
     if (allFields.some((val) => forbiddenPattern.test(String(val).trim()))) {
       return res.status(400).json({ message: 'Забранени символи в полетата!' });
     }
 
     // ✅ ако има productUrl — валидираме, за да не пращаме боклуци в мейла
-    if (productUrl && !isValidUrl(String(productUrl).trim())) {
+    if (!isCartoonService && productUrl && !isValidUrl(String(productUrl).trim())) {
       return res.status(400).json({ message: 'Невалиден линк към продукт.' });
     }
 
@@ -86,8 +103,9 @@ router.post('/', async (req, res) => {
       phone: sanitizeText(phone),
       message: sanitizeText(message),
       productId: sanitizeText(productId),
-      productTitle: sanitizeText(productTitle),
-      productUrl: sanitizeText(productUrl),
+      productTitle: isCartoonService ? '' : sanitizeText(productTitle),
+      productUrl: isCartoonService ? '' : sanitizeText(productUrl),
+      service: releasedService,
     };
 
     await handleContactForm(cleanData);

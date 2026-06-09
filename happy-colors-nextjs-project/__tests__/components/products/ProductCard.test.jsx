@@ -52,6 +52,16 @@ describe('ProductCard', () => {
     expect(screen.getByText('Налично')).toBeInTheDocument();
   });
 
+  it('preserves cartoon service context only when requested', () => {
+    const { rerender } = render(<ProductCard product={product} serviceContext="cartoons" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1?service=cartoons');
+
+    rerender(<ProductCard product={product} serviceContext="other" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1');
+  });
+
   it('builds image and video slides for the slideshow hook', () => {
     render(<ProductCard product={product} />);
 

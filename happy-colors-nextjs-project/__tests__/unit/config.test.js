@@ -83,4 +83,53 @@ describe('config baseURL', () => {
       ])
     );
   });
+
+  it('proxies cartoon order backend routes without overriding local cartoon upload API routes', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.happycolors.eu');
+
+    const { default: nextConfig } = await import('../../next.config.mjs');
+    const rewrites = await nextConfig.rewrites();
+
+    expect(rewrites).toEqual(
+      expect.arrayContaining([
+        {
+          source: '/api/cartoon-orders',
+          destination: 'https://api.happycolors.eu/cartoon-orders',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/statuses',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/statuses',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/admin-notes',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/admin-notes',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/complete',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/complete',
+        },
+      ])
+    );
+    expect(rewrites).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: '/api/cartoon-orders/upload-session',
+        }),
+        expect.objectContaining({
+          source: '/api/cartoon-orders/uploads',
+        }),
+      ])
+    );
+    expect(rewrites).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: '/api/cartoon-orders/:path*',
+        }),
+      ])
+    );
+  });
 });

@@ -16,6 +16,11 @@ const mockNavigation = {
   pathname: '/',
   searchParams: new URLSearchParams(),
 };
+const mockNotFound = vi.fn(() => {
+  const error = new Error('NEXT_NOT_FOUND');
+  error.digest = 'NEXT_NOT_FOUND';
+  throw error;
+});
 
 export function setMockRouter(overrides = {}) {
   Object.assign(mockRouter, overrides);
@@ -28,6 +33,7 @@ export function setMockNavigation(overrides = {}) {
 }
 
 vi.mock('next/navigation', () => ({
+  notFound: mockNotFound,
   useParams: vi.fn(() => mockNavigation.params),
   usePathname: vi.fn(() => mockNavigation.pathname),
   useRouter: vi.fn(() => mockRouter),
@@ -58,6 +64,7 @@ beforeEach(() => {
     pathname: '/',
     searchParams: new URLSearchParams(),
   });
+  mockNotFound.mockClear();
 });
 
 afterEach(() => {

@@ -3,6 +3,7 @@
 import ProductDetails from './ProductDetails';
 import { notFound } from 'next/navigation';
 import { getProduct } from '@/lib/getProduct';
+import { getReleasedServiceContext } from '@/config/cartoonsFeature';
 import {
   buildProductJsonLd,
   buildProductMetadata,
@@ -28,8 +29,10 @@ export async function generateMetadata({ params: paramsPromise }) {
   return buildProductMetadata(product, productId);
 }
 
-export default async function ProductDetailsPage({ params: paramsPromise }) {
+export default async function ProductDetailsPage({ params: paramsPromise, searchParams: searchParamsPromise }) {
   const { productId } = await paramsPromise;
+  const searchParams = await searchParamsPromise;
+  const serviceContext = getReleasedServiceContext(searchParams?.service);
 
   const product = await getProduct(productId);
 
@@ -45,7 +48,7 @@ export default async function ProductDetailsPage({ params: paramsPromise }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: stringifyJsonLd(productJsonLd) }}
       />
-      <ProductDetails product={product} />
+      <ProductDetails product={product} serviceContext={serviceContext} />
     </>
   );
 }

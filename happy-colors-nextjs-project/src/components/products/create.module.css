@@ -91,6 +91,30 @@ align-items: center;
   font-weight: 600;
 }
 
+.checkboxLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin: 0.5rem 0 1rem;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0.15rem 0 0;
+}
+
+.honeypotField {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .imagePreviewItem {
   display: flex;
   justify-content: space-between;
