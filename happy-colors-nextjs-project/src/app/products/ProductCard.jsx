@@ -27,19 +27,11 @@ function buildCardMediaSlides(product) {
   return [...imageSlides, ...videoSlides];
 }
 
-function buildProductHref(product, serviceContext) {
-  const baseHref = `/products/${product._id}`;
-
-  // Шарж галерията е витрина: картите водят към обикновено запитване,
-  // не към cartoon order flow-а.
-  if (serviceContext === 'cartoons') {
-    return '/contacts';
-  }
-
-  return baseHref;
+function buildProductHref(product) {
+  return `/products/${product._id}`;
 }
 
-export default function ProductCard({ product, serviceContext = '' }) {
+export default function ProductCard({ product }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const mediaSlides = useMemo(() => buildCardMediaSlides(product), [product]);
@@ -78,7 +70,7 @@ export default function ProductCard({ product, serviceContext = '' }) {
   const isAvailable = product?.availability !== 'unavailable';
 
   return (
-    <Link href={buildProductHref(product, serviceContext)} className={styles.product}>
+    <Link href={buildProductHref(product)} className={styles.product}>
       <div
         ref={containerRef}
         data-testid="product-card-media"

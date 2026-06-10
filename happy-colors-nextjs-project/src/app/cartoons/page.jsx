@@ -9,11 +9,9 @@ import { getCartoonHeroBanners } from '@/managers/homeBannersManager';
 import { getCartoonGalleryProducts } from '@/managers/productsManager';
 import styles from './cartoons.module.css';
 
-const PAGE_TITLE = 'Шарж по снимка за специален подарък';
+const PAGE_TITLE = 'Шарж по снимка за подарък с усмивка';
 const PAGE_DESCRIPTION =
-  'Поръчайте персонален шарж по снимка от Happy Colors с идея, повод и детайли, подходящи за специален подарък.';
-
-export const revalidate = 60;
+  'Превърнете любима снимка в забавен персонален шарж — за рожден ден, юбилей, сватба, годишнина или друг специален повод. Кажете ни идеята, изпратете снимка, а ние, ще създадем артистичен портрет с настроение, характер и щипка закачка. За повече информация изпратете запитване.';
 
 export function generateMetadata() {
   if (!isCartoonsServiceEnabled) {
@@ -52,18 +50,21 @@ export default async function CartoonsPage() {
       <main className={styles.page}>
         <section className={`${styles.introSection} pageInline`}>
           <h1>{PAGE_TITLE}</h1>
-          <p>{PAGE_DESCRIPTION}</p>
-          <Link className={styles.primaryAction} href="/contacts">
-            Изпрати запитване
-          </Link>
+          <p>
+            Превърнете любима снимка в забавен персонален шарж — за рожден ден, юбилей,
+            сватба, годишнина или друг специален повод. Кажете ни идеята, изпратете снимка,
+            а ние, ще създадем артистичен портрет с настроение, характер и щипка закачка.
+            За повече информация{' '}
+            <Link href="/contacts" className={styles.inquiryLink}>изпратете запитване.</Link>
+          </p>
         </section>
 
         {galleryProducts.length > 0 && (
           <section className={`${styles.gallerySection} pageInline`}>
-            <h2>Примери и варианти за шарж</h2>
+            {/* <h2>Шаржове направени от нас</h2> */}
             <div className={shopStyles.productList}>
               {galleryProducts.map((product) => (
-                <ProductCard key={product._id} product={product} serviceContext="cartoons" />
+                <ProductCard key={product._id} product={product} />
               ))}
             </div>
           </section>

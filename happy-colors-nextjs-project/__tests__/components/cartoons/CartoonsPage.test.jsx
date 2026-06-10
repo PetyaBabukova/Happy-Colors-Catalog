@@ -28,10 +28,8 @@ function setupCartoonsPage({
     default: carousel,
   }));
   vi.doMock('@/app/products/ProductCard', () => ({
-    default: ({ product, serviceContext }) => (
-      <a href={serviceContext === 'cartoons' ? '/contacts' : `/products/${product._id}`}>
-        {product.title}
-      </a>
+    default: ({ product }) => (
+      <a href={`/products/${product._id}`}>{product.title}</a>
     ),
   }));
 
@@ -89,14 +87,14 @@ describe('CartoonsPage', () => {
     render(element);
 
     expect(screen.getByTestId('cartoons-hero')).toHaveTextContent('1');
-    expect(screen.getByRole('heading', { name: 'Шарж по снимка за специален подарък' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Изпрати запитване' })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Шарж по снимка за подарък с усмивка' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'изпратете запитване.' })).toHaveAttribute(
       'href',
       '/contacts'
     );
     expect(screen.getByRole('link', { name: 'Cartoon Sample' })).toHaveAttribute(
       'href',
-      '/contacts'
+      '/products/product-1'
     );
   });
 
@@ -107,7 +105,7 @@ describe('CartoonsPage', () => {
 
     render(element);
 
-    expect(screen.getByRole('heading', { name: 'Шарж по снимка за специален подарък' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Шарж по снимка за подарък с усмивка' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Примери и варианти за шарж' })).not.toBeInTheDocument();
   });
 });

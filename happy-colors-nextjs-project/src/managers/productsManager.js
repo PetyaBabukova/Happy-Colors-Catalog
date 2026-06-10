@@ -195,10 +195,7 @@ export async function getHomepageFeaturedProducts() {
 export async function getCartoonGalleryProducts() {
   try {
     const res = await fetch(`${baseURL}/products/cartoon-gallery`, {
-      next: {
-        revalidate: 60,
-        tags: ['products', 'cartoon-gallery-products'],
-      },
+      cache: 'no-store',
     });
 
     if (!res.ok) {

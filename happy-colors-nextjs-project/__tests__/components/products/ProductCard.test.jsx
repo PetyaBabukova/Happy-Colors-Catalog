@@ -52,12 +52,8 @@ describe('ProductCard', () => {
     expect(screen.getByText('Налично')).toBeInTheDocument();
   });
 
-  it('links cartoon gallery cards to the contact form, products otherwise', () => {
-    const { rerender } = render(<ProductCard product={product} serviceContext="cartoons" />);
-
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/contacts');
-
-    rerender(<ProductCard product={product} serviceContext="other" />);
+  it('links the card to the product detail page', () => {
+    render(<ProductCard product={product} />);
 
     expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1');
   });
