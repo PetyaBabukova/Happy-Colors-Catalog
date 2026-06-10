@@ -27,6 +27,10 @@ export async function getVisibleCategories() {
     const productCount = await Product.countDocuments({
       ...buildPublicProductFilter(),
       category: category._id,
+      // Само каталожни продукти правят категорията видима в нав,
+      // за да е консистентно с каталога (getAllProducts). Категории само
+      // с шарж продукти (isInCatalog: false) не се показват в Каталог нав.
+      isInCatalog: true,
     });
     if (productCount > 0) {
       visibleCategories.push(category);
