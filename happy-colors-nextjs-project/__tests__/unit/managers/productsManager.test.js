@@ -72,7 +72,7 @@ describe('productsManager', () => {
     );
   });
 
-  it('loads cartoon gallery products from the dedicated endpoint with the cartoon cache tag', async () => {
+  it('loads cartoon gallery products fresh from the dedicated endpoint', async () => {
     const products = [
       { _id: 'product-1', title: 'First' },
       { _id: 'product-2', title: 'Second' },
@@ -84,10 +84,7 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/products/cartoon-gallery',
       expect.objectContaining({
-        next: {
-          revalidate: 60,
-          tags: ['products', 'cartoon-gallery-products'],
-        },
+        cache: 'no-store',
       })
     );
   });

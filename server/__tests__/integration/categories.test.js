@@ -81,6 +81,24 @@ describe('categories integration', () => {
     expect(res.body[0]).toMatchObject({ name: 'Visible' });
   });
 
+  it('excludes categories whose only products are cartoon-gallery (not in catalog)', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const catalogCategory = await createCategory({ name: 'Catalog', slug: 'catalog-cat' });
+    const cartoonCategory = await createCategory({ name: 'Cartoons', slug: 'cartoons-cat' });
+    await createProduct({ owner, category: catalogCategory });
+    await createProduct({
+      owner,
+      category: cartoonCategory,
+      isInCatalog: false,
+      isCartoonGallery: true,
+    });
+
+    const res = await request(app).get('/categories/visible').expect(200);
+
+    expect(res.body.map((category) => category.name)).toEqual(['Catalog']);
+  });
+
   it('reassigns products when deleting a category in use', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
