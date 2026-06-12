@@ -15,6 +15,8 @@ import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import MessageBox from '@/components/ui/MessageBox';
 import { approveAdminProduct, rejectAdminProduct } from '@/managers/usersAdminManager';
+import { isCartoonsServiceContext } from '@/config/cartoonsFeature';
+import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -73,6 +75,7 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
 	const isFullAdmin = user?.role === 'full_admin';
+	const isCartoonServiceContext = isCartoonsServiceContext(serviceContext);
 	const canEdit = isFullAdmin || isOwner(product, user);
 	const isPendingReview = product?.publicationStatus === 'pending_review' || product?.reviewStatus === 'pending_review';
 	const router = useRouter();
@@ -214,6 +217,7 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	}, [activeSlide?.key, activeSlide?.type, prefersReducedMotion]);
 
 	const isAvailable = product?.availability !== 'unavailable';
+	const shouldUseInquiryAction = isCartoonServiceContext || isCatalogMode || !isAvailable;
 
 	const availabilityLabel = isAvailable
 		? 'Продуктът е наличен'
@@ -297,8 +301,8 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	};
 
 	const handleInquiry = () => {
-		if (serviceContext === 'cartoons') {
-			router.push(`/contacts?service=cartoons&productId=${product._id}`);
+		if (isCartoonServiceContext) {
+			router.push(buildCartoonServiceContactHref({ productId: product._id }));
 			return;
 		}
 
@@ -486,24 +490,17 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 						)}
 
 						<div className={styles.actionButtonsContainer}>
-							{isCatalogMode ? (
+							{shouldUseInquiryAction ? (
 								<button onClick={handleInquiry} className={styles.actionBtn}>
 									Попитай
 								</button>
-							) : isAvailable ? (
+							) : (
 								<button
 									onClick={handleAddToCart}
 									className={styles.actionBtn}
 									data-testid="add-to-cart-button"
 								>
 									Добави в количката
-								</button>
-							) : (
-								<button
-									onClick={handleInquiry}
-									className={styles.actionBtn}
-								>
-									Попитай
 								</button>
 							)}
 

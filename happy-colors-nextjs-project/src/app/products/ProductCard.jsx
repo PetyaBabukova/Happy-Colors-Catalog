@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import useImageSlideshow from '@/hooks/useImageSlideshow';
+import { buildProductHref } from '@/utils/cartoonServiceRoutes';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import styles from './shop.module.css';
@@ -27,11 +28,7 @@ function buildCardMediaSlides(product) {
   return [...imageSlides, ...videoSlides];
 }
 
-function buildProductHref(product) {
-  return `/products/${product._id}`;
-}
-
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, serviceContext = '' }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const mediaSlides = useMemo(() => buildCardMediaSlides(product), [product]);
@@ -70,7 +67,7 @@ export default function ProductCard({ product }) {
   const isAvailable = product?.availability !== 'unavailable';
 
   return (
-    <Link href={buildProductHref(product)} className={styles.product}>
+    <Link href={buildProductHref(product._id, serviceContext)} className={styles.product}>
       <div
         ref={containerRef}
         data-testid="product-card-media"

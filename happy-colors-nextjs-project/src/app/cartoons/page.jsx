@@ -7,6 +7,7 @@ import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
 import { buildPageMetadata } from '@/config/siteSeo';
 import { getCartoonHeroBanners } from '@/managers/homeBannersManager';
 import { getCartoonGalleryProducts } from '@/managers/productsManager';
+import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
 import styles from './cartoons.module.css';
 
 const PAGE_TITLE = 'Шарж по снимка за подарък с усмивка';
@@ -55,7 +56,7 @@ export default async function CartoonsPage() {
             сватба, годишнина или друг специален повод. Кажете ни идеята, изпратете снимка,
             а ние, ще създадем артистичен портрет с настроение, характер и щипка закачка.
             За повече информация{' '}
-            <Link href="/contacts" className={styles.inquiryLink}>изпратете запитване.</Link>
+            <Link href={buildCartoonServiceContactHref()} className={styles.inquiryLink}>изпратете запитване.</Link>
           </p>
         </section>
 
@@ -64,7 +65,7 @@ export default async function CartoonsPage() {
             {/* <h2>Шаржове направени от нас</h2> */}
             <div className={shopStyles.productList}>
               {galleryProducts.map((product) => (
-                <ProductCard key={product._id} product={product} />
+                <ProductCard key={product._id} product={product} serviceContext="cartoons" />
               ))}
             </div>
           </section>

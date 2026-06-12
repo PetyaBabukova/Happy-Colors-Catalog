@@ -45,6 +45,15 @@ function uploadError(message, status, data = null) {
   return error;
 }
 
+function getPhotoItems(container) {
+  return Array.from(container.querySelectorAll('[data-photo-status]'));
+}
+
+function getResetPhotosButton(container) {
+  return Array.from(container.querySelectorAll('button[type="button"]'))
+    .find((button) => button.textContent.includes('Избери'));
+}
+
 async function uploadPhoto(container, file = buildFile()) {
   fireEvent.change(container.querySelector('#cartoonPhotos'), {
     target: { files: [file] },
@@ -247,6 +256,9 @@ describe('ContactForm', () => {
       uploadSessionToken: 'session-token',
     });
     expect(container.textContent).toContain('reference.webp');
+    expect(container.textContent).not.toContain('cartoon-orders/reference-photos/reference.webp');
+    expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'uploaded');
+    expect(container.textContent).toContain('Качена');
 
     fireEvent.click(container.querySelector('#cartoonConsent'));
     fireEvent.submit(container.querySelector('form'));
@@ -264,6 +276,10 @@ describe('ContactForm', () => {
         ],
       }))
     );
+    expect(createCartoonOrder.mock.calls[0][0].photos[0]).toMatchObject({
+      objectName: 'cartoon-orders/reference-photos/reference.webp',
+      uploadConfirmationToken: 'confirmation-reference.webp',
+    });
   });
 
   it('removes an uploaded pending cartoon photo from the submitted payload', async () => {
@@ -283,6 +299,129 @@ describe('ContactForm', () => {
     expect(createCartoonOrder.mock.calls[0][0].photos).toEqual([
       expect.objectContaining({ originalName: 'second.jpg' }),
     ]);
+    expect(createCartoonOrder.mock.calls[0][0].photos).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ originalName: 'first.jpg' })])
+    );
+  });
+
+  it('disables final submit while cartoon photos are uploading', async () => {
+    let resolveUpload;
+    uploadCartoonOrderPhoto.mockReturnValueOnce(new Promise((resolve) => {
+      resolveUpload = resolve;
+    }));
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    fireEvent.change(container.querySelector('#cartoonPhotos'), {
+      target: { files: [buildFile({ name: 'slow.jpg' })] },
+    });
+
+    await waitFor(() => expect(container.textContent).toContain('Качване'));
+    expect(container.querySelector('button[type="submit"]')).toBeDisabled();
+
+    await act(async () => {
+      resolveUpload({
+        objectName: 'cartoon-orders/reference-photos/slow.jpg',
+        uploadConfirmationToken: 'confirmation-slow.jpg',
+        originalName: 'slow.jpg',
+        contentType: 'image/jpeg',
+        size: 1024,
+      });
+    });
+
+    await waitFor(() => expect(container.querySelector('button[type="submit"]')).not.toBeDisabled());
+  });
+
+  it('keeps successful uploads and marks only failed files when a multi-file selection partially fails', async () => {
+    uploadCartoonOrderPhoto
+      .mockResolvedValueOnce({
+        objectName: 'cartoon-orders/reference-photos/ok.jpg',
+        uploadConfirmationToken: 'confirmation-ok.jpg',
+        originalName: 'ok.jpg',
+        contentType: 'image/jpeg',
+        size: 1024,
+      })
+      .mockRejectedValueOnce(uploadError('Second file failed.', 500));
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    fillContactFields(container);
+    fireEvent.change(container.querySelector('#cartoonPhotos'), {
+      target: {
+        files: [
+          buildFile({ name: 'ok.jpg' }),
+          buildFile({ name: 'failed.jpg' }),
+        ],
+      },
+    });
+
+    await waitFor(() => expect(container.textContent).toContain('Second file failed.'));
+    const items = getPhotoItems(container);
+
+    expect(items[0]).toHaveAttribute('data-photo-status', 'uploaded');
+    expect(items[1]).toHaveAttribute('data-photo-status', 'failed');
+
+    fireEvent.click(container.querySelector('#cartoonConsent'));
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => expect(createCartoonOrder).toHaveBeenCalled());
+    expect(createCartoonOrder.mock.calls[0][0].photos).toEqual([
+      expect.objectContaining({ originalName: 'ok.jpg' }),
+    ]);
+  });
+
+  it('retries a failed cartoon photo upload', async () => {
+    uploadCartoonOrderPhoto
+      .mockRejectedValueOnce(uploadError('Temporary upload error.', 500))
+      .mockResolvedValueOnce({
+        objectName: 'cartoon-orders/reference-photos/retry.jpg',
+        uploadConfirmationToken: 'confirmation-retry.jpg',
+        originalName: 'retry.jpg',
+        contentType: 'image/jpeg',
+        size: 1024,
+      });
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    fireEvent.change(container.querySelector('#cartoonPhotos'), {
+      target: { files: [buildFile({ name: 'retry.jpg' })] },
+    });
+
+    await waitFor(() => expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'failed'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Опитай пак' }));
+
+    await waitFor(() => expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'uploaded'));
+    expect(uploadCartoonOrderPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it('blocks submit when all cartoon photos are failed or removed', async () => {
+    uploadCartoonOrderPhoto.mockRejectedValueOnce(uploadError('Upload failed.', 500));
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    fillContactFields(container);
+    fireEvent.change(container.querySelector('#cartoonPhotos'), {
+      target: { files: [buildFile({ name: 'failed-only.jpg' })] },
+    });
+
+    await waitFor(() => expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'failed'));
+    fireEvent.click(container.querySelector('#cartoonConsent'));
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(createCartoonOrder).not.toHaveBeenCalled();
+    await waitFor(() => expect(container.textContent).toContain('поне една'));
+  });
+
+  it('does not show storage object names when uploaded metadata has no original name', async () => {
+    uploadCartoonOrderPhoto.mockResolvedValueOnce({
+      objectName: 'cartoon-orders/reference-photos/private-object-name.jpg',
+      uploadConfirmationToken: 'confirmation-private',
+      contentType: 'image/jpeg',
+      size: 1024,
+    });
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    await uploadPhoto(container, buildFile({ name: '' }));
+
+    expect(container.textContent).toContain('Снимка');
+    expect(container.textContent).not.toContain('private-object-name.jpg');
   });
 
   it('keeps uploaded photos when cartoon order submission fails', async () => {
@@ -313,7 +452,12 @@ describe('ContactForm', () => {
 
     await waitFor(() => expect(createCartoonOrder).toHaveBeenCalled());
     await waitFor(() => expect(container.textContent).toContain('качете ги отново'));
-    expect(container.textContent).not.toContain('stale.jpg');
+    expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'stale');
+    expect(container.textContent).toContain('stale.jpg');
+
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(createCartoonOrder).toHaveBeenCalledTimes(1);
   });
 
   it('clears stale cartoon uploads when the upload session expires', async () => {
@@ -329,7 +473,7 @@ describe('ContactForm', () => {
     });
 
     await waitFor(() => expect(container.textContent).toContain('поднови'));
-    expect(container.querySelector('[data-testid="cartoon-photo-list"]')).not.toBeInTheDocument();
+    expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'stale');
   });
 
   it('clears stale cartoon uploads when the server session is already full', async () => {
@@ -345,7 +489,7 @@ describe('ContactForm', () => {
     });
 
     await waitFor(() => expect(container.textContent).toContain('поднови'));
-    expect(container.querySelector('[data-testid="cartoon-photo-list"]')).not.toBeInTheDocument();
+    expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'stale');
   });
 
   it('keeps existing cartoon photos when a later upload fails as a duplicate', async () => {
@@ -382,10 +526,11 @@ describe('ContactForm', () => {
 
     fireEvent.click(container.querySelectorAll('button[type="button"]')[0]);
 
-    expect(container.textContent).not.toContain('face-0.jpg');
+    expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'removed');
+    expect(container.textContent).toContain('face-0.jpg');
     expect(container.querySelector('#cartoonPhotos')).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Избери снимките отново' }));
+    fireEvent.click(getResetPhotosButton(container));
 
     expect(container.querySelector('[data-testid="cartoon-photo-list"]')).not.toBeInTheDocument();
     expect(container.querySelector('#cartoonPhotos')).not.toBeDisabled();

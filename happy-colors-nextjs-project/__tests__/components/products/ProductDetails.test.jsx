@@ -13,6 +13,16 @@ vi.mock('@/managers/usersAdminManager', () => ({
   rejectAdminProduct: vi.fn(),
 }));
 
+const catalogModeState = vi.hoisted(() => ({
+  value: false,
+}));
+
+vi.mock('@/utils/catalogMode', () => ({
+  get isCatalogMode() {
+    return catalogModeState.value;
+  },
+}));
+
 const showPrev = vi.fn();
 const showNext = vi.fn();
 const pause = vi.fn();
@@ -68,6 +78,7 @@ describe('ProductDetails', () => {
     });
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    catalogModeState.value = false;
     mockSlideshow();
   });
 
@@ -143,6 +154,24 @@ describe('ProductDetails', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
+    expect(routerPush).toHaveBeenCalledWith('/contacts?service=cartoons&productId=product-1');
+  });
+
+  it('routes available cartoon-context products to inquiry before the shop cart branch', () => {
+    catalogModeState.value = false;
+    mockSlideshow({ hasMultiple: false });
+    const addToCart = vi.fn();
+    const routerPush = vi.fn();
+    render(<ProductDetails product={product} serviceContext="cartoons" />, {
+      cartOverrides: { addToCart },
+      routerOverrides: { push: routerPush },
+    });
+
+    expect(screen.queryByTestId('add-to-cart-button')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(addToCart).not.toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith('/contacts?service=cartoons&productId=product-1');
   });
 

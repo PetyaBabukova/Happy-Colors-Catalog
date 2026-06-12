@@ -67,16 +67,49 @@ describe('CartoonsHeroCarousel', () => {
     );
   });
 
+  it('does not crash when the current banner index is out of range after a list shrink', () => {
+    const { rerender } = render(<CartoonsHeroCarousel banners={banners} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Следващ банер' }));
+
+    expect(screen.getByAltText('Шарж втори')).toHaveAttribute(
+      'src',
+      'https://storage.googleapis.com/test-bucket/home-banners/cartoons-two.webp'
+    );
+
+    expect(() => rerender(<CartoonsHeroCarousel banners={[banners[0]]} />)).not.toThrow();
+    expect(screen.getByAltText('Шарж първи')).toHaveAttribute(
+      'src',
+      'https://storage.googleapis.com/test-bucket/home-banners/cartoons-one.webp'
+    );
+  });
+
   it('renders nothing when there are no images', () => {
     const { container } = render(<CartoonsHeroCarousel banners={[{ _id: 'empty' }]} />);
 
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('passes cartoon placement when deleting from admin controls', async () => {
-    render(<CartoonsHeroCarousel banners={banners} />, {
-      user: { _id: 'user-1', email: 'owner@example.com' },
+  it('hides admin controls from guests and ordinary authenticated users', () => {
+    const guestRender = render(<CartoonsHeroCarousel banners={banners} />);
+
+    expect(guestRender.container.querySelector('a[href="/home-banners/cartoon-banner-1/edit"]')).not.toBeInTheDocument();
+
+    guestRender.unmount();
+
+    const userRender = render(<CartoonsHeroCarousel banners={banners} />, {
+      user: { _id: 'user-1', role: 'artist' },
     });
+
+    expect(userRender.container.querySelector('a[href="/home-banners/cartoon-banner-1/edit"]')).not.toBeInTheDocument();
+  });
+
+  it('passes cartoon placement when a full admin deletes from admin controls', async () => {
+    const { container } = render(<CartoonsHeroCarousel banners={banners} />, {
+      user: { _id: 'admin-1', role: 'full_admin', email: 'admin@example.com' },
+    });
+
+    expect(container.querySelector('a[href="/home-banners/cartoon-banner-1/edit"]')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изтрий банера' }));
 

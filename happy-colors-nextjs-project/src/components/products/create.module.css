@@ -232,6 +232,10 @@ align-items: center;
   background: white;
 }
 
+.photoPreviewItem {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .videoPreviewPoster {
   width: 4.5rem;
   height: 4.5rem;
