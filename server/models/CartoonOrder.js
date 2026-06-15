@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const cartoonOrderPhotoSchema = new mongoose.Schema(
   {
+    photoId: {
+      type: String,
+      default: () => new mongoose.Types.ObjectId().toString(),
+      trim: true,
+      maxlength: 64,
+    },
     objectName: {
       type: String,
       required: true,
@@ -66,9 +72,37 @@ const cartoonOrderSchema = new mongoose.Schema(
       },
     },
     statuses: {
-      ordered: { type: Boolean, default: true },
+      ordered: { type: Boolean, default: false },
       designApproved: { type: Boolean, default: false },
       paid: { type: Boolean, default: false },
+    },
+    workflowStatus: {
+      type: String,
+      enum: ['inquiry', 'waiting', 'ordered', 'completed'],
+      default: 'inquiry',
+      index: true,
+    },
+    inquiryAt: {
+      type: Date,
+      default: null,
+    },
+    waitingAt: {
+      type: Date,
+      default: null,
+    },
+    waitingBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    orderedAt: {
+      type: Date,
+      default: null,
+    },
+    orderedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     adminNotes: {
       type: String,
@@ -87,6 +121,42 @@ const cartoonOrderSchema = new mongoose.Schema(
       default: '',
       trim: true,
       maxlength: 300,
+    },
+    notifications: {
+      admin: {
+        status: {
+          type: String,
+          enum: ['pending', 'sent', 'failed'],
+          default: 'pending',
+        },
+        error: {
+          type: String,
+          default: '',
+          trim: true,
+          maxlength: 300,
+        },
+        sentAt: {
+          type: Date,
+          default: null,
+        },
+      },
+      customer: {
+        status: {
+          type: String,
+          enum: ['pending', 'sent', 'failed'],
+          default: 'pending',
+        },
+        error: {
+          type: String,
+          default: '',
+          trim: true,
+          maxlength: 300,
+        },
+        sentAt: {
+          type: Date,
+          default: null,
+        },
+      },
     },
     claimStatus: {
       type: String,
@@ -132,6 +202,7 @@ const cartoonOrderSchema = new mongoose.Schema(
 
 cartoonOrderSchema.index({ archivedAt: 1, createdAt: -1 }, { background: true });
 cartoonOrderSchema.index({ completedAt: 1, createdAt: -1 }, { background: true });
+cartoonOrderSchema.index({ workflowStatus: 1, createdAt: -1 }, { background: true });
 cartoonOrderSchema.index({ 'customer.email': 1, createdAt: -1 }, { background: true });
 cartoonOrderSchema.index(
   { 'photos.objectName': 1 },

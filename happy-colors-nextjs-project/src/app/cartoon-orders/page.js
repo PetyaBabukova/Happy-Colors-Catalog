@@ -12,7 +12,7 @@ export const metadata = {
 export default function CartoonOrdersPage() {
   return (
     <RequireAuth
-      message="Трябва да сте логнати като администратор, за да управлявате шарж поръчките."
+      message="Трябва да сте влезли като администратор, за да управлявате шарж поръчките."
       requiredRole="full_admin"
       roleMessage="Тази страница е достъпна само за full admin потребители."
     >

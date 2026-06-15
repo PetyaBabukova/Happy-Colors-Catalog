@@ -116,6 +116,47 @@ export async function updateCartoonOrderAdminNotes(orderId, adminNotes) {
   );
 }
 
+export async function updateCartoonOrderWorkflow(orderId, workflowStatus) {
+  const response = await fetch(`${baseURL}/cartoon-orders/${orderId}/workflow`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    cache: 'no-store',
+    body: JSON.stringify({ workflowStatus }),
+  });
+
+  return assertCartoonOrderResponse(
+    response,
+    'Cartoon order workflow could not be updated.'
+  );
+}
+
+export async function rejectCartoonOrder(orderId) {
+  const response = await fetch(`${baseURL}/cartoon-orders/${orderId}/reject`, {
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  return assertCartoonOrderResponse(
+    response,
+    'Cartoon order could not be rejected.'
+  );
+}
+
+export async function purgeOldCompletedCartoonOrders() {
+  const response = await fetch(`${baseURL}/cartoon-orders/purge-old-completed`, {
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  return assertCartoonOrderResponse(
+    response,
+    'Old completed cartoon orders could not be deleted.'
+  );
+}
+
 export async function completeCartoonOrder(orderId) {
   const response = await fetch(`${baseURL}/cartoon-orders/${orderId}/complete`, {
     method: 'POST',
@@ -126,6 +167,19 @@ export async function completeCartoonOrder(orderId) {
   return assertCartoonOrderResponse(
     response,
     'РќРµСѓСЃРїРµС€РЅРѕ РїСЂРёРєР»СЋС‡РІР°РЅРµ РЅР° С€Р°СЂР¶ РїРѕСЂСЉС‡РєР°С‚Р°.'
+  );
+}
+
+export async function retryCartoonOrderNotifications(orderId) {
+  const response = await fetch(`${baseURL}/cartoon-orders/${orderId}/notifications/retry`, {
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  return assertCartoonOrderResponse(
+    response,
+    'Неуспешно повторно изпращане на известията за шарж поръчката.'
   );
 }
 

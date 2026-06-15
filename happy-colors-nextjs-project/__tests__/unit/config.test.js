@@ -109,8 +109,32 @@ describe('config baseURL', () => {
           destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/admin-notes',
         },
         {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/workflow',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/workflow',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/reject',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/reject',
+        },
+        {
           source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/complete',
           destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/complete',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/photo-diagnostics',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/photo-diagnostics',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/photos/:photoId([A-Za-z0-9_-]{1,80})',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/photos/:photoId',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/notifications/retry',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/notifications/retry',
+        },
+        {
+          source: '/api/cartoon-orders/purge-old-completed',
+          destination: 'https://api.happycolors.eu/cartoon-orders/purge-old-completed',
         },
       ])
     );

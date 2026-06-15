@@ -4,8 +4,12 @@ import {
   createCartoonOrder,
   createCartoonOrderUploadSession,
   fetchCartoonOrders,
+  purgeOldCompletedCartoonOrders,
+  rejectCartoonOrder,
+  retryCartoonOrderNotifications,
   updateCartoonOrderAdminNotes,
   updateCartoonOrderStatuses,
+  updateCartoonOrderWorkflow,
   uploadCartoonOrderPhoto,
 } from '../../../src/managers/cartoonOrdersManager.js';
 
@@ -170,6 +174,62 @@ describe('cartoonOrdersManager', () => {
     );
   });
 
+  it('updates cartoon order workflow', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { _id: 'order-1', workflowStatus: 'waiting' },
+    }));
+
+    await expect(
+      updateCartoonOrderWorkflow('order-1', 'waiting')
+    ).resolves.toEqual({ _id: 'order-1', workflowStatus: 'waiting' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/order-1/workflow',
+      expect.objectContaining({
+        method: 'PATCH',
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify({ workflowStatus: 'waiting' }),
+      })
+    );
+  });
+
+  it('rejects a cartoon order', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { deleted: true } }));
+
+    await expect(rejectCartoonOrder('order-1')).resolves.toEqual({ deleted: true });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/order-1/reject',
+      {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      }
+    );
+  });
+
+  it('purges old completed cartoon orders', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { matchedCount: 2, deletedCount: 2, failedCount: 0 },
+    }));
+
+    await expect(purgeOldCompletedCartoonOrders()).resolves.toEqual({
+      matchedCount: 2,
+      deletedCount: 2,
+      failedCount: 0,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/purge-old-completed',
+      {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      }
+    );
+  });
+
   it('completes a cartoon order', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({
       body: { _id: 'order-1', completedAt: '2026-06-05T10:00:00.000Z' },
@@ -182,6 +242,26 @@ describe('cartoonOrdersManager', () => {
 
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/cartoon-orders/order-1/complete',
+      {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      }
+    );
+  });
+
+  it('retries failed cartoon order notifications', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { _id: 'order-1', notificationStatus: 'sent' },
+    }));
+
+    await expect(retryCartoonOrderNotifications('order-1')).resolves.toEqual({
+      _id: 'order-1',
+      notificationStatus: 'sent',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/order-1/notifications/retry',
       {
         method: 'POST',
         credentials: 'include',
