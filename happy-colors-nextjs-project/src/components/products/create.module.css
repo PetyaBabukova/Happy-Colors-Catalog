@@ -50,6 +50,14 @@ align-items: center;
     margin-bottom: 0.5em;
 }
 
+.registerForm > button[type="submit"]:disabled {
+  background-color: #e5e7eb;
+  border-color: #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .invalidField {
     border-color: var(--dark-orange);
     /* background-color: #fff8f1;  */

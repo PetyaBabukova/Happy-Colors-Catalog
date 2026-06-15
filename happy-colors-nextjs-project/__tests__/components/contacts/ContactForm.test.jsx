@@ -144,11 +144,13 @@ describe('ContactForm', () => {
     expect(container.querySelector('#message')).toHaveAttribute('maxlength', '1500');
     expect(container.querySelector('#cartoonPhotos')).toBeInTheDocument();
     expect(container.querySelector('#cartoonConsent')).toBeInTheDocument();
+    expect(container.querySelector('button[type="submit"]')).toBeDisabled();
     expect(container.textContent).not.toContain('Изпращате запитване за: Cartoon Sample');
 
     fillContactFields(container);
     await uploadPhoto(container);
     fireEvent.click(container.querySelector('#cartoonConsent'));
+    expect(container.querySelector('button[type="submit"]')).not.toBeDisabled();
     fireEvent.submit(container.querySelector('form'));
 
     await waitFor(() =>
@@ -204,6 +206,29 @@ describe('ContactForm', () => {
 
     await waitFor(() => expect(createCartoonOrder).toHaveBeenCalled());
     expect(createCartoonOrder.mock.calls[0][0]).toMatchObject({ productId: null });
+  });
+
+  it('redirects successful cartoon enquiries back to cartoons after the success message', async () => {
+    const { container, mockRouterPush } = render(<ContactForm serviceContext="cartoons" />);
+
+    fillContactFields(container);
+    await uploadPhoto(container);
+    fireEvent.click(container.querySelector('#cartoonConsent'));
+    vi.useFakeTimers();
+
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form'));
+      await Promise.resolve();
+    });
+
+    expect(createCartoonOrder).toHaveBeenCalled();
+    expect(mockRouterPush).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/cartoons');
   });
 
   it('rejects more than five selected cartoon photos before upload', async () => {
@@ -328,7 +353,9 @@ describe('ContactForm', () => {
       });
     });
 
-    await waitFor(() => expect(container.querySelector('button[type="submit"]')).not.toBeDisabled());
+    await waitFor(() => expect(container.querySelector('button[type="submit"]')).toBeDisabled());
+    fireEvent.click(container.querySelector('#cartoonConsent'));
+    expect(container.querySelector('button[type="submit"]')).not.toBeDisabled();
   });
 
   it('keeps successful uploads and marks only failed files when a multi-file selection partially fails', async () => {

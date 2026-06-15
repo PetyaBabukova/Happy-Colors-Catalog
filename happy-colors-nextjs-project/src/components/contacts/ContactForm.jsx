@@ -121,15 +121,15 @@ export default function ContactForm({ product, productId = null, serviceContext 
     cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS &&
     uploadedCartoonPhotos.length < MAX_CARTOON_ORDER_PHOTOS
   );
+  const isSubmitDisabled =
+    isSubmitting || isUploadingPhotos || (isCartoonInquiry && !consentAccepted);
 
   useEffect(() => {
     if (notificationMessage && notificationType === 'success') {
       const timer = setTimeout(() => {
         setNotificationMessage('');
         setNotificationType(null);
-        if (!isCartoonInquiry) {
-          router.push('/products');
-        }
+        router.push(isCartoonInquiry ? '/cartoons' : '/products');
       }, 3000);
 
       return () => clearTimeout(timer);
@@ -611,7 +611,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
           </>
         )}
 
-        <button type="submit" disabled={isSubmitting || isUploadingPhotos}>Изпрати</button>
+        <button type="submit" disabled={isSubmitDisabled}>Изпрати</button>
       </form>
     </div>
   );
