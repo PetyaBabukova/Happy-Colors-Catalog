@@ -220,8 +220,9 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	const shouldUseInquiryAction = isCartoonServiceContext || isCatalogMode || !isAvailable;
 
 	const availabilityLabel = isAvailable
-		? 'Продуктът е наличен'
-		: 'Продуктът не е наличен';
+		? 'Налична готова бройка — изпратете запитване за потвърждение'
+		: 'Възможна изработка след потвърждение.';
+	const cartoonAvailabilityLabel = 'Изработва се по индивидуално запитване.';
 
 	const handleAddToCart = () => {
 		addToCart({
@@ -480,10 +481,16 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 				{activeTab === 'description' && (
 					<>
 						<p className={isAvailable ? styles.available : styles.unavailable}>
-							<b>Наличност:</b> {availabilityLabel}
+							<b>Наличност:</b> {isCartoonServiceContext ? cartoonAvailabilityLabel : availabilityLabel}
 						</p>
 
-						{isCatalogMode ? (
+						{isCartoonServiceContext ? (
+							<p className={styles.cartoonPriceNote}>
+								Ориентировъчна цена от {product.price} €.
+								<br />
+								Крайната цена зависи от броя лица, сложността, стила, срока и желания вариант. Изпратете запитване за конкретна оферта.
+							</p>
+						) : isCatalogMode ? (
 							<p>Цена {product.price} €. За наличност и уточнения, моля изпратете запитване.</p>
 						) : (
 							<p>Цена {product.price} €</p>

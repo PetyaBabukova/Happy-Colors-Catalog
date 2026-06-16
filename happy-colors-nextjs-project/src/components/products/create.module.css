@@ -91,6 +91,13 @@ align-items: center;
   margin-bottom: 0.8em;
 }
 
+.registerForm .cartoonInquirySubtitle {
+  color: var(--dark-green);
+  font-size: 1.2em;
+  line-height: 1.4;
+  margin: -0.5rem 0 1rem;
+}
+
 .errorHint {
   font-size: 0.85em;
   color: var(--dark-orange);
@@ -331,6 +338,10 @@ align-items: center;
 
     .registerForm p{
         font-size: 0.7em;
+    }
+
+    .registerForm .cartoonInquirySubtitle {
+        font-size: 1em;
     }
 
     .registerForm button {

@@ -139,6 +139,20 @@ describe('ProductDetails', () => {
     expect(routerPush).toHaveBeenCalledWith('/contacts?productId=product-1');
   });
 
+  it('shows product availability copy for available and unavailable product pages', () => {
+    const availableRender = render(<ProductDetails product={product} />);
+
+    expect(
+      screen.getByText(/Налична готова бройка — изпратете запитване за потвърждение/)
+    ).toBeInTheDocument();
+
+    availableRender.unmount();
+
+    render(<ProductDetails product={{ ...product, availability: 'unavailable' }} />);
+
+    expect(screen.getByText(/Възможна изработка след потвърждение\./)).toBeInTheDocument();
+  });
+
   it('preserves cartoon service context for inquiry links when provided', () => {
     mockSlideshow({ hasMultiple: false });
     const routerPush = vi.fn();
@@ -168,6 +182,11 @@ describe('ProductDetails', () => {
     });
 
     expect(screen.queryByTestId('add-to-cart-button')).not.toBeInTheDocument();
+    expect(screen.getByText(/Изработва се по индивидуално запитване\./)).toBeInTheDocument();
+    expect(screen.getByText(/Ориентировъчна цена от 18 €/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Крайната цена зависи от броя лица, сложността, стила, срока и желания вариант/)
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button'));
 

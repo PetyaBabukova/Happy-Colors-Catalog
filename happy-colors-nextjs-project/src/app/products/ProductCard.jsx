@@ -65,6 +65,7 @@ export default function ProductCard({ product, serviceContext = '' }) {
 
   const shouldRenderVideo = currentSlide?.type === 'video' && isInView;
   const isAvailable = product?.availability !== 'unavailable';
+  const showAvailabilityBadge = isAvailable && serviceContext !== 'cartoons';
 
   return (
     <Link href={buildProductHref(product._id, serviceContext)} className={styles.product}>
@@ -75,7 +76,7 @@ export default function ProductCard({ product, serviceContext = '' }) {
         onMouseEnter={pause}
         onMouseLeave={resume}
       >
-        {isAvailable && (
+        {showAvailabilityBadge && (
           <span className={styles.availabilityBadge}>Налично</span>
         )}
 

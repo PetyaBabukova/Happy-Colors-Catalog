@@ -62,6 +62,7 @@ describe('ProductCard', () => {
     render(<ProductCard product={product} serviceContext="cartoons" />);
 
     expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1?service=cartoons');
+    expect(screen.queryByText('Налично')).not.toBeInTheDocument();
   });
 
   it('ignores unrelated service context values', () => {

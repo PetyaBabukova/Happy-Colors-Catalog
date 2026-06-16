@@ -470,6 +470,11 @@ export default function ContactForm({ product, productId = null, serviceContext 
 
       <form className={styles.registerForm} onSubmit={handleSubmit}>
         <h3>{isCartoonInquiry ? 'Запитване за шарж' : 'Свържете се с нас'}</h3>
+        {isCartoonInquiry && (
+          <p className={styles.cartoonInquirySubtitle}>
+            Изпратете запитване. Ще се свържем с вас за уточнение на цена, срок, вариант и начин на изработка.
+          </p>
+        )}
         {!isCartoonInquiry && product?.title && (
           <p><b>Изпращате запитване за: {product.title}</b></p>
         )}
@@ -614,7 +619,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                 checked={consentAccepted}
                 onChange={(event) => setConsentAccepted(event.target.checked)}
               />
-              Съгласявам се качените снимки да бъдат използвани за изготвяне на запитването/поръчката за шарж.
+              Съгласявам се качените снимки да бъдат използвани единствено за разглеждане на запитването и изготвяне на индивидуална оферта за шарж.
             </label>
 
             <input

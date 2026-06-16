@@ -145,6 +145,12 @@ describe('ContactForm', () => {
     expect(container.querySelector('#cartoonPhotos')).toBeInTheDocument();
     expect(container.querySelector('#cartoonConsent')).toBeInTheDocument();
     expect(container.querySelector('button[type="submit"]')).toBeDisabled();
+    expect(container.textContent).toContain(
+      'Изпратете запитване. Ще се свържем с вас за уточнение на цена, срок, вариант и начин на изработка.'
+    );
+    expect(container.textContent).toContain(
+      'Съгласявам се качените снимки да бъдат използвани единствено за разглеждане на запитването и изготвяне на индивидуална оферта за шарж.'
+    );
     expect(container.textContent).not.toContain('Изпращате запитване за: Cartoon Sample');
 
     fillContactFields(container);
