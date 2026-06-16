@@ -152,6 +152,31 @@ align-items: center;
   pointer-events: none;
 }
 
+.successPopupBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.successPopup {
+  width: min(100%, 30rem);
+  padding: 1.5rem 1.75rem;
+  border: 1px solid var(--light-green);
+  border-radius: 0.5rem;
+  background: var(--lighter-green);
+  color: var(--dark-green);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.2);
+}
+
 .imagePreviewItem {
   display: flex;
   justify-content: space-between;

@@ -169,6 +169,27 @@ describe('ContactForm', () => {
     expect(sendContactForm).not.toHaveBeenCalled();
   });
 
+  it('keeps the cartoon submit button disabled until required fields, photo, and consent are ready', async () => {
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+    const submitButton = container.querySelector('button[type="submit"]');
+
+    expect(submitButton).toBeDisabled();
+
+    fillContactFields(container);
+    expect(submitButton).toBeDisabled();
+
+    await uploadPhoto(container);
+    expect(submitButton).toBeDisabled();
+
+    fireEvent.click(container.querySelector('#cartoonConsent'));
+    expect(submitButton).not.toBeDisabled();
+
+    fireEvent.change(container.querySelector('#message'), {
+      target: { value: '   ' },
+    });
+    expect(submitButton).toBeDisabled();
+  });
+
   it('requires consent only for cartoon order submission', async () => {
     const { container } = render(
       <ContactForm product={{ _id: 'product-1', title: 'Cartoon Sample' }} serviceContext="cartoons" />
@@ -222,12 +243,14 @@ describe('ContactForm', () => {
     });
 
     expect(createCartoonOrder).toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Благодарим');
     expect(mockRouterPush).not.toHaveBeenCalled();
 
     act(() => {
       vi.advanceTimersByTime(3000);
     });
 
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(mockRouterPush).toHaveBeenCalledWith('/cartoons');
   });
 
@@ -354,6 +377,7 @@ describe('ContactForm', () => {
     });
 
     await waitFor(() => expect(container.querySelector('button[type="submit"]')).toBeDisabled());
+    fillContactFields(container);
     fireEvent.click(container.querySelector('#cartoonConsent'));
     expect(container.querySelector('button[type="submit"]')).not.toBeDisabled();
   });

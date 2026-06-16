@@ -121,8 +121,19 @@ export default function ContactForm({ product, productId = null, serviceContext 
     cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS &&
     uploadedCartoonPhotos.length < MAX_CARTOON_ORDER_PHOTOS
   );
+  const hasCartoonRequiredFields =
+    !isCartoonInquiry ||
+    (
+      formValues.name.trim() &&
+      formValues.email.trim() &&
+      formValues.message.trim() &&
+      uploadedCartoonPhotos.length > 0 &&
+      consentAccepted
+    );
   const isSubmitDisabled =
-    isSubmitting || isUploadingPhotos || (isCartoonInquiry && !consentAccepted);
+    isSubmitting || isUploadingPhotos || !hasCartoonRequiredFields;
+  const showCartoonSuccessPopup =
+    isCartoonInquiry && notificationMessage && notificationType === 'success';
 
   useEffect(() => {
     if (notificationMessage && notificationType === 'success') {
@@ -441,7 +452,15 @@ export default function ContactForm({ product, productId = null, serviceContext 
 
   return (
     <div className={styles.registerFormContainer}>
-      {notificationMessage ? (
+      {showCartoonSuccessPopup ? (
+        <div className={styles.successPopupBackdrop}>
+          <div className={styles.successPopup} role="status" aria-live="polite">
+            {notificationMessage}
+          </div>
+        </div>
+      ) : null}
+
+      {!showCartoonSuccessPopup && notificationMessage ? (
         <MessageBox type={notificationType} message={notificationMessage} />
       ) : error ? (
         <MessageBox type="error" message={error} />
