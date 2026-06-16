@@ -20,7 +20,7 @@ function getCredentials() {
 }
 
 function formatSender(fromEmail) {
-  return `Happy Colors <${fromEmail}>`;
+  return `Happy Colors | Creative Studio <${fromEmail}>`;
 }
 
 function maskEmail(value) {
