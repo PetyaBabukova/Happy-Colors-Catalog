@@ -20,13 +20,14 @@ describe('gcsImageHelper cartoon signed read URLs', () => {
     delete process.env.NODE_ENV;
   });
 
-  async function loadHelperWithStorageMock({ existingCredentialPath = '' } = {}) {
+  async function loadHelperWithStorageMock({ existingCredentialPath = '', getFilesImpl = null } = {}) {
     const getSignedUrl = vi.fn().mockResolvedValue(['https://signed.example.com/photo.webp']);
     const deleteFile = vi.fn().mockResolvedValue(undefined);
     const exists = vi.fn().mockResolvedValue([true]);
     const createReadStream = vi.fn(() => Readable.from([Buffer.from('mock-photo')]));
     const file = vi.fn(() => ({ createReadStream, delete: deleteFile, exists, getSignedUrl }));
-    const bucket = vi.fn(() => ({ file }));
+    const getFiles = vi.fn(getFilesImpl || (async () => [[], null]));
+    const bucket = vi.fn(() => ({ file, getFiles }));
     const Storage = vi.fn(() => ({ bucket }));
     const existingCredentialPaths = Array.isArray(existingCredentialPath)
       ? existingCredentialPath
@@ -48,6 +49,7 @@ describe('gcsImageHelper cartoon signed read URLs', () => {
       deleteFile,
       exists,
       file,
+      getFiles,
       getSignedUrl,
       Storage,
       existsSync,
@@ -216,6 +218,103 @@ describe('gcsImageHelper cartoon signed read URLs', () => {
       errorCategory: '',
       code: '',
       name: '',
+    });
+  });
+
+  it('lists cartoon order photo objects across storage pages under the private prefix', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.GCS_CARTOON_ORDERS_BUCKET_NAME = 'happy-private-cartoon-orders';
+    const { helper, getFiles } = await loadHelperWithStorageMock({
+      getFilesImpl: vi.fn()
+        .mockResolvedValueOnce([
+          [
+            {
+              name: 'cartoon-orders/reference-photos/first.webp',
+              metadata: { updated: '2026-06-17T10:00:00.000Z' },
+            },
+          ],
+          { pageToken: 'page-2' },
+        ])
+        .mockResolvedValueOnce([
+          [
+            {
+              name: 'cartoon-orders/reference-photos/second.webp',
+              metadata: { timeCreated: '2026-06-17T11:00:00.000Z' },
+            },
+          ],
+          null,
+        ]),
+    });
+
+    const result = await helper.listCartoonOrderPhotoObjects({ limit: 2000 });
+
+    expect(result).toEqual({
+      ok: true,
+      errorCategory: 'none',
+      objects: [
+        {
+          objectName: 'cartoon-orders/reference-photos/first.webp',
+          updatedAt: new Date('2026-06-17T10:00:00.000Z'),
+        },
+        {
+          objectName: 'cartoon-orders/reference-photos/second.webp',
+          updatedAt: new Date('2026-06-17T11:00:00.000Z'),
+        },
+      ],
+    });
+    expect(getFiles).toHaveBeenNthCalledWith(1, {
+      autoPaginate: false,
+      maxResults: 1000,
+      pageToken: undefined,
+      prefix: 'cartoon-orders/reference-photos/',
+    });
+    expect(getFiles).toHaveBeenNthCalledWith(2, {
+      autoPaginate: false,
+      maxResults: 1000,
+      pageToken: 'page-2',
+      prefix: 'cartoon-orders/reference-photos/',
+    });
+  });
+
+  it('bounds cartoon order photo object listing by the total limit', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.GCS_CARTOON_ORDERS_BUCKET_NAME = 'happy-private-cartoon-orders';
+    const { helper, getFiles } = await loadHelperWithStorageMock({
+      getFilesImpl: vi.fn()
+        .mockResolvedValueOnce([
+          [
+            {
+              name: 'cartoon-orders/reference-photos/first.webp',
+              metadata: { updated: '2026-06-17T10:00:00.000Z' },
+            },
+          ],
+          { pageToken: 'page-2' },
+        ])
+        .mockResolvedValueOnce([
+          [
+            {
+              name: 'cartoon-orders/reference-photos/second.webp',
+              metadata: { updated: '2026-06-17T11:00:00.000Z' },
+            },
+          ],
+          null,
+        ]),
+    });
+
+    const result = await helper.listCartoonOrderPhotoObjects({ limit: 1 });
+
+    expect(result.objects).toEqual([
+      {
+        objectName: 'cartoon-orders/reference-photos/first.webp',
+        updatedAt: new Date('2026-06-17T10:00:00.000Z'),
+      },
+    ]);
+    expect(getFiles).toHaveBeenCalledTimes(1);
+    expect(getFiles).toHaveBeenCalledWith({
+      autoPaginate: false,
+      maxResults: 1,
+      pageToken: undefined,
+      prefix: 'cartoon-orders/reference-photos/',
     });
   });
 

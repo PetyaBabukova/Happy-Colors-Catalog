@@ -17,10 +17,12 @@ import MessageBox from '@/components/ui/MessageBox';
 import { useAuth } from '@/context/AuthContext';
 import {
   completeCartoonOrder,
+  fetchCartoonUploadCleanupStatus,
   fetchCartoonOrders,
   purgeOldCompletedCartoonOrders,
   rejectCartoonOrder,
   retryCartoonOrderNotifications,
+  runCartoonUploadCleanup,
   updateCartoonOrderAdminNotes,
   updateCartoonOrderStatuses,
   updateCartoonOrderWorkflow,
@@ -44,6 +46,16 @@ const NOTIFICATION_STATUS_LABELS = {
   failed: 'грешка',
 };
 
+const CLEANUP_WARNING_LABELS = {
+  uploads_older_than_24h: 'Има стари неподадени снимки',
+  cleanup_stale: 'Почистването не е прясно',
+  cleanup_failed: 'Почистването има грешка',
+  recordless_sweep_stale: 'Проверката на съхранението не е прясна',
+  recordless_sweep_failed: 'Проверката на съхранението има грешка',
+  reconciliation_stale: 'Проверката на upload квотите не е скорошна',
+  reconciliation_failed: 'Проверката на upload квотите има грешка',
+};
+
 function formatDate(value) {
   if (!value) {
     return '-';
@@ -62,6 +74,46 @@ function formatDate(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('bg-BG').format(Number(value) || 0);
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+
+  if (bytes < 1024) {
+    return `${formatNumber(bytes)} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${formatNumber(Math.round(bytes / 1024))} KB`;
+  }
+
+  return `${formatNumber(Math.round((bytes / (1024 * 1024)) * 10) / 10)} MB`;
+}
+
+function formatAgeHours(value) {
+  if (value == null) {
+    return '-';
+  }
+
+  return `${formatNumber(Math.round(Number(value) * 10) / 10)} ч`;
+}
+
+function getManualCleanupDeletedCount(result = {}) {
+  return ['unclaimed', 'claimedOrphans', 'recordlessSweep'].reduce(
+    (total, key) => total + (Number(result?.[key]?.deletedCount) || 0),
+    0
+  );
+}
+
+function getManualCleanupFailedCount(result = {}) {
+  return ['unclaimed', 'claimedOrphans', 'recordlessSweep'].reduce(
+    (total, key) => total + (Number(result?.[key]?.failedCount) || 0),
+    0
+  );
 }
 
 function getTimestamp(value) {
@@ -139,6 +191,128 @@ function NotificationStatus({ order }) {
   );
 }
 
+function CleanupRunDetails({ label, run }) {
+  if (!run) {
+    return <small>{label}: -</small>;
+  }
+
+  return (
+    <small>
+      {label}: {formatDate(run.finishedAt || run.startedAt)}, изтрити {formatNumber(run.deletedUploadCount)} / неуспешни {formatNumber(run.failedUploadCount)}
+    </small>
+  );
+}
+
+function CleanupRunSummary({ cleanupRun, recordlessRun }) {
+  return (
+    <div className={styles.healthMetric}>
+      <span>Ненужни снимки: последно чистене</span>
+      <p className={styles.metricHelp}>Показва кога са изчистени снимки, които не принадлежат към реална поръчка.</p>
+      <strong>{cleanupRun ? formatDate(cleanupRun.finishedAt || cleanupRun.startedAt) : '-'}</strong>
+      <CleanupRunDetails label="погрешно качени" run={cleanupRun} />
+      <CleanupRunDetails label="без запис" run={recordlessRun} />
+    </div>
+  );
+}
+
+function UploadCleanupHealth({
+  status,
+  loading,
+  activeAction,
+  onRefresh,
+  onRunCleanup,
+}) {
+  const warnings = Array.isArray(status?.warnings) ? status.warnings : [];
+  const isBusy = loading || Boolean(activeAction);
+
+  return (
+    <section className={styles.healthSection} aria-labelledby="upload-cleanup-health-heading">
+      <div className={styles.sectionHeading}>
+        <div>
+          <h2 id="upload-cleanup-health-heading">Статистика на ъплоднатите снимки</h2>
+        </div>
+        <div className={styles.healthActions}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={onRefresh}
+            disabled={isBusy}
+            data-action="refreshUploadCleanupStatus"
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            Обнови
+          </button>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={onRunCleanup}
+            disabled={isBusy}
+            data-action="runUploadCleanup"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+            Изтрий ненужните снимки
+          </button>
+        </div>
+      </div>
+
+      {loading && !status ? (
+        <p className={styles.emptyState}>Зареждане на статуса...</p>
+      ) : null}
+
+      {status ? (
+        <>
+          <div className={styles.healthGrid}>
+            <div className={styles.healthMetric}>
+              <span>Качени, но неподадени</span>
+              <p className={styles.metricHelp}>Снимки, качени във формата, но без изпратено запитване.</p>
+              <strong>{formatNumber(status.pendingUnclaimedUploadCount)}</strong>
+              <small>{formatBytes(status.pendingUnclaimedUploadBytes)}</small>
+            </div>
+            <div className={styles.healthMetric}>
+              <span>Най-стара неподадена</span>
+              <p className={styles.metricHelp}>От колко време стои най-старото неподадено качване.</p>
+              <strong>{formatAgeHours(status.oldestUnclaimedUploadAgeHours)}</strong>
+              <small>{formatNumber(status.uploadsOlderThan24Hours)} над 24 ч</small>
+            </div>
+            <CleanupRunSummary
+              cleanupRun={status.lastCleanupRun}
+              recordlessRun={status.lastRecordlessSweep}
+            />
+            <div className={styles.healthMetric}>
+              <span>Проверка на upload квотите</span>
+              <p className={styles.metricHelp}>Проверява дали upload броячите съвпадат с реалните снимки.</p>
+              <strong>{status.lastReconciliation ? formatDate(status.lastReconciliation.finishedAt) : '-'}</strong>
+              <small>{formatBytes(status.lastReconciliation?.repairedBytes || 0)}</small>
+            </div>
+            <div className={styles.healthMetric}>
+              <span>Засечени лимити</span>
+              <p className={styles.metricHelp}>Колко пъти защитите са ограничили запитвания или upload-и.</p>
+              <strong>{formatNumber(status.recentLimitHits?.successfulInquiry || 0)}</strong>
+              <small>{formatNumber(status.recentLimitHits?.uploadByte || 0)} upload лимита</small>
+            </div>
+          </div>
+
+          <div className={styles.healthWarnings}>
+            {warnings.length === 0 ? (
+              <span className={styles.completedBadge}>
+                <CheckCircle2 size={14} aria-hidden="true" />
+                Няма активни предупреждения
+              </span>
+            ) : (
+              warnings.map((warning) => (
+                <span key={warning} className={styles.warningBadge}>
+                  <AlertTriangle size={14} aria-hidden="true" />
+                  {CLEANUP_WARNING_LABELS[warning] || warning}
+                </span>
+              ))
+            )}
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function PhotoLinks({ order }) {
   const activePhotos = (order.photos || []).filter((photo) => !photo.deletedAt);
 
@@ -176,6 +350,8 @@ export default function CartoonOrdersClientPage() {
   const [orders, setOrders] = useState([]);
   const [notesDrafts, setNotesDrafts] = useState({});
   const [loading, setLoading] = useState(false);
+  const [cleanupStatus, setCleanupStatus] = useState(null);
+  const [cleanupStatusLoading, setCleanupStatusLoading] = useState(false);
   const [activeAction, setActiveAction] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -238,11 +414,33 @@ export default function CartoonOrdersClientPage() {
     }
   }, [isFullAdmin, syncNotesDrafts]);
 
+  const loadCleanupStatus = useCallback(async () => {
+    if (!isFullAdmin) {
+      return false;
+    }
+
+    setCleanupStatusLoading(true);
+    setError('');
+
+    try {
+      const data = await fetchCartoonUploadCleanupStatus();
+
+      setCleanupStatus(data);
+      return true;
+    } catch (err) {
+      setError(err.message || 'Неуспешно зареждане на статуса на качванията.');
+      return false;
+    } finally {
+      setCleanupStatusLoading(false);
+    }
+  }, [isFullAdmin]);
+
   useEffect(() => {
     if (!authLoading) {
       loadOrders();
+      loadCleanupStatus();
     }
-  }, [authLoading, loadOrders]);
+  }, [authLoading, loadCleanupStatus, loadOrders]);
 
   const groupedOrders = useMemo(() => {
     const inquiries = [];
@@ -451,6 +649,32 @@ export default function CartoonOrdersClientPage() {
     } catch (err) {
       await refreshAfterPartialFailure(err);
       setError(err.message || 'Неуспешно изтриване на старите изпълнени поръчки.');
+    } finally {
+      finishAction();
+    }
+  }
+
+  async function handleRunUploadCleanup() {
+    if (!window.confirm('Да се пусне ръчно почистване на шарж качванията?')) {
+      return;
+    }
+
+    startAction('runUploadCleanup');
+
+    try {
+      const result = await runCartoonUploadCleanup();
+
+      await loadCleanupStatus();
+      const deletedCount = getManualCleanupDeletedCount(result);
+      const failedCount = getManualCleanupFailedCount(result);
+
+      if (result?.status === 'partial_failure' || failedCount > 0) {
+        setError(`Почистването завърши с проблеми: ${formatNumber(deletedCount)} изтрити, ${formatNumber(failedCount)} неуспешни.`);
+        return;
+      }
+      setMessage(`Почистването завърши: ${formatNumber(deletedCount)} изтрити.`);
+    } catch (err) {
+      setError(err.message || 'Неуспешно ръчно почистване на качванията.');
     } finally {
       finishAction();
     }
@@ -852,6 +1076,14 @@ export default function CartoonOrdersClientPage() {
           Изтрий стари
         </button>
       </footer>
+
+      <UploadCleanupHealth
+        status={cleanupStatus}
+        loading={cleanupStatusLoading}
+        activeAction={activeAction}
+        onRefresh={loadCleanupStatus}
+        onRunCleanup={handleRunUploadCleanup}
+      />
     </main>
   );
 }

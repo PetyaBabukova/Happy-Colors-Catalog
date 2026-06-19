@@ -43,6 +43,7 @@ describe('/api/cartoon-orders/upload-session', () => {
     vi.stubEnv('NODE_ENV', 'test');
     vi.stubEnv('CARTOON_ORDER_UPLOAD_TOKEN_SECRET', 'test-cartoon-upload-secret');
     vi.stubEnv('NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED', 'true');
+    vi.stubEnv('CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED', 'false');
     resetCartoonUploadRateLimitsForTests();
 
     createCartoonUploadSession.mockResolvedValue({
@@ -66,6 +67,7 @@ describe('/api/cartoon-orders/upload-session', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('set-cookie')).toBeNull();
     expect(body).toMatchObject({
       sessionId: 'session-1',
       maxFiles: 5,
@@ -80,6 +82,18 @@ describe('/api/cartoon-orders/upload-session', () => {
         sessionId: 'session-1',
       })
     ).toMatchObject({ ok: true });
+  });
+
+  it('sets the browser guard cookie on session creation only when persistent guards are enabled', async () => {
+    vi.stubEnv('CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED', 'true');
+    const { POST } = await loadRoute();
+
+    const response = await POST(createPostRequest());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toContain('hc_cartoon_guard=');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    expect(response.headers.get('set-cookie')).toContain('SameSite=lax');
   });
 
   it('does not expose upload sessions while the cartoons service gate is disabled', async () => {

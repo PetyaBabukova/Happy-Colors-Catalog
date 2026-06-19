@@ -4,6 +4,7 @@ import { sendContactForm } from '@/managers/contactsManager';
 import {
   createCartoonOrder,
   createCartoonOrderUploadSession,
+  cleanupCartoonOrderUploadedPhotos,
   uploadCartoonOrderPhoto,
 } from '@/managers/cartoonOrdersManager';
 import { act, fireEvent, render, screen, waitFor } from '../test-utils.jsx';
@@ -15,6 +16,7 @@ vi.mock('@/managers/contactsManager', () => ({
 vi.mock('@/managers/cartoonOrdersManager', () => ({
   createCartoonOrder: vi.fn(),
   createCartoonOrderUploadSession: vi.fn(),
+  cleanupCartoonOrderUploadedPhotos: vi.fn(),
   uploadCartoonOrderPhoto: vi.fn(),
 }));
 
@@ -68,6 +70,10 @@ describe('ContactForm', () => {
     createCartoonOrder.mockResolvedValue({ message: 'created', orderId: 'order-1' });
     createCartoonOrderUploadSession.mockResolvedValue({
       uploadSessionToken: 'session-token',
+    });
+    cleanupCartoonOrderUploadedPhotos.mockResolvedValue({
+      deletedCount: 1,
+      failedCount: 0,
     });
     uploadCartoonOrderPhoto.mockImplementation(({ file }) => Promise.resolve({
       objectName: `cartoon-orders/reference-photos/${file.name}`,
@@ -249,6 +255,7 @@ describe('ContactForm', () => {
     });
 
     expect(createCartoonOrder).toHaveBeenCalled();
+    expect(cleanupCartoonOrderUploadedPhotos).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toHaveTextContent('Благодарим');
     expect(mockRouterPush).not.toHaveBeenCalled();
 
@@ -346,6 +353,11 @@ describe('ContactForm', () => {
     await uploadPhoto(container, buildFile({ name: 'second.jpg' }));
 
     fireEvent.click(container.querySelectorAll('button[type="button"]')[0]);
+    await waitFor(() => expect(cleanupCartoonOrderUploadedPhotos).toHaveBeenCalledWith({
+      uploadSessionToken: 'session-token',
+      uploadConfirmationTokens: ['confirmation-first.jpg'],
+    }));
+    await waitFor(() => expect(container.textContent).not.toContain('first.jpg'));
     fireEvent.click(container.querySelector('#cartoonConsent'));
     fireEvent.submit(container.querySelector('form'));
 
@@ -447,6 +459,22 @@ describe('ContactForm', () => {
 
     await waitFor(() => expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'uploaded'));
     expect(uploadCartoonOrderPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps an uploaded cartoon photo retryable when cleanup removal fails', async () => {
+    cleanupCartoonOrderUploadedPhotos.mockRejectedValueOnce(new Error('cleanup failed'));
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    await uploadPhoto(container, buildFile({ name: 'cleanup-fails.jpg' }));
+
+    fireEvent.click(container.querySelectorAll('button[type="button"]')[0]);
+
+    await waitFor(() => expect(cleanupCartoonOrderUploadedPhotos).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(container.textContent).toContain('cleanup-fails.jpg');
+      expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'uploaded');
+      expect(container.textContent).toContain('Снимката не можа да бъде премахната');
+    });
   });
 
   it('blocks submit when all cartoon photos are failed or removed', async () => {
@@ -569,7 +597,7 @@ describe('ContactForm', () => {
     });
   });
 
-  it('does not free server upload slots when a pending cartoon photo is removed locally', async () => {
+  it('cleans up a pending cartoon photo before freeing its upload slot', async () => {
     const { container } = render(<ContactForm serviceContext="cartoons" />);
     const files = Array.from({ length: 5 }, (_, index) => (
       buildFile({ name: `face-${index}.jpg` })
@@ -583,13 +611,63 @@ describe('ContactForm', () => {
 
     fireEvent.click(container.querySelectorAll('button[type="button"]')[0]);
 
-    expect(getPhotoItems(container)[0]).toHaveAttribute('data-photo-status', 'removed');
-    expect(container.textContent).toContain('face-0.jpg');
-    expect(container.querySelector('#cartoonPhotos')).toBeDisabled();
+    await waitFor(() => expect(cleanupCartoonOrderUploadedPhotos).toHaveBeenCalledWith({
+      uploadSessionToken: 'session-token',
+      uploadConfirmationTokens: ['confirmation-face-0.jpg'],
+    }));
+    await waitFor(() => expect(container.textContent).not.toContain('face-0.jpg'));
+    expect(container.querySelector('#cartoonPhotos')).not.toBeDisabled();
 
     fireEvent.click(getResetPhotosButton(container));
 
-    expect(container.querySelector('[data-testid="cartoon-photo-list"]')).not.toBeInTheDocument();
+    await waitFor(() => expect(cleanupCartoonOrderUploadedPhotos).toHaveBeenCalledTimes(2));
+    expect(cleanupCartoonOrderUploadedPhotos.mock.calls[1][0]).toMatchObject({
+      uploadSessionToken: 'session-token',
+      uploadConfirmationTokens: [
+        'confirmation-face-1.jpg',
+        'confirmation-face-2.jpg',
+        'confirmation-face-3.jpg',
+        'confirmation-face-4.jpg',
+      ],
+    });
+    await waitFor(() =>
+      expect(container.querySelector('[data-testid="cartoon-photo-list"]')).not.toBeInTheDocument()
+    );
+    expect(container.querySelector('#cartoonPhotos')).not.toBeDisabled();
+  });
+
+  it('clears local cartoon photos after partial reset cleanup progress', async () => {
+    const partialCleanupError = uploadError('partial cleanup', 409, {
+      deletedCount: 1,
+      failedCount: 1,
+    });
+
+    cleanupCartoonOrderUploadedPhotos.mockRejectedValueOnce(partialCleanupError);
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    fireEvent.change(container.querySelector('#cartoonPhotos'), {
+      target: {
+        files: [
+          buildFile({ name: 'partial-a.jpg' }),
+          buildFile({ name: 'partial-b.jpg' }),
+        ],
+      },
+    });
+
+    await waitFor(() => expect(container.textContent).toContain('partial-b.jpg'));
+
+    fireEvent.click(getResetPhotosButton(container));
+
+    await waitFor(() => expect(cleanupCartoonOrderUploadedPhotos).toHaveBeenCalledWith({
+      uploadSessionToken: 'session-token',
+      uploadConfirmationTokens: [
+        'confirmation-partial-a.jpg',
+        'confirmation-partial-b.jpg',
+      ],
+    }));
+    await waitFor(() =>
+      expect(container.querySelector('[data-testid="cartoon-photo-list"]')).not.toBeInTheDocument()
+    );
     expect(container.querySelector('#cartoonPhotos')).not.toBeDisabled();
   });
 

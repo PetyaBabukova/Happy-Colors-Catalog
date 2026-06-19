@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CartoonOrdersClientPage from '@/app/cartoon-orders/CartoonOrdersClientPage';
 import {
   completeCartoonOrder,
+  fetchCartoonUploadCleanupStatus,
   fetchCartoonOrders,
   purgeOldCompletedCartoonOrders,
   rejectCartoonOrder,
   retryCartoonOrderNotifications,
+  runCartoonUploadCleanup,
   updateCartoonOrderAdminNotes,
   updateCartoonOrderStatuses,
   updateCartoonOrderWorkflow,
@@ -14,10 +16,12 @@ import { fireEvent, render, screen, waitFor, within } from '../test-utils.jsx';
 
 vi.mock('@/managers/cartoonOrdersManager', () => ({
   completeCartoonOrder: vi.fn(),
+  fetchCartoonUploadCleanupStatus: vi.fn(),
   fetchCartoonOrders: vi.fn(),
   purgeOldCompletedCartoonOrders: vi.fn(),
   rejectCartoonOrder: vi.fn(),
   retryCartoonOrderNotifications: vi.fn(),
+  runCartoonUploadCleanup: vi.fn(),
   updateCartoonOrderAdminNotes: vi.fn(),
   updateCartoonOrderStatuses: vi.fn(),
   updateCartoonOrderWorkflow: vi.fn(),
@@ -73,6 +77,59 @@ function buildOrder(overrides = {}) {
     archivedAt: null,
     createdAt: '2026-06-05T10:00:00.000Z',
     updatedAt: '2026-06-05T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function buildCleanupStatus(overrides = {}) {
+  return {
+    generatedAt: '2026-06-07T12:00:00.000Z',
+    pendingUnclaimedUploadCount: 2,
+    pendingUnclaimedUploadBytes: 3000,
+    oldestUnclaimedUploadAgeHours: 25.5,
+    uploadsOlderThan24Hours: 1,
+    lastCleanupRun: {
+      runType: 'unclaimed_upload_cleanup',
+      startedAt: '2026-06-07T11:00:00.000Z',
+      finishedAt: '2026-06-07T11:01:00.000Z',
+      status: 'success',
+      retentionHours: 24,
+      candidateUploadCount: 2,
+      deletedUploadCount: 2,
+      failedUploadCount: 0,
+      skippedLockedCount: 0,
+      skippedOrderLinkedCount: 0,
+      skippedUnsafeCount: 0,
+      oldestDeletedAgeHours: 30,
+      errorCategory: 'none',
+    },
+    lastRecordlessSweep: {
+      runType: 'recordless_sweep',
+      startedAt: '2026-06-07T10:00:00.000Z',
+      finishedAt: '2026-06-07T10:01:00.000Z',
+      status: 'success',
+      retentionHours: 24,
+      candidateUploadCount: 0,
+      deletedUploadCount: 0,
+      failedUploadCount: 0,
+      skippedLockedCount: 0,
+      skippedOrderLinkedCount: 0,
+      skippedUnsafeCount: 0,
+      oldestDeletedAgeHours: null,
+      errorCategory: 'none',
+    },
+    lastReconciliation: {
+      startedAt: '2026-06-07T09:00:00.000Z',
+      finishedAt: '2026-06-07T09:01:00.000Z',
+      status: 'success',
+      repairedCounterCount: 1,
+      repairedBytes: 1024,
+    },
+    recentLimitHits: {
+      successfulInquiry: 3,
+      uploadByte: 4,
+    },
+    warnings: ['uploads_older_than_24h'],
     ...overrides,
   };
 }
@@ -136,6 +193,11 @@ function renderAdmin() {
 describe('CartoonOrdersClientPage', () => {
   beforeEach(() => {
     fetchCartoonOrders.mockResolvedValue(initialOrders);
+    fetchCartoonUploadCleanupStatus.mockResolvedValue(buildCleanupStatus());
+    runCartoonUploadCleanup.mockResolvedValue({
+      status: 'success',
+      unclaimed: { deletedCount: 2 },
+    });
     updateCartoonOrderWorkflow.mockImplementation((orderId, workflowStatus) => {
       const source = [inquiryNewest, waitingOlder, orderOld, orderNew].find(
         (order) => order._id === orderId
@@ -202,6 +264,7 @@ describe('CartoonOrdersClientPage', () => {
 
     expect(screen.getByText(/full admin/)).toBeInTheDocument();
     expect(fetchCartoonOrders).not.toHaveBeenCalled();
+    expect(fetchCartoonUploadCleanupStatus).not.toHaveBeenCalled();
   });
 
   it('renders all three workflow sections and completed orders by default', async () => {
@@ -489,7 +552,7 @@ describe('CartoonOrdersClientPage', () => {
     renderAdmin();
 
     expect(await screen.findByText('Backend down')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Обнови' }));
+    fireEvent.click(document.querySelector('[data-action="refresh"]'));
 
     expect(await screen.findByText('Newest Inquiry')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Backend down')).not.toBeInTheDocument());
@@ -523,6 +586,57 @@ describe('CartoonOrdersClientPage', () => {
     await waitFor(() => expect(fetchCartoonOrders).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Снимките не са изтрити напълно.')).toBeInTheDocument();
     expect(screen.getByText('Нужно внимание')).toBeInTheDocument();
+  });
+
+  it('renders aggregate upload cleanup health without private metadata', async () => {
+    const { container } = renderAdmin();
+
+    expect(await screen.findByText('Статистика на ъплоднатите снимки')).toBeInTheDocument();
+    expect(screen.getByText('Ненужни снимки: последно чистене')).toBeInTheDocument();
+    expect(screen.getByText('Снимки, качени във формата, но без изпратено запитване.')).toBeInTheDocument();
+    expect(screen.getByText('Проверява дали upload броячите съвпадат с реалните снимки.')).toBeInTheDocument();
+    expect(screen.getByText('Колко пъти защитите са ограничили запитвания или upload-и.')).toBeInTheDocument();
+    expect(screen.getByText(/погрешно качени:/)).toBeInTheDocument();
+    expect(screen.getByText(/без запис:/)).toBeInTheDocument();
+    expect(screen.getByText('3 KB')).toBeInTheDocument();
+    expect(screen.getByText('4 upload лимита')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/cartoon-orders\/reference-photos/);
+    expect(container.textContent).not.toMatch(/cartoon-session-/);
+  });
+
+  it('runs manual upload cleanup and refreshes the health status', async () => {
+    fetchCartoonUploadCleanupStatus
+      .mockResolvedValueOnce(buildCleanupStatus())
+      .mockResolvedValueOnce(buildCleanupStatus({
+        pendingUnclaimedUploadCount: 0,
+        pendingUnclaimedUploadBytes: 0,
+        oldestUnclaimedUploadAgeHours: null,
+        uploadsOlderThan24Hours: 0,
+        warnings: [],
+      }));
+    renderAdmin();
+
+    await screen.findByText('Статистика на ъплоднатите снимки');
+    fireEvent.click(document.querySelector('[data-action="runUploadCleanup"]'));
+
+    await waitFor(() => expect(runCartoonUploadCleanup).toHaveBeenCalledWith());
+    await waitFor(() => expect(fetchCartoonUploadCleanupStatus).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/Почистването завърши:/)).toBeInTheDocument();
+  });
+
+  it('shows manual upload cleanup partial failures as an error', async () => {
+    runCartoonUploadCleanup.mockResolvedValueOnce({
+      status: 'partial_failure',
+      unclaimed: { deletedCount: 1, failedCount: 1 },
+      claimedOrphans: { deletedCount: 0, failedCount: 0 },
+      recordlessSweep: { deletedCount: 0, failedCount: 0 },
+    });
+    renderAdmin();
+
+    await screen.findByText('Статистика на ъплоднатите снимки');
+    fireEvent.click(document.querySelector('[data-action="runUploadCleanup"]'));
+
+    expect(await screen.findByText(/Почистването завърши с проблеми:/)).toBeInTheDocument();
   });
 
   it('does not render unexpected private metadata from order payloads', async () => {

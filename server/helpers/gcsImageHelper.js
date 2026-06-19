@@ -265,6 +265,64 @@ export async function deleteGcsObjectByName(objectName, { throwOnError = false }
   }
 }
 
+export async function listCartoonOrderPhotoObjects({ limit = 1000 } = {}) {
+  const bucketName = getCartoonOrdersBucketName();
+
+  if (!bucketName) {
+    return {
+      ok: false,
+      objects: [],
+      errorCategory: 'bucket_not_configured',
+    };
+  }
+
+  try {
+    const totalLimit = Math.max(Math.floor(Number(limit) || 1000), 1);
+    const bucket = getCartoonOrdersStorage().bucket(bucketName);
+    const files = [];
+    let pageToken;
+
+    do {
+      const remaining = totalLimit - files.length;
+      const pageSize = Math.min(remaining, 1000);
+      const [pageFiles, nextQuery] = await bucket.getFiles({
+        autoPaginate: false,
+        maxResults: pageSize,
+        pageToken,
+        prefix: `${CARTOON_ORDER_PHOTO_PREFIX}/`,
+      });
+
+      files.push(...pageFiles.slice(0, remaining));
+      pageToken = nextQuery?.pageToken || null;
+    } while (pageToken && files.length < totalLimit);
+
+    return {
+      ok: true,
+      objects: files
+        .map((file) => ({
+          objectName: String(file?.name || '').trim(),
+          updatedAt: file?.metadata?.updated
+            ? new Date(file.metadata.updated)
+            : file?.metadata?.timeCreated
+              ? new Date(file.metadata.timeCreated)
+              : null,
+        }))
+        .filter((object) => object.objectName),
+      errorCategory: 'none',
+    };
+  } catch (error) {
+    const classified = classifyStorageError(error);
+
+    return {
+      ok: false,
+      objects: [],
+      errorCategory: classified.errorCategory === 'permission_denied'
+        ? 'storage_permission_denied'
+        : 'recordless_sweep_unavailable',
+    };
+  }
+}
+
 export function extractObjectNameFromGcsUrl(assetUrl) {
   if (!assetUrl) {
     return null;

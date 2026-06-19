@@ -51,6 +51,8 @@ describe('apiRouteOwnership', () => {
     '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo_abc-123_DEF',
     '/api/cartoon-orders/665f1f77bcf86cd799439011/notifications/retry',
     '/api/cartoon-orders/purge-old-completed',
+    '/api/cartoon-orders/upload-cleanup/status',
+    '/api/cartoon-orders/upload-cleanup/run',
   ])('routes backend-owned path %s to Express', (path) => {
     expect(isBackendApiPath(path)).toBe(true);
   });
@@ -70,6 +72,7 @@ describe('apiRouteOwnership', () => {
     '/api/offices/econt',
     '/api/cartoon-orders/upload-session',
     '/api/cartoon-orders/uploads',
+    '/api/cartoon-orders/uploads/cleanup',
   ])('routes Next-owned path %s away from Express', (path) => {
     expect(isBackendApiPath(path)).toBe(false);
   });
@@ -86,6 +89,7 @@ describe('apiRouteOwnership', () => {
     '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/../secret',
     '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo.with.dot',
     '/api/cartoon-orders/upload-session/refresh',
+    '/api/cartoon-orders/uploads/cleanup',
   ])('does not treat similar prefix %s as backend-owned', (path) => {
     expect(isBackendApiPath(path)).toBe(false);
   });
@@ -101,9 +105,12 @@ describe('apiRouteOwnership', () => {
     expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo_abc-123_DEF')).toBe(true);
     expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/notifications/retry')).toBe(true);
     expect(isBackendApiPath('/api/cartoon-orders/purge-old-completed')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/upload-cleanup/status')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/upload-cleanup/run')).toBe(true);
 
     expect(isBackendApiPath('/api/cartoon-orders/upload-session')).toBe(false);
     expect(isBackendApiPath('/api/cartoon-orders/uploads')).toBe(false);
+    expect(isBackendApiPath('/api/cartoon-orders/uploads/cleanup')).toBe(false);
     expect(isBackendApiPath('/api/cartoon-orders/future-next-route')).toBe(false);
   });
 
@@ -124,10 +131,13 @@ describe('apiRouteOwnership', () => {
     expect(BACKEND_API_EXACT_PATHS).toEqual([
       '/api/cartoon-orders',
       '/api/cartoon-orders/purge-old-completed',
+      '/api/cartoon-orders/upload-cleanup/status',
+      '/api/cartoon-orders/upload-cleanup/run',
     ]);
     expect(NEXT_API_EXACT_PATHS).toEqual([
       '/api/cartoon-orders/upload-session',
       '/api/cartoon-orders/uploads',
+      '/api/cartoon-orders/uploads/cleanup',
     ]);
   });
 

@@ -111,6 +111,14 @@ const nextConfig = {
         destination: `${backendBaseUrl}/cartoon-orders/purge-old-completed`,
       },
       {
+        source: '/api/cartoon-orders/upload-cleanup/status',
+        destination: `${backendBaseUrl}/cartoon-orders/upload-cleanup/status`,
+      },
+      {
+        source: '/api/cartoon-orders/upload-cleanup/run',
+        destination: `${backendBaseUrl}/cartoon-orders/upload-cleanup/run`,
+      },
+      {
         source: '/api/newsletter/:path*',
         destination: `${backendBaseUrl}/newsletter/:path*`,
       },

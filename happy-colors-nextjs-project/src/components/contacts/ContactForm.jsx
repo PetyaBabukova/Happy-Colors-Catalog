@@ -14,6 +14,7 @@ import { sendContactForm } from '../../managers/contactsManager';
 import {
   createCartoonOrder,
   createCartoonOrderUploadSession,
+  cleanupCartoonOrderUploadedPhotos,
   uploadCartoonOrderPhoto,
 } from '../../managers/cartoonOrdersManager';
 import {
@@ -39,6 +40,10 @@ const PHOTO_STATUS_LABELS = {
   removed: 'Премахната',
   stale: 'Изтекла сесия',
 };
+const PHOTO_CLEANUP_ERROR_MESSAGE =
+  '\u0421\u043d\u0438\u043c\u043a\u0430\u0442\u0430 \u043d\u0435 \u043c\u043e\u0436\u0430 \u0434\u0430 \u0431\u044a\u0434\u0435 \u043f\u0440\u0435\u043c\u0430\u0445\u043d\u0430\u0442\u0430. \u041c\u043e\u043b\u044f, \u043e\u043f\u0438\u0442\u0430\u0439\u0442\u0435 \u043e\u0442\u043d\u043e\u0432\u043e.';
+const PHOTO_REMOVING_LABEL =
+  '\u041f\u0440\u0435\u043c\u0430\u0445\u0432\u0430\u043d\u0435...';
 
 function createPhotoItem(file, id) {
   return {
@@ -79,6 +84,10 @@ function isUploadSessionResetError(err) {
   );
 }
 
+function hasPartialCleanupProgress(err) {
+  return Number(err?.data?.deletedCount) > 0 && Number(err?.data?.failedCount) > 0;
+}
+
 export default function ContactForm({ product, productId = null, serviceContext = '' }) {
   const resolvedProductId = product?._id || productId;
   const isCartoonInquiry = serviceContext === 'cartoons';
@@ -105,6 +114,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
   const [cartoonPhotoSlotsUsed, setCartoonPhotoSlotsUsed] = useState(0);
   const [photoError, setPhotoError] = useState('');
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isCleaningPhotos, setIsCleaningPhotos] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [website, setWebsite] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -115,12 +125,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
   const uploadedCartoonPhotos = cartoonPhotoItems
     .filter((photo) => photo.status === 'uploaded' && photo.uploadedPhoto)
     .map((photo) => photo.uploadedPhoto);
-  const hasStaleCartoonPhotos = cartoonPhotoItems.some((photo) => photo.status === 'stale');
-  const hasRemovedCartoonPhotos = cartoonPhotoItems.some((photo) => photo.status === 'removed');
-  const canResetCartoonPhotos = hasStaleCartoonPhotos || hasRemovedCartoonPhotos || (
-    cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS &&
-    uploadedCartoonPhotos.length < MAX_CARTOON_ORDER_PHOTOS
-  );
+  const canResetCartoonPhotos = cartoonPhotoItems.length > 0;
   const hasCartoonRequiredFields =
     !isCartoonInquiry ||
     (
@@ -131,7 +136,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
       consentAccepted
     );
   const isSubmitDisabled =
-    isSubmitting || isUploadingPhotos || !hasCartoonRequiredFields;
+    isSubmitting || isUploadingPhotos || isCleaningPhotos || !hasCartoonRequiredFields;
   const showCartoonSuccessPopup =
     isCartoonInquiry && notificationMessage && notificationType === 'success';
 
@@ -336,16 +341,65 @@ export default function ContactForm({ product, productId = null, serviceContext 
     }
   };
 
-  const removeCartoonPhoto = (photoId) => {
-    updateCartoonPhotoItem(photoId, {
-      status: 'removed',
-      error: '',
-      uploadedPhoto: null,
+  const cleanupUploadedCartoonPhotos = async (uploadedPhotos) => {
+    const uploadConfirmationTokens = uploadedPhotos
+      .map((photo) => photo?.uploadConfirmationToken)
+      .filter(Boolean);
+
+    if (uploadConfirmationTokens.length === 0) {
+      return;
+    }
+
+    const result = await cleanupCartoonOrderUploadedPhotos({
+      uploadSessionToken: uploadSessionTokenRef.current,
+      uploadConfirmationTokens,
     });
-    setPhotoError('');
+
+    if (Number(result?.failedCount) > 0) {
+      const error = new Error(PHOTO_CLEANUP_ERROR_MESSAGE);
+
+      error.data = result;
+      throw error;
+    }
   };
 
-  const resetCartoonOrderState = () => {
+  const removeCartoonPhoto = async (photoId) => {
+    const photoItem = cartoonPhotoItems.find((photo) => photo.id === photoId);
+
+    if (!photoItem || photoItem.status === 'uploading' || photoItem.status === 'removing') {
+      return;
+    }
+
+    setPhotoError('');
+
+    if (!photoItem.uploadedPhoto) {
+      setCartoonPhotoItems((currentPhotos) => (
+        currentPhotos.filter((photo) => photo.id !== photoId)
+      ));
+      return;
+    }
+
+    updateCartoonPhotoItem(photoId, { status: 'removing', error: '' });
+    setIsCleaningPhotos(true);
+
+    try {
+      await cleanupUploadedCartoonPhotos([photoItem.uploadedPhoto]);
+      setCartoonPhotoItems((currentPhotos) => (
+        currentPhotos.filter((photo) => photo.id !== photoId)
+      ));
+      setCartoonPhotoSlotsUsed((currentCount) => Math.max(currentCount - 1, 0));
+    } catch {
+      updateCartoonPhotoItem(photoId, {
+        status: 'uploaded',
+        error: PHOTO_CLEANUP_ERROR_MESSAGE,
+      });
+      setPhotoError(PHOTO_CLEANUP_ERROR_MESSAGE);
+    } finally {
+      setIsCleaningPhotos(false);
+    }
+  };
+
+  const clearCartoonOrderLocalState = () => {
     clearCartoonUploadSession();
     setCartoonPhotoItems([]);
     setCartoonPhotoSlotsUsed(0);
@@ -354,10 +408,41 @@ export default function ContactForm({ product, productId = null, serviceContext 
     setWebsite('');
   };
 
+  const cleanupAndResetCartoonOrderState = async () => {
+    if (isCleaningPhotos || isUploadingPhotos || isSubmitting) {
+      return;
+    }
+
+    const uploadedPhotos = cartoonPhotoItems
+      .filter((photo) => photo.status === 'uploaded' && photo.uploadedPhoto)
+      .map((photo) => photo.uploadedPhoto);
+
+    if (uploadedPhotos.length === 0) {
+      clearCartoonOrderLocalState();
+      return;
+    }
+
+    setPhotoError('');
+    setIsCleaningPhotos(true);
+
+    try {
+      await cleanupUploadedCartoonPhotos(uploadedPhotos);
+      clearCartoonOrderLocalState();
+    } catch (err) {
+      if (hasPartialCleanupProgress(err)) {
+        clearCartoonOrderLocalState();
+      }
+
+      setPhotoError(PHOTO_CLEANUP_ERROR_MESSAGE);
+    } finally {
+      setIsCleaningPhotos(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (isSubmitting || isUploadingPhotos) {
+    if (isSubmitting || isUploadingPhotos || isCleaningPhotos) {
       return;
     }
 
@@ -433,7 +518,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
       setNotificationType('success');
       resetForm();
       if (isCartoonInquiry) {
-        resetCartoonOrderState();
+        clearCartoonOrderLocalState();
       }
     } catch (err) {
       if (isCartoonInquiry && err?.status === 409) {
@@ -548,7 +633,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                 accept={ALLOWED_CARTOON_ORDER_PHOTO_MIME_TYPES.join(',')}
                 multiple
                 onChange={handleCartoonPhotoSelection}
-                disabled={isUploadingPhotos || cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS}
+                disabled={isUploadingPhotos || isCleaningPhotos || cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS}
               />
               <p className={styles.fieldHint}>
                 До {MAX_CARTOON_ORDER_PHOTOS} снимки, всяка до {cartoonPhotoMaxSizeMb} MB. Поддържани формати: JPG, PNG, WEBP.
@@ -558,6 +643,9 @@ export default function ContactForm({ product, productId = null, serviceContext 
               )}
               {isUploadingPhotos && (
                 <p className={styles.videoInlineStatus}>Качване...</p>
+              )}
+              {isCleaningPhotos && (
+                <p className={styles.videoInlineStatus}>{PHOTO_REMOVING_LABEL}</p>
               )}
               {cartoonPhotoItems.length > 0 && (
                 <ul className={styles.videoPreviewList} data-testid="cartoon-photo-list">
@@ -570,7 +658,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                       <div className={styles.videoPreviewContent}>
                         <strong>{getPhotoDisplayName(photo)}</strong>
                         <p>
-                          {photo.contentType || 'image'} · {formatPhotoSize(photo.size)} · {PHOTO_STATUS_LABELS[photo.status]}
+                          {photo.contentType || 'image'} · {formatPhotoSize(photo.size)} · {PHOTO_STATUS_LABELS[photo.status] || PHOTO_REMOVING_LABEL}
                         </p>
                         {photo.error && (
                           <p className={styles.errorHint}>{photo.error}</p>
@@ -581,7 +669,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                           <button
                             type="button"
                             onClick={() => retryCartoonPhoto(photo.id)}
-                            disabled={isSubmitting || isUploadingPhotos}
+                            disabled={isSubmitting || isUploadingPhotos || isCleaningPhotos}
                           >
                             Опитай пак
                           </button>
@@ -590,7 +678,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                           <button
                             type="button"
                             onClick={() => removeCartoonPhoto(photo.id)}
-                            disabled={isSubmitting || photo.status === 'uploading'}
+                            disabled={isSubmitting || isCleaningPhotos || photo.status === 'uploading' || photo.status === 'removing'}
                           >
                             Премахни
                           </button>
@@ -604,7 +692,8 @@ export default function ContactForm({ product, productId = null, serviceContext 
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={resetCartoonOrderState}
+                  onClick={cleanupAndResetCartoonOrderState}
+                  disabled={isSubmitting || isUploadingPhotos || isCleaningPhotos}
                 >
                   Избери снимките отново
                 </button>

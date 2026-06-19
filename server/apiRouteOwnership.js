@@ -15,11 +15,14 @@ export const BACKEND_API_PREFIXES = Object.freeze([
 export const BACKEND_API_EXACT_PATHS = Object.freeze([
   '/api/cartoon-orders',
   '/api/cartoon-orders/purge-old-completed',
+  '/api/cartoon-orders/upload-cleanup/status',
+  '/api/cartoon-orders/upload-cleanup/run',
 ]);
 
 export const NEXT_API_EXACT_PATHS = Object.freeze([
   '/api/cartoon-orders/upload-session',
   '/api/cartoon-orders/uploads',
+  '/api/cartoon-orders/uploads/cleanup',
 ]);
 
 const CARTOON_ORDER_ADMIN_API_PATH_RE =

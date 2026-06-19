@@ -3,10 +3,13 @@ import {
   completeCartoonOrder,
   createCartoonOrder,
   createCartoonOrderUploadSession,
+  cleanupCartoonOrderUploadedPhotos,
+  fetchCartoonUploadCleanupStatus,
   fetchCartoonOrders,
   purgeOldCompletedCartoonOrders,
   rejectCartoonOrder,
   retryCartoonOrderNotifications,
+  runCartoonUploadCleanup,
   updateCartoonOrderAdminNotes,
   updateCartoonOrderStatuses,
   updateCartoonOrderWorkflow,
@@ -77,6 +80,33 @@ describe('cartoonOrdersManager', () => {
     const formData = fetch.mock.calls[0][1].body;
     expect(formData.get('uploadSessionToken')).toBe('session-token');
     expect(formData.get('file')).toBe(file);
+  });
+
+  it('cleans up cartoon order uploaded photos with confirmation tokens', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: { deletedCount: 2, failedCount: 0 },
+    }));
+
+    await expect(cleanupCartoonOrderUploadedPhotos({
+      uploadSessionToken: 'session-token',
+      uploadConfirmationTokens: ['confirmation-1', 'confirmation-2'],
+    })).resolves.toEqual({ deletedCount: 2, failedCount: 0 });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/cartoon-orders/uploads/cleanup',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          uploadSessionToken: 'session-token',
+          uploadConfirmationTokens: ['confirmation-1', 'confirmation-2'],
+        }),
+      })
+    );
   });
 
   it('creates a cartoon order through the backend API', async () => {
@@ -226,6 +256,53 @@ describe('cartoonOrdersManager', () => {
         method: 'POST',
         credentials: 'include',
         cache: 'no-store',
+      }
+    );
+  });
+
+  it('fetches cartoon upload cleanup status as a full-admin request', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: {
+        pendingUnclaimedUploadCount: 1,
+        warnings: [],
+      },
+    }));
+
+    await expect(fetchCartoonUploadCleanupStatus()).resolves.toEqual({
+      pendingUnclaimedUploadCount: 1,
+      warnings: [],
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/upload-cleanup/status',
+      {
+        credentials: 'include',
+        cache: 'no-store',
+      }
+    );
+  });
+
+  it('runs cartoon upload cleanup as a full-admin mutation', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      body: {
+        status: 'success',
+        unclaimed: { deletedCount: 2 },
+      },
+    }));
+
+    await expect(runCartoonUploadCleanup()).resolves.toEqual({
+      status: 'success',
+      unclaimed: { deletedCount: 2 },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/cartoon-orders/upload-cleanup/run',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify({ recordlessSweep: true }),
       }
     );
   });

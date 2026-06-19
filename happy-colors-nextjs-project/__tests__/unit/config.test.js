@@ -146,6 +146,9 @@ describe('config baseURL', () => {
         expect.objectContaining({
           source: '/api/cartoon-orders/uploads',
         }),
+        expect.objectContaining({
+          source: '/api/cartoon-orders/uploads/cleanup',
+        }),
       ])
     );
     expect(rewrites).not.toEqual(

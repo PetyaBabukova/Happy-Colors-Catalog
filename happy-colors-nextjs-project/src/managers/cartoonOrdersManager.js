@@ -157,6 +157,33 @@ export async function purgeOldCompletedCartoonOrders() {
   );
 }
 
+export async function fetchCartoonUploadCleanupStatus() {
+  const response = await fetch(`${baseURL}/cartoon-orders/upload-cleanup/status`, {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  return assertCartoonOrderResponse(
+    response,
+    'Cartoon upload cleanup status could not be loaded.'
+  );
+}
+
+export async function runCartoonUploadCleanup({ recordlessSweep = true } = {}) {
+  const response = await fetch(`${baseURL}/cartoon-orders/upload-cleanup/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    cache: 'no-store',
+    body: JSON.stringify({ recordlessSweep }),
+  });
+
+  return assertCartoonOrderResponse(
+    response,
+    'Cartoon upload cleanup could not be run.'
+  );
+}
+
 export async function completeCartoonOrder(orderId) {
   const response = await fetch(`${baseURL}/cartoon-orders/${orderId}/complete`, {
     method: 'POST',
@@ -199,6 +226,35 @@ export async function uploadCartoonOrderPhoto({ file, uploadSessionToken }) {
   if (!response.ok) {
     throw createManagerError(
       data?.message || 'Cartoon order upload failed.',
+      response,
+      data
+    );
+  }
+
+  return data;
+}
+
+export async function cleanupCartoonOrderUploadedPhotos({
+  uploadSessionToken,
+  uploadConfirmationTokens,
+}) {
+  const response = await fetch('/api/cartoon-orders/uploads/cleanup', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      uploadSessionToken,
+      uploadConfirmationTokens,
+    }),
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw createManagerError(
+      data?.message || 'Cartoon order upload cleanup failed.',
       response,
       data
     );

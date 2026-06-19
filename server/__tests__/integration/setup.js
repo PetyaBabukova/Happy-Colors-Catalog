@@ -17,6 +17,11 @@ vi.mock('../../helpers/gcsImageHelper.js', () => {
   return {
     deleteImageFromGCS: vi.fn().mockResolvedValue(undefined),
     deleteGcsObjectByName: vi.fn().mockResolvedValue(undefined),
+    listCartoonOrderPhotoObjects: vi.fn(async () => ({
+      ok: true,
+      objects: [],
+      errorCategory: 'none',
+    })),
     getBucketName,
     getCartoonOrdersBucketName: vi.fn(() => 'test-bucket'),
     getSafeCartoonPhotoStorageContext: vi.fn(() => ({

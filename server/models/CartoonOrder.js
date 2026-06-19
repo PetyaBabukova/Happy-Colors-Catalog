@@ -170,6 +170,10 @@ const cartoonOrderSchema = new mongoose.Schema(
       trim: true,
       maxlength: 300,
     },
+    abuseGuardReservationIds: {
+      type: [String],
+      default: [],
+    },
     requiresAdminAttention: {
       type: Boolean,
       default: false,
@@ -204,6 +208,7 @@ cartoonOrderSchema.index({ archivedAt: 1, createdAt: -1 }, { background: true })
 cartoonOrderSchema.index({ completedAt: 1, createdAt: -1 }, { background: true });
 cartoonOrderSchema.index({ workflowStatus: 1, createdAt: -1 }, { background: true });
 cartoonOrderSchema.index({ 'customer.email': 1, createdAt: -1 }, { background: true });
+cartoonOrderSchema.index({ abuseGuardReservationIds: 1 }, { background: true });
 cartoonOrderSchema.index(
   { 'photos.objectName': 1 },
   {

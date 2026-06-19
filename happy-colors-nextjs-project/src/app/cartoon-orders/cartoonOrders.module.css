@@ -42,6 +42,11 @@
   margin-top: 1.5rem;
 }
 
+.healthSection {
+  margin-top: 1.5rem;
+  padding-top: 0.25rem;
+}
+
 .sectionHeading {
   padding-bottom: 0.55rem;
   border-bottom: 2px solid #2f5d50;
@@ -244,6 +249,67 @@
   align-items: start;
 }
 
+.healthActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.healthGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid #b8c5bf;
+  background: #fff;
+}
+
+.healthMetric {
+  min-width: 0;
+  padding: 0.7rem;
+  border-right: 1px solid #d7dfdb;
+  border-bottom: 1px solid #d7dfdb;
+}
+
+.healthMetric:nth-child(5n) {
+  border-right: 0;
+}
+
+.healthMetric span,
+.healthMetric strong,
+.healthMetric small {
+  display: block;
+}
+
+.healthMetric span {
+  color: #53645c;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.healthMetric strong {
+  margin-top: 0.25rem;
+  font-size: 1.05rem;
+}
+
+.healthMetric small {
+  margin-top: 0.2rem;
+  color: #65736c;
+}
+
+.metricHelp {
+  margin: 0.25rem 0 0;
+  color: #65736c;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.healthWarnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.65rem 0;
+}
+
 .primaryButton,
 .secondaryButton,
 .completeButton,
@@ -365,5 +431,23 @@
 
   .header h1 {
     font-size: 1.65rem;
+  }
+
+  .healthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .healthMetric:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 1080px) and (min-width: 761px) {
+  .healthGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .healthMetric:nth-child(3n) {
+    border-right: 0;
   }
 }

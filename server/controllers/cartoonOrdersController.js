@@ -5,6 +5,7 @@ import { requireTrustedOrigin } from '../middlewares/trustedOrigin.js';
 import {
   completeCartoonOrder,
   createCartoonOrder,
+  getCartoonUploadCleanupStatus,
   getCartoonOrderById,
   getCartoonOrderPhotoAccess,
   getCartoonOrderPhotoDiagnostics,
@@ -12,6 +13,7 @@ import {
   purgeOldCompletedCartoonOrders,
   rejectCartoonOrder,
   retryCartoonOrderNotifications,
+  runCartoonUploadCleanupNow,
   updateCartoonOrderAdminNotes,
   updateCartoonOrderStatuses,
   updateCartoonOrderWorkflow,
@@ -46,6 +48,14 @@ const cartoonOrdersPhotoAccessLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
   max: 120,
   message: 'Too many cartoon order photo access requests. Please try again later.',
+  keyGenerator: (req, clientIp) => req.user?._id || clientIp,
+});
+
+const cartoonOrdersCleanupRunLimiter = createRateLimiter({
+  keyPrefix: 'cartoon-orders-upload-cleanup-run',
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  message: 'Too many cartoon upload cleanup requests. Please try again later.',
   keyGenerator: (req, clientIp) => req.user?._id || clientIp,
 });
 
@@ -102,6 +112,41 @@ router.get('/', requireAuth, requireFullAdmin, async (req, res) => {
     return sendError(res, err);
   }
 });
+
+router.get('/upload-cleanup/status', requireAuth, requireFullAdmin, async (req, res) => {
+  try {
+    const status = await getCartoonUploadCleanupStatus();
+
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json(status);
+  } catch (err) {
+    res.setHeader('Cache-Control', 'no-store');
+    return sendError(res, err);
+  }
+});
+
+router.post(
+  '/upload-cleanup/run',
+  requireAuth,
+  requireFullAdmin,
+  requireTrustedOrigin,
+  cartoonOrdersCleanupRunLimiter,
+  async (req, res) => {
+    try {
+      const result = await runCartoonUploadCleanupNow({
+        limit: req.body?.limit,
+        recordlessSweep: req.body?.recordlessSweep !== false,
+        reconcileByteGauge: req.body?.reconcileByteGauge === true,
+      });
+
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(result.status === 'partial_failure' ? 207 : 200).json(result);
+    } catch (err) {
+      res.setHeader('Cache-Control', 'no-store');
+      return sendError(res, err);
+    }
+  }
+);
 
 router.get('/:orderId', requireAuth, requireFullAdmin, async (req, res) => {
   try {
@@ -290,7 +335,7 @@ router.post(
   cartoonOrdersCreateLimiter,
   async (req, res) => {
     try {
-      const result = await createCartoonOrder(req.body);
+      const result = await createCartoonOrder(req.body, { req, res });
 
       return res.status(result.statusCode).json(result.body);
     } catch (err) {

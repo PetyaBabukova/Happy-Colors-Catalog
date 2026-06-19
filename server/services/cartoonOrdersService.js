@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import crypto from 'node:crypto';
+import CartoonGuardLimitMetric from '../models/CartoonGuardLimitMetric.js';
 import CartoonOrder from '../models/CartoonOrder.js';
+import CartoonUploadCleanupRun from '../models/CartoonUploadCleanupRun.js';
 import CartoonUploadSession from '../models/CartoonUploadSession.js';
 import Product from '../models/Product.js';
 import { sendEmail } from '../helpers/sendEmail.js';
@@ -16,7 +18,23 @@ import {
   deleteGcsObjectByName,
   getSafeCartoonPhotoStorageContext,
   isCartoonOrderPhotoObjectName,
+  listCartoonOrderPhotoObjects,
 } from '../helpers/gcsImageHelper.js';
+import {
+  createBrowserGuardCookieValue,
+  getBrowserGuardCookieName,
+  getBrowserGuardCookieOptions,
+  getTrustedClientIpFromExpressRequest,
+} from '../helpers/cartoonUploadGuards.js';
+import { normalizeCartoonUploadCleanupCategory } from '../helpers/cartoonUploadGuardConstants.js';
+import {
+  confirmGuardReservationGroup,
+  decrementUploadByteGaugeForGuardRefs,
+  expireStalePersistentGuardReservations,
+  reconcileUploadByteGaugeCounters,
+  releaseGuardReservationGroup,
+  reserveSuccessfulInquiryGuard,
+} from './cartoonPersistentGuardsService.js';
 import {
   ALLOWED_CARTOON_ORDER_PHOTO_MIME_TYPES,
   MAX_CARTOON_ORDER_PHOTO_SIZE_BYTES,
@@ -36,9 +54,12 @@ class CartoonOrderError extends Error {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HTML_RE = /<[^>]*>/;
 const ADMIN_ORDER_PHOTO_READ_URL_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_UNCLAIMED_UPLOAD_RETENTION_DAYS = 14;
+const DEFAULT_UNCLAIMED_UPLOAD_RETENTION_DAYS = 1;
 const MIN_UNCLAIMED_UPLOAD_RETENTION_DAYS = 1;
-const CLEANUP_LOCK_LEASE_MS = 60 * 60 * 1000;
+const DEFAULT_CLEANUP_LOCK_LEASE_MINUTES = 15;
+const DEFAULT_CLAIMED_ORPHAN_GRACE_MINUTES = 60;
+const DEFAULT_ORDER_PERSISTENCE_MARKER_LEASE_MINUTES = 15;
+const DEFAULT_CLEANUP_RUN_RETENTION_DAYS = 90;
 const STATUS_KEYS = new Set(['ordered', 'designApproved', 'paid']);
 const PHOTO_LINK_UNAVAILABLE_MESSAGE = 'Photo links unavailable.';
 const CARTOON_ORDER_CUSTOMER_THANK_YOU_BG =
@@ -191,6 +212,150 @@ function normalizeCleanupCutoff({
   return new Date(new Date(now).getTime() - safeRetentionDays * 24 * 60 * 60 * 1000);
 }
 
+function getCleanupLockLeaseMs() {
+  const minutes = Number.parseInt(process.env.CARTOON_UPLOAD_CLEANUP_LOCK_LEASE_MINUTES, 10);
+  const safeMinutes = Number.isFinite(minutes) && minutes > 0
+    ? minutes
+    : DEFAULT_CLEANUP_LOCK_LEASE_MINUTES;
+
+  return safeMinutes * 60 * 1000;
+}
+
+function getCleanupLockLeaseCutoff(now = new Date()) {
+  return new Date(new Date(now).getTime() - getCleanupLockLeaseMs());
+}
+
+function isActiveCleanupLock(cleanupLockedAt, now = new Date()) {
+  if (!cleanupLockedAt) {
+    return false;
+  }
+
+  return new Date(cleanupLockedAt) >= getCleanupLockLeaseCutoff(now);
+}
+
+function parsePositiveIntegerEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name], 10);
+
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function getClaimedOrphanGraceMs() {
+  return parsePositiveIntegerEnv(
+    'CARTOON_UPLOAD_CLAIMED_ORPHAN_GRACE_MINUTES',
+    DEFAULT_CLAIMED_ORPHAN_GRACE_MINUTES
+  ) * 60 * 1000;
+}
+
+function getClaimedOrphanCutoff(now = new Date()) {
+  return new Date(new Date(now).getTime() - getClaimedOrphanGraceMs());
+}
+
+function getOrderPersistenceMarkerLeaseMs() {
+  const orphanMarkerAlias = Number.parseInt(
+    process.env.CARTOON_UPLOAD_ORPHAN_MARKER_LEASE_MINUTES,
+    10
+  );
+
+  if (Number.isFinite(orphanMarkerAlias) && orphanMarkerAlias > 0) {
+    return orphanMarkerAlias * 60 * 1000;
+  }
+
+  return parsePositiveIntegerEnv(
+    'CARTOON_UPLOAD_ORDER_PERSISTENCE_MARKER_LEASE_MINUTES',
+    DEFAULT_ORDER_PERSISTENCE_MARKER_LEASE_MINUTES
+  ) * 60 * 1000;
+}
+
+function getOrderPersistenceMarkerLeaseCutoff(now = new Date()) {
+  return new Date(new Date(now).getTime() - getOrderPersistenceMarkerLeaseMs());
+}
+
+function mapStorageDeleteFailureCategory(error) {
+  const classified = classifyStorageError(error);
+
+  if (classified.errorCategory === 'permission_denied') {
+    return 'storage_permission_denied';
+  }
+
+  if (classified.errorCategory === 'invalid_photo_reference') {
+    return 'invalid_photo_reference';
+  }
+
+  if (classified.errorCategory === 'photo_not_found') {
+    return 'none';
+  }
+
+  return 'storage_delete_failed';
+}
+
+async function deleteCartoonUploadObjectSafely(objectName) {
+  try {
+    await deleteGcsObjectByName(objectName, { throwOnError: true });
+
+    return { ok: true, errorCategory: 'none' };
+  } catch (error) {
+    const errorCategory = mapStorageDeleteFailureCategory(error);
+
+    if (errorCategory === 'none') {
+      return { ok: true, errorCategory };
+    }
+
+    return { ok: false, errorCategory };
+  }
+}
+
+function getOldestDeletedAgeHours(deletedUploadedAts, now = new Date()) {
+  if (!deletedUploadedAts.length) {
+    return null;
+  }
+
+  const oldest = deletedUploadedAts.reduce((oldestDate, uploadedAt) => (
+    new Date(uploadedAt) < new Date(oldestDate) ? uploadedAt : oldestDate
+  ));
+
+  return Math.max(0, (new Date(now).getTime() - new Date(oldest).getTime()) / (60 * 60 * 1000));
+}
+
+async function persistCleanupRunMetrics({
+  startedAt,
+  finishedAt = new Date(),
+  runType = 'unclaimed_upload_cleanup',
+  status,
+  retentionHours,
+  scannedSessionCount = 0,
+  candidateUploadCount = 0,
+  deletedUploadCount = 0,
+  failedUploadCount = 0,
+  skippedLockedCount = 0,
+  skippedOrderLinkedCount = 0,
+  skippedUnsafeCount = 0,
+  oldestDeletedAgeHours = null,
+  errorCategory = 'none',
+} = {}) {
+  const retentionDays = parsePositiveIntegerEnv(
+    'CARTOON_UPLOAD_CLEANUP_RUN_RETENTION_DAYS',
+    DEFAULT_CLEANUP_RUN_RETENTION_DAYS
+  );
+
+  await CartoonUploadCleanupRun.create({
+    startedAt,
+    finishedAt,
+    runType,
+    status,
+    retentionHours,
+    scannedSessionCount,
+    candidateUploadCount,
+    deletedUploadCount,
+    failedUploadCount,
+    skippedLockedCount,
+    skippedOrderLinkedCount,
+    skippedUnsafeCount,
+    oldestDeletedAgeHours,
+    errorCategory: normalizeCartoonUploadCleanupCategory(errorCategory),
+    expiresAt: new Date(new Date(startedAt).getTime() + retentionDays * 24 * 60 * 60 * 1000),
+  }).catch(() => {});
+}
+
 function validateOrderId(orderId) {
   if (!mongoose.Types.ObjectId.isValid(String(orderId || ''))) {
     throw createValidationError('Cartoon order was not found.', 404);
@@ -201,6 +366,58 @@ function validateOrderId(orderId) {
 
 function serializeDate(value) {
   return value ? new Date(value).toISOString() : null;
+}
+
+function serializeCleanupRun(run) {
+  if (!run) {
+    return null;
+  }
+
+  return {
+    runType: String(run.runType || ''),
+    startedAt: serializeDate(run.startedAt),
+    finishedAt: serializeDate(run.finishedAt),
+    status: String(run.status || 'failed'),
+    retentionHours: Number(run.retentionHours) || 0,
+    candidateUploadCount: Number(run.candidateUploadCount) || 0,
+    deletedUploadCount: Number(run.deletedUploadCount) || 0,
+    failedUploadCount: Number(run.failedUploadCount) || 0,
+    skippedLockedCount: Number(run.skippedLockedCount) || 0,
+    skippedOrderLinkedCount: Number(run.skippedOrderLinkedCount) || 0,
+    skippedUnsafeCount: Number(run.skippedUnsafeCount) || 0,
+    oldestDeletedAgeHours: run.oldestDeletedAgeHours == null
+      ? null
+      : Number(run.oldestDeletedAgeHours) || 0,
+    errorCategory: String(run.errorCategory || 'none'),
+  };
+}
+
+function serializeReconciliationRun(run) {
+  if (!run) {
+    return null;
+  }
+
+  return {
+    startedAt: serializeDate(run.startedAt),
+    finishedAt: serializeDate(run.finishedAt),
+    status: String(run.reconciliationStatus || 'not_run'),
+    repairedCounterCount: Number(run.reconciliationRepairedCounterCount) || 0,
+    repairedBytes: Number(run.reconciliationRepairedBytes) || 0,
+  };
+}
+
+function getAgeHours(value, now = new Date()) {
+  if (!value) {
+    return null;
+  }
+
+  const ageMs = new Date(now).getTime() - new Date(value).getTime();
+
+  if (!Number.isFinite(ageMs) || ageMs < 0) {
+    return null;
+  }
+
+  return ageMs / (60 * 60 * 1000);
 }
 
 function normalizeWorkflowStatus(rawOrder = {}) {
@@ -637,16 +854,48 @@ async function validateUploadSessionPhotos(photos, now = new Date()) {
       uploadedObject,
     ])
   );
+  const normalizedPhotos = [];
 
-  return photos.map((photo) => {
+  for (const photo of photos) {
     const uploadedObject = uploadedObjects.get(photo.objectName);
 
     if (!uploadedObject) {
       throw createValidationError('Reference photo was not found in the upload session.', 409);
     }
 
-    if (uploadedObject.claimedAt || uploadedObject.claimedOrderId || uploadedObject.cleanupLockedAt) {
+    if (uploadedObject.claimedAt || uploadedObject.claimedOrderId) {
       throw createValidationError('Reference photo has already been used in an order.', 409);
+    }
+
+    if (uploadedObject.cleanupLockedAt) {
+      if (isActiveCleanupLock(uploadedObject.cleanupLockedAt, now)) {
+        throw createValidationError('Reference photo is being removed. Please upload it again.', 409);
+      }
+
+      const existsCheck = await checkCartoonOrderPhotoExists(photo.objectName);
+
+      if (existsCheck.status !== 'exists') {
+        throw createValidationError('Reference photo could not be confirmed. Please upload it again.', 409);
+      }
+
+      await CartoonUploadSession.updateOne(
+        {
+          sessionId,
+          uploadedObjects: {
+            $elemMatch: {
+              objectName: photo.objectName,
+              cleanupLockedAt: uploadedObject.cleanupLockedAt,
+              claimedAt: null,
+              claimedOrderId: null,
+            },
+          },
+        },
+        {
+          $set: {
+            'uploadedObjects.$.cleanupLockedAt': null,
+          },
+        }
+      );
     }
 
     if (
@@ -656,14 +905,16 @@ async function validateUploadSessionPhotos(photos, now = new Date()) {
       throw createValidationError('Reference photo metadata does not match the upload session.', 409);
     }
 
-    return {
+    normalizedPhotos.push({
       objectName: photo.objectName,
       originalName: String(uploadedObject.originalName || photo.originalName || '').slice(0, 255),
       contentType: photo.contentType,
       size: photo.size,
       uploadSessionId: sessionId,
-    };
-  });
+    });
+  }
+
+  return normalizedPhotos;
 }
 
 async function markSessionPhotosClaimed({ sessionId, objectNames, orderId, now }) {
@@ -725,6 +976,114 @@ async function releaseSessionPhotoClaims({ sessionId, objectNames, orderId }) {
       ],
     }
   ).catch(() => {});
+}
+
+async function markSessionPhotosOrderPersisting({ sessionId, objectNames, orderId, now }) {
+  const markerLeaseCutoff = getOrderPersistenceMarkerLeaseCutoff(now);
+
+  for (const objectName of objectNames) {
+    await CartoonUploadSession.updateOne(
+      {
+        sessionId,
+        uploadedObjects: {
+          $elemMatch: {
+            objectName,
+            claimedOrderId: orderId,
+            $or: [
+              { orphanReapingAt: null },
+              { orphanReapingAt: { $lt: markerLeaseCutoff } },
+            ],
+          },
+        },
+      },
+      {
+        $set: {
+          'uploadedObjects.$.orderPersistingAt': now,
+          'uploadedObjects.$.orphanReapingAt': null,
+        },
+      }
+    );
+  }
+
+  const session = await CartoonUploadSession.findOne({ sessionId }).lean();
+  const uploadedObjects = new Map(
+    (session?.uploadedObjects || []).map((uploadedObject) => [
+      uploadedObject.objectName,
+      uploadedObject,
+    ])
+  );
+
+  return objectNames.every((objectName) => {
+    const uploadedObject = uploadedObjects.get(objectName);
+
+    return (
+      String(uploadedObject?.claimedOrderId || '') === String(orderId) &&
+      uploadedObject?.orderPersistingAt
+    );
+  });
+}
+
+async function clearSessionPhotosOrderPersisting({ sessionId, objectNames, orderId }) {
+  await CartoonUploadSession.updateOne(
+    {
+      sessionId,
+    },
+    {
+      $set: {
+        'uploadedObjects.$[photo].orderPersistingAt': null,
+      },
+    },
+    {
+      arrayFilters: [
+        {
+          'photo.objectName': { $in: objectNames },
+          'photo.claimedOrderId': orderId,
+        },
+      ],
+    }
+  ).catch(() => {});
+}
+
+async function releaseUploadByteGaugeForSessionObjects({ sessionId, objectNames, now = new Date() }) {
+  const session = await CartoonUploadSession.findOne({ sessionId }).lean();
+  const uploadedObjects = (session?.uploadedObjects || [])
+    .filter((uploadedObject) => objectNames.includes(uploadedObject.objectName));
+  let releasedCount = 0;
+  let releasedBytes = 0;
+
+  for (const uploadedObject of uploadedObjects) {
+    const markerResult = await CartoonUploadSession.updateOne(
+      {
+        sessionId,
+        uploadedObjects: {
+          $elemMatch: {
+            objectName: uploadedObject.objectName,
+            byteGaugeReleasedAt: null,
+          },
+        },
+      },
+      {
+        $set: {
+          'uploadedObjects.$.byteGaugeReleasedAt': now,
+        },
+      }
+    );
+
+    if (markerResult.modifiedCount !== 1) {
+      continue;
+    }
+
+    const decrementResult = await decrementUploadByteGaugeForGuardRefs({
+      guard: uploadedObject.guard,
+      size: uploadedObject.size,
+      now,
+    });
+
+    releasedCount += decrementResult.releasedCount > 0 ? 1 : 0;
+    releasedBytes += decrementResult.releasedBytes;
+  }
+
+  return { releasedCount, releasedBytes };
 }
 
 function getPhotoReadUrl(photoReadAccess, photo, index = 0) {
@@ -916,6 +1275,18 @@ function clearResolvedPhotoLinkNotificationWarnings(order) {
   }
 }
 
+function getOrCreateBrowserGuardCookieValue(req) {
+  const cookieName = getBrowserGuardCookieName();
+  const existingValue = String(req?.cookies?.[cookieName] || '').trim();
+
+  return {
+    cookieName,
+    value: existingValue || createBrowserGuardCookieValue(),
+    shouldSetCookie: !existingValue,
+    options: getBrowserGuardCookieOptions(),
+  };
+}
+
 async function deliverCartoonOrderNotifications(order, { failedOnly = false } = {}) {
   const notifications = normalizeNotifications(order);
   const channels = ['admin', 'customer'].filter(
@@ -929,7 +1300,7 @@ async function deliverCartoonOrderNotifications(order, { failedOnly = false } = 
   applyNotificationSummary(order);
 }
 
-export async function createCartoonOrder(rawData) {
+export async function createCartoonOrder(rawData, { req = null, res = null } = {}) {
   const basicPayload = validateBasicPayload(rawData);
 
   if (basicPayload.honeypot) {
@@ -940,20 +1311,42 @@ export async function createCartoonOrder(rawData) {
   }
 
   const now = new Date();
-  const photosWithTokens = verifyPhotoTokens(validateAndNormalizePhotos(rawData.photos), now.getTime());
-  const sessionId = photosWithTokens[0]?.sessionId;
-  const [productSnapshot, photos] = await Promise.all([
-    basicPayload.productId
-      ? getPublishedProductSnapshot(basicPayload.productId)
-      : Promise.resolve(null),
-    validateUploadSessionPhotos(photosWithTokens, now),
-  ]);
-  const objectNames = photos.map((photo) => photo.objectName);
+  const browserGuard = getOrCreateBrowserGuardCookieValue(req);
+  const trustedIp = getTrustedClientIpFromExpressRequest(req);
+  const successfulInquiryReservation = await reserveSuccessfulInquiryGuard({
+    browserValue: browserGuard.value,
+    trustedIp,
+    now,
+  });
+
+  if (!successfulInquiryReservation.ok) {
+    if (browserGuard.shouldSetCookie && res) {
+      res.cookie(browserGuard.cookieName, browserGuard.value, browserGuard.options);
+    }
+
+    throw createValidationError('Order request could not be accepted right now. Please try again later.', 429);
+  }
+
+  if (successfulInquiryReservation.enabled && browserGuard.shouldSetCookie && res) {
+    res.cookie(browserGuard.cookieName, browserGuard.value, browserGuard.options);
+  }
+
   const orderId = new mongoose.Types.ObjectId();
 
   let order;
+  let sessionId = '';
+  let objectNames = [];
 
   try {
+    const photosWithTokens = verifyPhotoTokens(validateAndNormalizePhotos(rawData.photos), now.getTime());
+    sessionId = photosWithTokens[0]?.sessionId;
+    const [productSnapshot, photos] = await Promise.all([
+      basicPayload.productId
+        ? getPublishedProductSnapshot(basicPayload.productId)
+        : Promise.resolve(null),
+      validateUploadSessionPhotos(photosWithTokens, now),
+    ]);
+    objectNames = photos.map((photo) => photo.objectName);
     const claimSucceeded = await markSessionPhotosClaimed({
       sessionId,
       objectNames,
@@ -963,6 +1356,17 @@ export async function createCartoonOrder(rawData) {
 
     if (!claimSucceeded) {
       throw createValidationError('Reference photo has already been used in an order.', 409);
+    }
+
+    const persistMarkerAcquired = await markSessionPhotosOrderPersisting({
+      sessionId,
+      objectNames,
+      orderId,
+      now,
+    });
+
+    if (!persistMarkerAcquired) {
+      throw createValidationError('Reference photo could not be confirmed. Please upload it again.', 409);
     }
 
     order = await CartoonOrder.create({
@@ -977,13 +1381,27 @@ export async function createCartoonOrder(rawData) {
       consentAcceptedAt: now,
       notificationStatus: 'pending',
       claimStatus: 'claimed',
+      abuseGuardReservationIds: successfulInquiryReservation.reservations
+        .map((reservation) => reservation.reservationId)
+        .filter(Boolean),
       notifications: {
         admin: { status: 'pending', error: '', sentAt: null },
         customer: { status: 'pending', error: '', sentAt: null },
       },
     });
+
+    await clearSessionPhotosOrderPersisting({ sessionId, objectNames, orderId }).catch(() => {});
+    await confirmGuardReservationGroup(successfulInquiryReservation.reservations, now).catch(() => {});
+    await releaseUploadByteGaugeForSessionObjects({ sessionId, objectNames, now }).catch(() => {});
   } catch (error) {
-    await releaseSessionPhotoClaims({ sessionId, objectNames, orderId });
+    if (!order && sessionId && objectNames.length > 0) {
+      await clearSessionPhotosOrderPersisting({ sessionId, objectNames, orderId });
+      await releaseSessionPhotoClaims({ sessionId, objectNames, orderId });
+    }
+
+    if (!order) {
+      await releaseGuardReservationGroup(successfulInquiryReservation.reservations, now);
+    }
 
     if (isDuplicatePhotoOrderError(error)) {
       throw createValidationError('Reference photo has already been used in an order.', 409);
@@ -1393,14 +1811,222 @@ export async function purgeOldCompletedCartoonOrders({
   return counts;
 }
 
+function summarizeCleanupResult(result = {}) {
+  return {
+    cutoff: serializeDate(result.cutoff),
+    scannedSessions: Number(result.scannedSessions) || 0,
+    scannedObjectCount: Number(result.scannedObjectCount) || 0,
+    candidateCount: Number(result.candidateCount) || 0,
+    deletedCount: Number(result.deletedCount) || 0,
+    preservedOrderLinkedCount: Number(result.preservedOrderLinkedCount) || 0,
+    skippedReferencedCount: Number(result.skippedReferencedCount) || 0,
+    skippedLockedCount: Number(result.skippedLockedCount) || 0,
+    skippedUnsafeCount: Number(result.skippedUnsafeCount) || 0,
+    failedCount: Number(result.failedCount) || 0,
+    errorCategory: String(result.errorCategory || 'none'),
+  };
+}
+
+function getFreshnessWarning({ run, now, maxAgeHours, staleCode, failedCode }) {
+  if (!run) {
+    return staleCode;
+  }
+
+  if (run.status && run.status !== 'success') {
+    return failedCode;
+  }
+
+  const finishedAgeHours = getAgeHours(run.finishedAt || run.startedAt, now);
+
+  return finishedAgeHours == null || finishedAgeHours > maxAgeHours ? staleCode : '';
+}
+
+function isBooleanEnvEnabled(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
+export async function getCartoonUploadCleanupStatus({ now = new Date() } = {}) {
+  const safeNow = new Date(now);
+  const staleUploadCutoff = new Date(safeNow.getTime() - 24 * 60 * 60 * 1000);
+
+  const [
+    pendingUploadStats,
+    lastCleanupRun,
+    lastClaimedOrphanRun,
+    lastRecordlessSweep,
+    lastReconciliationRun,
+    recentLimitHits,
+  ] = await Promise.all([
+    CartoonUploadSession.aggregate([
+      { $unwind: '$uploadedObjects' },
+      {
+        $match: {
+          'uploadedObjects.claimedAt': null,
+          'uploadedObjects.claimedOrderId': null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 },
+          bytes: { $sum: { $ifNull: ['$uploadedObjects.size', 0] } },
+          olderThan24Hours: {
+            $sum: {
+              $cond: [
+                { $lt: ['$uploadedObjects.uploadedAt', staleUploadCutoff] },
+                1,
+                0,
+              ],
+            },
+          },
+          oldestUploadedAt: { $min: '$uploadedObjects.uploadedAt' },
+        },
+      },
+    ]),
+    CartoonUploadCleanupRun.findOne({ runType: 'unclaimed_upload_cleanup' })
+      .sort({ startedAt: -1, _id: -1 })
+      .lean(),
+    CartoonUploadCleanupRun.findOne({ runType: 'claimed_orphan_reaper' })
+      .sort({ startedAt: -1, _id: -1 })
+      .lean(),
+    CartoonUploadCleanupRun.findOne({ runType: 'recordless_sweep' })
+      .sort({ startedAt: -1, _id: -1 })
+      .lean(),
+    CartoonUploadCleanupRun.findOne({ runType: 'byte_gauge_reconciliation' })
+      .sort({ startedAt: -1, _id: -1 })
+      .lean(),
+    CartoonGuardLimitMetric.aggregate([
+      { $match: { windowExpiresAt: { $gt: safeNow } } },
+      { $group: { _id: '$metricType', count: { $sum: '$count' } } },
+    ]),
+  ]);
+  const pendingStats = pendingUploadStats[0] || {};
+  const pendingUnclaimedUploadCount = Number(pendingStats.count) || 0;
+  const pendingUnclaimedUploadBytes = Number(pendingStats.bytes) || 0;
+  const uploadsOlderThan24Hours = Number(pendingStats.olderThan24Hours) || 0;
+  const oldestUnclaimedUploadedAt = pendingStats.oldestUploadedAt || null;
+  const limitHitsByType = recentLimitHits.reduce((acc, metric) => {
+    acc[metric._id] = Number(metric.count) || 0;
+    return acc;
+  }, {});
+  const warnings = [
+    uploadsOlderThan24Hours > 0 ? 'uploads_older_than_24h' : '',
+    getFreshnessWarning({
+      run: lastCleanupRun,
+      now: safeNow,
+      maxAgeHours: 48,
+      staleCode: 'cleanup_stale',
+      failedCode: 'cleanup_failed',
+    }),
+    isBooleanEnvEnabled(process.env.CARTOON_UPLOAD_RECORDLESS_SWEEP_ENABLED) || lastRecordlessSweep
+      ? getFreshnessWarning({
+          run: lastRecordlessSweep,
+          now: safeNow,
+          maxAgeHours: 8 * 24,
+          staleCode: 'recordless_sweep_stale',
+          failedCode: 'recordless_sweep_failed',
+        })
+      : '',
+    getFreshnessWarning({
+      run: lastReconciliationRun,
+      now: safeNow,
+      maxAgeHours: 48,
+      staleCode: 'reconciliation_stale',
+      failedCode: 'reconciliation_failed',
+    }),
+  ].filter(Boolean);
+
+  return {
+    generatedAt: serializeDate(safeNow),
+    pendingUnclaimedUploadCount,
+    pendingUnclaimedUploadBytes,
+    oldestUnclaimedUploadAgeHours: getAgeHours(oldestUnclaimedUploadedAt, safeNow),
+    uploadsOlderThan24Hours,
+    lastCleanupRun: serializeCleanupRun(lastCleanupRun),
+    lastClaimedOrphanRun: serializeCleanupRun(lastClaimedOrphanRun),
+    lastRecordlessSweep: serializeCleanupRun(lastRecordlessSweep),
+    lastReconciliation: serializeReconciliationRun(lastReconciliationRun),
+    recentLimitHits: {
+      successfulInquiry: limitHitsByType.successful_inquiry_limit_hit || 0,
+      uploadByte: limitHitsByType.upload_byte_limit_hit || 0,
+    },
+    warnings,
+  };
+}
+
+export async function runCartoonUploadCleanupNow({
+  now = new Date(),
+  retentionDays = DEFAULT_UNCLAIMED_UPLOAD_RETENTION_DAYS,
+  limit = 200,
+  recordlessSweep = true,
+  reconcileByteGauge = false,
+} = {}) {
+  const safeRetentionDays = Math.max(
+    Number(retentionDays) || DEFAULT_UNCLAIMED_UPLOAD_RETENTION_DAYS,
+    MIN_UNCLAIMED_UPLOAD_RETENTION_DAYS
+  );
+  const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+  const unclaimed = await cleanupUnclaimedCartoonOrderUploads({
+    now,
+    retentionDays: safeRetentionDays,
+    limit: safeLimit,
+  });
+  const claimedOrphans = await reapClaimedOrphanCartoonOrderUploads({
+    now,
+    limit: safeLimit,
+  });
+  const staleReservationExpiry = await expireStalePersistentGuardReservations({ now });
+  const byteGaugeReconciliation = reconcileByteGauge
+    ? await reconcileUploadByteGaugeCounters({ now })
+    : {
+        repairedCounterCount: 0,
+        repairedBytes: 0,
+        skippedMissingGuardCount: 0,
+        expectedCounterCount: 0,
+        skipped: true,
+      };
+  const recordless = recordlessSweep
+    ? await sweepRecordlessCartoonOrderPhotoObjects({
+        now,
+        retentionDays: safeRetentionDays,
+        limit: 1000,
+      })
+    : null;
+  const failedCount = Number(unclaimed.failedCount || 0) +
+    Number(claimedOrphans.failedCount || 0) +
+    Number(recordless?.failedCount || 0);
+
+  return {
+    status: failedCount > 0 ? 'partial_failure' : 'success',
+    unclaimed: summarizeCleanupResult(unclaimed),
+    claimedOrphans: summarizeCleanupResult(claimedOrphans),
+    ...(recordless ? { recordlessSweep: summarizeCleanupResult(recordless) } : {}),
+    staleReservationExpiry: {
+      expiredCount: Number(staleReservationExpiry.expiredCount) || 0,
+      expiredAmount: Number(staleReservationExpiry.expiredAmount) || 0,
+      confirmedCount: Number(staleReservationExpiry.confirmedCount) || 0,
+      confirmedAmount: Number(staleReservationExpiry.confirmedAmount) || 0,
+    },
+    byteGaugeReconciliation: {
+      repairedCounterCount: Number(byteGaugeReconciliation.repairedCounterCount) || 0,
+      repairedBytes: Number(byteGaugeReconciliation.repairedBytes) || 0,
+      skippedMissingGuardCount: Number(byteGaugeReconciliation.skippedMissingGuardCount) || 0,
+      expectedCounterCount: Number(byteGaugeReconciliation.expectedCounterCount) || 0,
+      skipped: byteGaugeReconciliation.skipped === true,
+    },
+  };
+}
+
 export async function cleanupUnclaimedCartoonOrderUploads({
   olderThan = null,
   now = new Date(),
   retentionDays = DEFAULT_UNCLAIMED_UPLOAD_RETENTION_DAYS,
   limit = 200,
+  persistMetrics = true,
 } = {}) {
+  const startedAt = new Date(now);
   const cutoff = normalizeCleanupCutoff({ olderThan, now, retentionDays });
-  const cleanupLockLeaseCutoff = new Date(new Date(now).getTime() - CLEANUP_LOCK_LEASE_MS);
+  const cleanupLockLeaseCutoff = getCleanupLockLeaseCutoff(now);
   const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 1000);
   const sessions = await CartoonUploadSession.find({
     uploadedObjects: {
@@ -1416,6 +2042,8 @@ export async function cleanupUnclaimedCartoonOrderUploads({
     .lean();
   const candidates = [];
   const unsafeObjectNames = [];
+  const deletedUploadedAts = [];
+  let errorCategory = 'none';
 
   for (const session of sessions) {
     for (const uploadedObject of session.uploadedObjects || []) {
@@ -1438,6 +2066,7 @@ export async function cleanupUnclaimedCartoonOrderUploads({
       candidates.push({
         sessionId: session.sessionId,
         objectName,
+        uploadedAt: uploadedObject.uploadedAt,
       });
     }
   }
@@ -1455,8 +2084,8 @@ export async function cleanupUnclaimedCartoonOrderUploads({
   const orderLinkedCandidateObjectNames = new Set(
     uniqueObjectNames.filter((objectName) => orderLinkedObjectNames.has(objectName))
   );
-  const deletedObjectNames = [];
-  const failedObjectNames = [];
+  let deletedCount = 0;
+  let failedCount = 0;
   let skippedLockedCount = 0;
 
   for (const candidate of candidates) {
@@ -1465,6 +2094,7 @@ export async function cleanupUnclaimedCartoonOrderUploads({
     }
 
     const cleanupLockedAt = new Date();
+    let storageDeletionProven = false;
 
     try {
       const lockResult = await CartoonUploadSession.updateOne(
@@ -1486,6 +2116,9 @@ export async function cleanupUnclaimedCartoonOrderUploads({
         {
           $set: {
             'uploadedObjects.$.cleanupLockedAt': cleanupLockedAt,
+            'uploadedObjects.$.cleanupRequestedAt': cleanupLockedAt,
+            'uploadedObjects.$.cleanupFailedAt': null,
+            'uploadedObjects.$.cleanupFailureCategory': 'none',
           },
         }
       );
@@ -1495,12 +2128,30 @@ export async function cleanupUnclaimedCartoonOrderUploads({
         continue;
       }
 
-      await deleteGcsObjectByName(candidate.objectName, { throwOnError: true });
+      const storageDeleteResult = await deleteCartoonUploadObjectSafely(candidate.objectName);
+
+      if (!storageDeleteResult.ok) {
+        errorCategory = storageDeleteResult.errorCategory;
+        throw new Error('Cartoon upload storage deletion failed.');
+      }
+
+      storageDeletionProven = true;
+      await releaseUploadByteGaugeForSessionObjects({
+        sessionId: candidate.sessionId,
+        objectNames: [candidate.objectName],
+        now,
+      }).catch(() => {});
       const pullResult = await CartoonUploadSession.updateOne(
         {
           sessionId: candidate.sessionId,
-          'uploadedObjects.objectName': candidate.objectName,
-          'uploadedObjects.cleanupLockedAt': cleanupLockedAt,
+          uploadedObjects: {
+            $elemMatch: {
+              objectName: candidate.objectName,
+              cleanupLockedAt,
+              claimedAt: null,
+              claimedOrderId: null,
+            },
+          },
         },
         {
           $pull: {
@@ -1514,47 +2165,474 @@ export async function cleanupUnclaimedCartoonOrderUploads({
       );
 
       if (pullResult.modifiedCount !== 1) {
+        errorCategory = 'session_update_failed';
         throw new Error('Cleaned storage object could not be removed from upload session.');
       }
 
-      deletedObjectNames.push(candidate.objectName);
+      deletedCount += 1;
+      deletedUploadedAts.push(candidate.uploadedAt);
     } catch (error) {
-      failedObjectNames.push(candidate.objectName);
-      await CartoonUploadSession.updateOne(
-        {
-          sessionId: candidate.sessionId,
-          'uploadedObjects.objectName': candidate.objectName,
-          'uploadedObjects.cleanupLockedAt': cleanupLockedAt,
-        },
-        {
-          $set: {
-            'uploadedObjects.$[photo].cleanupLockedAt': null,
-          },
-        },
-        {
-          arrayFilters: [
-            {
-              'photo.objectName': candidate.objectName,
-              'photo.cleanupLockedAt': cleanupLockedAt,
-              'photo.claimedAt': null,
-              'photo.claimedOrderId': null,
+      failedCount += 1;
+
+      if (!storageDeletionProven) {
+        const safeCategory = normalizeCartoonUploadCleanupCategory(
+          errorCategory === 'none' ? mapStorageDeleteFailureCategory(error) : errorCategory
+        );
+        errorCategory = safeCategory;
+        await CartoonUploadSession.updateOne(
+          {
+            sessionId: candidate.sessionId,
+            uploadedObjects: {
+              $elemMatch: {
+                objectName: candidate.objectName,
+                cleanupLockedAt,
+                claimedAt: null,
+                claimedOrderId: null,
+              },
             },
-          ],
-        }
-      ).catch(() => {});
+          },
+          {
+            $set: {
+              'uploadedObjects.$[photo].cleanupLockedAt': null,
+              'uploadedObjects.$[photo].cleanupFailedAt': new Date(),
+              'uploadedObjects.$[photo].cleanupFailureCategory': safeCategory,
+            },
+          },
+          {
+            arrayFilters: [
+              {
+                'photo.objectName': candidate.objectName,
+                'photo.cleanupLockedAt': cleanupLockedAt,
+                'photo.claimedAt': null,
+                'photo.claimedOrderId': null,
+              },
+            ],
+          }
+        ).catch(() => {});
+      }
     }
   }
 
-  return {
+  const result = {
     cutoff,
     scannedSessions: sessions.length,
     candidateCount: candidates.length,
-    deletedCount: deletedObjectNames.length,
+    deletedCount,
     preservedOrderLinkedCount: orderLinkedCandidateObjectNames.size,
     skippedLockedCount,
     skippedUnsafeCount: unsafeObjectNames.length,
-    failedCount: failedObjectNames.length,
-    deletedObjectNames,
-    failedObjectNames,
+    failedCount,
   };
+
+  if (persistMetrics) {
+    await persistCleanupRunMetrics({
+      startedAt,
+      finishedAt: new Date(),
+      runType: 'unclaimed_upload_cleanup',
+      status: failedCount > 0 ? 'partial_failure' : 'success',
+      retentionHours: Math.max(0, (new Date(now).getTime() - cutoff.getTime()) / (60 * 60 * 1000)),
+      scannedSessionCount: sessions.length,
+      candidateUploadCount: candidates.length,
+      deletedUploadCount: deletedCount,
+      failedUploadCount: failedCount,
+      skippedLockedCount,
+      skippedOrderLinkedCount: orderLinkedCandidateObjectNames.size,
+      skippedUnsafeCount: unsafeObjectNames.length,
+      oldestDeletedAgeHours: getOldestDeletedAgeHours(deletedUploadedAts, now),
+      errorCategory: failedCount > 0 ? errorCategory : 'none',
+    });
+  }
+
+  return result;
 }
+
+export async function reapClaimedOrphanCartoonOrderUploads({
+  now = new Date(),
+  graceMinutes = null,
+  limit = 200,
+  persistMetrics = true,
+} = {}) {
+  const startedAt = new Date(now);
+  const graceMs = Number.isFinite(Number(graceMinutes)) && Number(graceMinutes) > 0
+    ? Number(graceMinutes) * 60 * 1000
+    : getClaimedOrphanGraceMs();
+  const cutoff = new Date(new Date(now).getTime() - graceMs);
+  const markerLeaseCutoff = getOrderPersistenceMarkerLeaseCutoff(now);
+  const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+  const sessions = await CartoonUploadSession.find({
+    uploadedObjects: {
+      $elemMatch: {
+        claimedAt: { $lt: cutoff },
+        claimedOrderId: { $ne: null },
+      },
+    },
+  })
+    .sort({ createdAt: 1 })
+    .limit(safeLimit)
+    .lean();
+  const candidates = [];
+  const unsafeObjectNames = [];
+  const deletedUploadedAts = [];
+  let preservedOrderLinkedCount = 0;
+  let skippedLockedCount = 0;
+  let deletedCount = 0;
+  let failedCount = 0;
+  let errorCategory = 'none';
+
+  for (const session of sessions) {
+    for (const uploadedObject of session.uploadedObjects || []) {
+      if (!uploadedObject.claimedAt || !uploadedObject.claimedOrderId || uploadedObject.claimedAt >= cutoff) {
+        continue;
+      }
+
+      const objectName = String(uploadedObject.objectName || '').trim();
+
+      if (!isCartoonOrderPhotoObjectName(objectName)) {
+        unsafeObjectNames.push(objectName);
+        continue;
+      }
+
+      candidates.push({
+        sessionId: session.sessionId,
+        objectName,
+        uploadedAt: uploadedObject.uploadedAt || uploadedObject.claimedAt,
+        claimedOrderId: uploadedObject.claimedOrderId,
+      });
+    }
+  }
+
+  for (const candidate of candidates) {
+    const existingOrder = await CartoonOrder.exists({
+      _id: candidate.claimedOrderId,
+      'photos.objectName': candidate.objectName,
+    });
+
+    if (existingOrder) {
+      preservedOrderLinkedCount += 1;
+      continue;
+    }
+
+    const orphanReapingAt = new Date();
+    let storageDeletionProven = false;
+
+    try {
+      const markerResult = await CartoonUploadSession.updateOne(
+        {
+          sessionId: candidate.sessionId,
+          uploadedObjects: {
+            $elemMatch: {
+              objectName: candidate.objectName,
+              claimedOrderId: candidate.claimedOrderId,
+              $or: [
+                { orphanReapingAt: null },
+                { orphanReapingAt: { $lt: markerLeaseCutoff } },
+              ],
+              $and: [
+                {
+                  $or: [
+                    { orderPersistingAt: null },
+                    { orderPersistingAt: { $lt: markerLeaseCutoff } },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        {
+          $set: {
+            'uploadedObjects.$.orphanReapingAt': orphanReapingAt,
+          },
+        }
+      );
+
+      if (markerResult.modifiedCount !== 1) {
+        skippedLockedCount += 1;
+        continue;
+      }
+
+      const orderAfterMarker = await CartoonOrder.exists({
+        _id: candidate.claimedOrderId,
+        'photos.objectName': candidate.objectName,
+      });
+
+      if (orderAfterMarker) {
+        preservedOrderLinkedCount += 1;
+        await CartoonUploadSession.updateOne(
+          {
+            sessionId: candidate.sessionId,
+            uploadedObjects: {
+              $elemMatch: {
+                objectName: candidate.objectName,
+                orphanReapingAt,
+              },
+            },
+          },
+          {
+            $set: {
+              'uploadedObjects.$[photo].orphanReapingAt': null,
+            },
+          },
+          {
+            arrayFilters: [
+              {
+                'photo.objectName': candidate.objectName,
+                'photo.orphanReapingAt': orphanReapingAt,
+              },
+            ],
+          }
+        ).catch(() => {});
+        continue;
+      }
+
+      const storageDeleteResult = await deleteCartoonUploadObjectSafely(candidate.objectName);
+
+      if (!storageDeleteResult.ok) {
+        errorCategory = storageDeleteResult.errorCategory;
+        throw new Error('Claimed orphan storage deletion failed.');
+      }
+
+      storageDeletionProven = true;
+      await releaseUploadByteGaugeForSessionObjects({
+        sessionId: candidate.sessionId,
+        objectNames: [candidate.objectName],
+        now,
+      }).catch(() => {});
+      const pullResult = await CartoonUploadSession.updateOne(
+        {
+          sessionId: candidate.sessionId,
+          uploadedObjects: {
+            $elemMatch: {
+              objectName: candidate.objectName,
+              orphanReapingAt,
+              claimedOrderId: candidate.claimedOrderId,
+            },
+          },
+        },
+        {
+          $pull: {
+            uploadedObjects: {
+              objectName: candidate.objectName,
+              orphanReapingAt,
+            },
+          },
+          $inc: { uploadCount: -1 },
+        }
+      );
+
+      if (pullResult.modifiedCount !== 1) {
+        errorCategory = 'session_update_failed';
+        throw new Error('Reaped orphan could not be removed from upload session.');
+      }
+
+      deletedCount += 1;
+      deletedUploadedAts.push(candidate.uploadedAt);
+    } catch (error) {
+      failedCount += 1;
+
+      if (!storageDeletionProven) {
+        const safeCategory = normalizeCartoonUploadCleanupCategory(
+          errorCategory === 'none' ? mapStorageDeleteFailureCategory(error) : errorCategory
+        );
+        errorCategory = safeCategory;
+        await CartoonUploadSession.updateOne(
+          {
+            sessionId: candidate.sessionId,
+            uploadedObjects: {
+              $elemMatch: {
+                objectName: candidate.objectName,
+                orphanReapingAt,
+                claimedOrderId: candidate.claimedOrderId,
+              },
+            },
+          },
+          {
+            $set: {
+              'uploadedObjects.$[photo].orphanReapingAt': null,
+              'uploadedObjects.$[photo].cleanupFailedAt': new Date(),
+              'uploadedObjects.$[photo].cleanupFailureCategory': safeCategory,
+            },
+          },
+          {
+            arrayFilters: [
+              {
+                'photo.objectName': candidate.objectName,
+                'photo.orphanReapingAt': orphanReapingAt,
+                'photo.claimedOrderId': candidate.claimedOrderId,
+              },
+            ],
+          }
+        ).catch(() => {});
+      }
+    }
+  }
+
+  const result = {
+    cutoff,
+    scannedSessions: sessions.length,
+    candidateCount: candidates.length,
+    deletedCount,
+    preservedOrderLinkedCount,
+    skippedLockedCount,
+    skippedUnsafeCount: unsafeObjectNames.length,
+    failedCount,
+  };
+
+  if (persistMetrics) {
+    await persistCleanupRunMetrics({
+      startedAt,
+      finishedAt: new Date(),
+      runType: 'claimed_orphan_reaper',
+      status: failedCount > 0 ? 'partial_failure' : 'success',
+      retentionHours: Math.max(0, graceMs / (60 * 60 * 1000)),
+      scannedSessionCount: sessions.length,
+      candidateUploadCount: candidates.length,
+      deletedUploadCount: deletedCount,
+      failedUploadCount: failedCount,
+      skippedLockedCount,
+      skippedOrderLinkedCount: preservedOrderLinkedCount,
+      skippedUnsafeCount: unsafeObjectNames.length,
+      oldestDeletedAgeHours: getOldestDeletedAgeHours(deletedUploadedAts, now),
+      errorCategory: failedCount > 0 ? errorCategory : 'none',
+    });
+  }
+
+  return result;
+}
+
+export async function sweepRecordlessCartoonOrderPhotoObjects({
+  now = new Date(),
+  retentionDays = DEFAULT_UNCLAIMED_UPLOAD_RETENTION_DAYS,
+  limit = 1000,
+  persistMetrics = true,
+} = {}) {
+  const startedAt = new Date(now);
+  const cutoff = normalizeCleanupCutoff({ now, retentionDays });
+  const storageList = await listCartoonOrderPhotoObjects({ limit });
+
+  if (!storageList.ok) {
+    const result = {
+      cutoff,
+      scannedObjectCount: 0,
+      candidateCount: 0,
+      deletedCount: 0,
+      skippedReferencedCount: 0,
+      skippedUnsafeCount: 0,
+      failedCount: 1,
+      errorCategory: normalizeCartoonUploadCleanupCategory(storageList.errorCategory),
+    };
+
+    if (persistMetrics) {
+      await persistCleanupRunMetrics({
+        startedAt,
+        finishedAt: new Date(),
+        runType: 'recordless_sweep',
+        status: 'failed',
+        retentionHours: Math.max(0, (new Date(now).getTime() - cutoff.getTime()) / (60 * 60 * 1000)),
+        failedUploadCount: 1,
+        errorCategory: result.errorCategory,
+      });
+    }
+
+    return result;
+  }
+
+  const listedObjects = storageList.objects || [];
+  const candidates = [];
+  let skippedUnsafeCount = 0;
+  let skippedReferencedCount = 0;
+  let deletedCount = 0;
+  let failedCount = 0;
+  let errorCategory = 'none';
+  const deletedUploadedAts = [];
+
+  for (const object of listedObjects) {
+    const objectName = String(object?.objectName || '').trim();
+    const updatedAt = object?.updatedAt ? new Date(object.updatedAt) : null;
+
+    if (!isCartoonOrderPhotoObjectName(objectName)) {
+      skippedUnsafeCount += 1;
+      continue;
+    }
+
+    if (!updatedAt || updatedAt >= cutoff) {
+      continue;
+    }
+
+    candidates.push({ objectName, updatedAt });
+  }
+
+  const uniqueObjectNames = [...new Set(candidates.map((candidate) => candidate.objectName))];
+  const [sessionRefs, orderRefs] = uniqueObjectNames.length
+    ? await Promise.all([
+        CartoonUploadSession.find(
+          { 'uploadedObjects.objectName': { $in: uniqueObjectNames } },
+          { 'uploadedObjects.objectName': 1 }
+        ).lean(),
+        CartoonOrder.find(
+          { 'photos.objectName': { $in: uniqueObjectNames } },
+          { 'photos.objectName': 1 }
+        ).lean(),
+      ])
+    : [[], []];
+  const referencedObjectNames = new Set([
+    ...sessionRefs.flatMap((session) => (
+      (session.uploadedObjects || []).map((uploadedObject) => uploadedObject.objectName)
+    )),
+    ...orderRefs.flatMap((order) => (
+      (order.photos || []).map((photo) => photo.objectName)
+    )),
+  ]);
+
+  for (const candidate of candidates) {
+    if (referencedObjectNames.has(candidate.objectName)) {
+      skippedReferencedCount += 1;
+      continue;
+    }
+
+    const storageDeleteResult = await deleteCartoonUploadObjectSafely(candidate.objectName);
+
+    if (!storageDeleteResult.ok) {
+      failedCount += 1;
+      errorCategory = storageDeleteResult.errorCategory;
+      continue;
+    }
+
+    deletedCount += 1;
+    deletedUploadedAts.push(candidate.updatedAt);
+  }
+
+  const result = {
+    cutoff,
+    scannedObjectCount: listedObjects.length,
+    candidateCount: candidates.length,
+    deletedCount,
+    skippedReferencedCount,
+    skippedUnsafeCount,
+    failedCount,
+    errorCategory: failedCount > 0 ? normalizeCartoonUploadCleanupCategory(errorCategory) : 'none',
+  };
+
+  if (persistMetrics) {
+    await persistCleanupRunMetrics({
+      startedAt,
+      finishedAt: new Date(),
+      runType: 'recordless_sweep',
+      status: failedCount > 0 ? 'partial_failure' : 'success',
+      retentionHours: Math.max(0, (new Date(now).getTime() - cutoff.getTime()) / (60 * 60 * 1000)),
+      candidateUploadCount: candidates.length,
+      deletedUploadCount: deletedCount,
+      failedUploadCount: failedCount,
+      skippedOrderLinkedCount: skippedReferencedCount,
+      skippedUnsafeCount,
+      oldestDeletedAgeHours: getOldestDeletedAgeHours(deletedUploadedAts, now),
+      errorCategory: result.errorCategory,
+    });
+  }
+
+  return result;
+}
+
+export {
+  expireStalePersistentGuardReservations,
+  reconcileUploadByteGaugeCounters,
+};

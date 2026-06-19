@@ -2,6 +2,11 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import CartoonOrder from '../../models/CartoonOrder.js';
+import CartoonGuardLimitMetric from '../../models/CartoonGuardLimitMetric.js';
+import CartoonGuardReservation from '../../models/CartoonGuardReservation.js';
+import CartoonOrderAbuseCounter from '../../models/CartoonOrderAbuseCounter.js';
+import CartoonUploadCleanupRun from '../../models/CartoonUploadCleanupRun.js';
+import CartoonUploadQuotaCounter from '../../models/CartoonUploadQuotaCounter.js';
 import CartoonUploadSession from '../../models/CartoonUploadSession.js';
 import { sendEmail } from '../../helpers/sendEmail.js';
 import {
@@ -130,6 +135,14 @@ describe('cartoon orders integration', () => {
     delete process.env.CARTOONS_SERVICE_ENABLED;
     delete process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED;
     delete process.env.CARTOON_ORDER_PHOTO_DIAGNOSTICS_ENABLED;
+    delete process.env.CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED;
+    delete process.env.CARTOON_GUARD_HMAC_SECRET;
+    delete process.env.CARTOON_ORDER_SUCCESSFUL_INQUIRY_BROWSER_LIMIT;
+    delete process.env.CARTOON_ORDER_SUCCESSFUL_INQUIRY_IP_LIMIT;
+    delete process.env.CARTOON_UPLOAD_BYTE_BROWSER_LIMIT;
+    delete process.env.CARTOON_UPLOAD_BYTE_IP_LIMIT;
+    delete process.env.CARTOON_UPLOAD_RECORDLESS_SWEEP_ENABLED;
+    delete process.env.ALLOWED_ORIGINS;
     process.env.NODE_ENV = 'test';
     vi.restoreAllMocks();
   });
@@ -437,6 +450,300 @@ describe('cartoon orders integration', () => {
       .post('/cartoon-orders/purge-old-completed')
       .set('Cookie', authCookie(user))
       .expect(403);
+    await request(app)
+      .get('/cartoon-orders/upload-cleanup/status')
+      .expect(401);
+    await request(app)
+      .get('/cartoon-orders/upload-cleanup/status')
+      .set('Cookie', authCookie(user))
+      .expect(403);
+    await request(app)
+      .post('/cartoon-orders/upload-cleanup/run')
+      .set('Cookie', authCookie(user))
+      .set('Origin', 'http://localhost:3000')
+      .expect(403);
+  });
+
+  it('returns aggregate upload cleanup health for full admins without the public gate', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const now = new Date();
+    await CartoonUploadSession.create({
+      sessionId: 'health-session',
+      createdAt: new Date(now.getTime() - 26 * 60 * 60 * 1000),
+      expiresAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+      uploadCount: 2,
+      uploadedObjects: [
+        {
+          objectName: 'cartoon-orders/reference-photos/old-health.webp',
+          contentType: 'image/webp',
+          size: 1000,
+          originalName: 'old-health.webp',
+          uploadedAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+        {
+          objectName: 'cartoon-orders/reference-photos/new-health.webp',
+          contentType: 'image/webp',
+          size: 2000,
+          originalName: 'new-health.webp',
+          uploadedAt: new Date(now.getTime() - 60 * 60 * 1000),
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+      ],
+    });
+    await CartoonUploadCleanupRun.create([
+      {
+        startedAt: new Date(now.getTime() - 60 * 60 * 1000),
+        finishedAt: new Date(now.getTime() - 59 * 60 * 1000),
+        runType: 'unclaimed_upload_cleanup',
+        status: 'success',
+        retentionHours: 24,
+        candidateUploadCount: 3,
+        deletedUploadCount: 1,
+        failedUploadCount: 0,
+        errorCategory: 'none',
+      },
+      {
+        startedAt: new Date(now.getTime() - 60 * 60 * 1000),
+        finishedAt: new Date(now.getTime() - 58 * 60 * 1000),
+        runType: 'claimed_orphan_reaper',
+        status: 'success',
+        retentionHours: 1,
+        candidateUploadCount: 4,
+        deletedUploadCount: 2,
+        failedUploadCount: 0,
+        errorCategory: 'none',
+      },
+      {
+        startedAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+        finishedAt: new Date(now.getTime() - 119 * 60 * 1000),
+        runType: 'recordless_sweep',
+        status: 'success',
+        retentionHours: 24,
+        candidateUploadCount: 1,
+        deletedUploadCount: 1,
+        failedUploadCount: 0,
+        errorCategory: 'none',
+      },
+      {
+        startedAt: new Date(now.getTime() - 30 * 60 * 1000),
+        finishedAt: new Date(now.getTime() - 29 * 60 * 1000),
+        runType: 'byte_gauge_reconciliation',
+        status: 'success',
+        retentionHours: 0,
+        reconciliationStatus: 'success',
+        reconciliationRepairedCounterCount: 1,
+        reconciliationRepairedBytes: 2000,
+        errorCategory: 'none',
+      },
+    ]);
+    await CartoonGuardLimitMetric.create([
+      {
+        metricType: 'successful_inquiry_limit_hit',
+        windowStart: new Date(now.getTime() - 60 * 60 * 1000),
+        windowExpiresAt: new Date(now.getTime() + 23 * 60 * 60 * 1000),
+        count: 2,
+        updatedAt: now,
+      },
+      {
+        metricType: 'upload_byte_limit_hit',
+        windowStart: new Date(now.getTime() - 60 * 60 * 1000),
+        windowExpiresAt: new Date(now.getTime() + 23 * 60 * 60 * 1000),
+        count: 3,
+        updatedAt: now,
+      },
+    ]);
+
+    const res = await request(app)
+      .get('/cartoon-orders/upload-cleanup/status')
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+    const serialized = JSON.stringify(res.body);
+
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toMatchObject({
+      pendingUnclaimedUploadCount: 2,
+      pendingUnclaimedUploadBytes: 3000,
+      uploadsOlderThan24Hours: 1,
+      recentLimitHits: {
+        successfulInquiry: 2,
+        uploadByte: 3,
+      },
+      lastCleanupRun: {
+        runType: 'unclaimed_upload_cleanup',
+        status: 'success',
+        deletedUploadCount: 1,
+      },
+      lastClaimedOrphanRun: {
+        runType: 'claimed_orphan_reaper',
+        status: 'success',
+        deletedUploadCount: 2,
+      },
+      lastRecordlessSweep: {
+        runType: 'recordless_sweep',
+        status: 'success',
+      },
+      lastReconciliation: {
+        status: 'success',
+        repairedBytes: 2000,
+      },
+    });
+    expect(res.body.warnings).toContain('uploads_older_than_24h');
+    expect(serialized).not.toContain('cartoon-orders/reference-photos');
+    expect(serialized).not.toContain('health-session');
+    expect(serialized).not.toContain('old-health.webp');
+  });
+
+  it('does not warn about recordless sweep freshness before that sweep is enabled or run', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
+    process.env.CARTOON_UPLOAD_RECORDLESS_SWEEP_ENABLED = 'false';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+
+    const res = await request(app)
+      .get('/cartoon-orders/upload-cleanup/status')
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(res.body.warnings).not.toContain('recordless_sweep_stale');
+  });
+
+  it('runs manual upload cleanup only for trusted full-admin requests', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
+    process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    await CartoonUploadSession.create({
+      sessionId: 'manual-cleanup-session',
+      createdAt: new Date('2026-06-17T08:00:00Z'),
+      expiresAt: new Date('2026-06-17T08:20:00Z'),
+      uploadCount: 1,
+      uploadedObjects: [
+        {
+          objectName: 'cartoon-orders/reference-photos/manual-cleanup.webp',
+          contentType: 'image/webp',
+          size: 1000,
+          originalName: 'manual-cleanup.webp',
+          uploadedAt: new Date('2026-06-17T08:01:00Z'),
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+      ],
+    });
+
+    await request(app)
+      .post('/cartoon-orders/upload-cleanup/run')
+      .set('Cookie', authCookie(admin))
+      .set('Referer', 'https://evil.test/admin')
+      .expect(403);
+
+    const res = await request(app)
+      .post('/cartoon-orders/upload-cleanup/run')
+      .set('Cookie', authCookie(admin))
+      .set('Origin', 'http://localhost:3000')
+      .send({})
+      .expect(200);
+    const session = await CartoonUploadSession.findOne({
+      sessionId: 'manual-cleanup-session',
+    }).lean();
+
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toMatchObject({
+      status: 'success',
+      unclaimed: {
+        deletedCount: 1,
+        failedCount: 0,
+      },
+      claimedOrphans: {
+        failedCount: 0,
+      },
+      recordlessSweep: {
+        failedCount: 0,
+      },
+      staleReservationExpiry: {
+        expiredCount: 0,
+      },
+      byteGaugeReconciliation: {
+        repairedCounterCount: 0,
+        skipped: true,
+      },
+    });
+    expect(session.uploadedObjects).toHaveLength(0);
+    expect(JSON.stringify(res.body)).not.toContain('manual-cleanup.webp');
+  });
+
+  it('returns aggregate partial failure when manual upload cleanup cannot delete storage', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
+    process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    await CartoonUploadSession.create({
+      sessionId: 'manual-cleanup-partial-session',
+      createdAt: new Date('2026-06-17T08:00:00Z'),
+      expiresAt: new Date('2026-06-17T08:20:00Z'),
+      uploadCount: 1,
+      uploadedObjects: [
+        {
+          objectName: 'cartoon-orders/reference-photos/manual-cleanup-partial.webp',
+          contentType: 'image/webp',
+          size: 1000,
+          originalName: 'manual-cleanup-partial.webp',
+          uploadedAt: new Date('2026-06-17T08:01:00Z'),
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+      ],
+    });
+    deleteGcsObjectByName.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const res = await request(app)
+      .post('/cartoon-orders/upload-cleanup/run')
+      .set('Cookie', authCookie(admin))
+      .set('Origin', 'http://localhost:3000')
+      .send({})
+      .expect(207);
+    const session = await CartoonUploadSession.findOne({
+      sessionId: 'manual-cleanup-partial-session',
+    }).lean();
+
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toMatchObject({
+      status: 'partial_failure',
+      unclaimed: {
+        deletedCount: 0,
+        failedCount: 1,
+      },
+    });
+    expect(session.uploadedObjects).toHaveLength(1);
+    expect(session.uploadedObjects[0].cleanupLockedAt).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain('manual-cleanup-partial.webp');
+  });
+
+  it('rate-limits manual upload cleanup runs for full admins', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
+    process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await request(app)
+        .post('/cartoon-orders/upload-cleanup/run')
+        .set('Cookie', authCookie(admin))
+        .set('Origin', 'http://localhost:3000')
+        .send({ recordlessSweep: false })
+        .expect(200);
+    }
+
+    await request(app)
+      .post('/cartoon-orders/upload-cleanup/run')
+      .set('Cookie', authCookie(admin))
+      .set('Origin', 'http://localhost:3000')
+      .send({ recordlessSweep: false })
+      .expect(429);
   });
 
   it('keeps photo diagnostics full-admin only and disabled by default', async () => {
@@ -1514,6 +1821,7 @@ describe('cartoon orders integration', () => {
     expect(order.consentAcceptedAt).toBeInstanceOf(Date);
     expect(String(session.uploadedObjects[0].claimedOrderId)).toBe(String(order._id));
     expect(session.uploadedObjects[0].claimedAt).toBeInstanceOf(Date);
+    expect(session.uploadedObjects[0].orderPersistingAt).toBeNull();
     expect(sendEmail).toHaveBeenCalledTimes(2);
     expect(sendEmail).toHaveBeenNthCalledWith(
       1,
@@ -1584,6 +1892,151 @@ describe('cartoon orders integration', () => {
         text: expect.stringContaining('General inquiry'),
       })
     );
+  });
+
+  it('confirms successful-inquiry guard counters only after durable order creation', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    process.env.CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED = 'true';
+    process.env.CARTOON_GUARD_HMAC_SECRET = 'x'.repeat(32);
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto();
+    await createUploadSession({ photos: [photo] });
+
+    const res = await request(app)
+      .post('/cartoon-orders')
+      .set('x-real-ip', '203.0.113.130')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(201);
+    const counters = await CartoonOrderAbuseCounter.find({}).lean();
+    const reservations = await CartoonGuardReservation.find({
+      reservationType: 'successful_inquiry',
+    }).lean();
+    const order = await CartoonOrder.findById(res.body.orderId).lean();
+
+    expect(res.headers['set-cookie']?.join(';')).toContain('hc_cartoon_guard=');
+    expect(counters).toHaveLength(2);
+    expect(counters.every((counter) => counter.confirmedCount === 1)).toBe(true);
+    expect(counters.every((counter) => counter.reservedCount === 0)).toBe(true);
+    expect(reservations).toHaveLength(2);
+    expect(reservations.every((reservation) => reservation.status === 'confirmed')).toBe(true);
+    expect(order.abuseGuardReservationIds).toHaveLength(2);
+    expect(order.abuseGuardReservationIds.sort()).toEqual(
+      reservations.map((reservation) => reservation.reservationId).sort()
+    );
+    expect(JSON.stringify(counters)).not.toContain('203.0.113.130');
+  });
+
+  it('releases upload byte gauges after durable order creation claims the photos', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    process.env.CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED = 'true';
+    process.env.CARTOON_GUARD_HMAC_SECRET = 'x'.repeat(32);
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto({ size: 1234 });
+    await CartoonUploadQuotaCounter.create([
+      {
+        keyType: 'browser',
+        keyHmac: 'browser-byte-hmac',
+        confirmedOutstandingBytes: 1234,
+        reservedBytes: 0,
+        updatedAt: new Date(),
+        zeroedAt: null,
+      },
+      {
+        keyType: 'ip',
+        keyHmac: 'ip-byte-hmac',
+        confirmedOutstandingBytes: 1234,
+        reservedBytes: 0,
+        updatedAt: new Date(),
+        zeroedAt: null,
+      },
+    ]);
+    await createUploadSession({
+      photos: [photo],
+      uploadedObjectOverrides: {
+        guard: {
+          browserHmac: 'browser-byte-hmac',
+          ipHmac: 'ip-byte-hmac',
+        },
+      },
+    });
+
+    const res = await request(app)
+      .post('/cartoon-orders')
+      .set('x-real-ip', '203.0.113.133')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(201);
+    const counters = await CartoonUploadQuotaCounter.find({
+      keyHmac: { $in: ['browser-byte-hmac', 'ip-byte-hmac'] },
+    }).lean();
+    const session = await CartoonUploadSession.findOne({ sessionId: 'cartoon-session-1' }).lean();
+
+    expect(res.body.orderId).toBeTruthy();
+    expect(counters).toHaveLength(2);
+    expect(counters.every((counter) => counter.confirmedOutstandingBytes === 0)).toBe(true);
+    expect(counters.every((counter) => counter.reservedBytes === 0)).toBe(true);
+    expect(counters.every((counter) => counter.zeroedAt instanceof Date)).toBe(true);
+    expect(session.uploadedObjects[0].byteGaugeReleasedAt).toBeInstanceOf(Date);
+  });
+
+  it('blocks durable order creation past the successful-inquiry guard limit', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    process.env.CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED = 'true';
+    process.env.CARTOON_GUARD_HMAC_SECRET = 'y'.repeat(32);
+    process.env.CARTOON_ORDER_SUCCESSFUL_INQUIRY_BROWSER_LIMIT = '1';
+    process.env.CARTOON_ORDER_SUCCESSFUL_INQUIRY_IP_LIMIT = '10';
+    const app = createExpressApp();
+    const product = await createProduct();
+    const firstPhoto = buildPhoto();
+    const secondPhoto = buildPhoto({
+      sessionId: 'cartoon-session-2',
+      objectName: 'cartoon-orders/reference-photos/second-limit.webp',
+      originalName: 'second-limit.webp',
+    });
+    await createUploadSession({ photos: [firstPhoto] });
+    await createUploadSession({ sessionId: 'cartoon-session-2', photos: [secondPhoto] });
+
+    const firstRes = await request(app)
+      .post('/cartoon-orders')
+      .set('x-real-ip', '203.0.113.131')
+      .send(buildCartoonOrderPayload({ product, photos: [firstPhoto] }))
+      .expect(201);
+    const guardCookie = firstRes.headers['set-cookie']
+      .find((cookie) => cookie.startsWith('hc_cartoon_guard='))
+      .split(';')[0];
+    const blockedRes = await request(app)
+      .post('/cartoon-orders')
+      .set('x-real-ip', '203.0.113.131')
+      .set('Cookie', guardCookie)
+      .send(buildCartoonOrderPayload({ product, photos: [secondPhoto] }))
+      .expect(429);
+
+    expect(blockedRes.body.message).toBe('Order request could not be accepted right now. Please try again later.');
+    expect(await CartoonOrder.countDocuments()).toBe(1);
+    expect(await CartoonGuardLimitMetric.countDocuments({ metricType: 'successful_inquiry_limit_hit' })).toBe(1);
+    expect(JSON.stringify(blockedRes.body)).not.toContain('browser');
+    expect(JSON.stringify(blockedRes.body)).not.toContain('ip');
+  });
+
+  it('does not consume successful-inquiry budget for honeypot submissions', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    process.env.CARTOON_PERSISTENT_ABUSE_GUARDS_ENABLED = 'true';
+    process.env.CARTOON_GUARD_HMAC_SECRET = 'z'.repeat(32);
+    const app = createExpressApp();
+
+    await request(app)
+      .post('/cartoon-orders')
+      .set('x-real-ip', '203.0.113.132')
+      .send({
+        ...buildCartoonOrderPayload({ photos: [] }),
+        website: 'bot-filled',
+      })
+      .expect(200);
+
+    expect(await CartoonOrderAbuseCounter.countDocuments()).toBe(0);
+    expect(await CartoonGuardReservation.countDocuments()).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it('sends admin notification without photo links when signed read URLs fail', async () => {
@@ -1849,6 +2302,86 @@ describe('cartoon orders integration', () => {
     expect(await CartoonOrder.countDocuments()).toBe(0);
   });
 
+  it('rejects photos with active cleanup locks before creating an order', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto();
+    await createUploadSession({
+      photos: [photo],
+      uploadedObjectOverrides: {
+        cleanupLockedAt: new Date(),
+      },
+    });
+
+    await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.119')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(409);
+
+    expect(await CartoonOrder.countDocuments()).toBe(0);
+    expect(checkCartoonOrderPhotoExists).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('reclaims stale cleanup locks only after storage existence is safely confirmed', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto();
+    await createUploadSession({
+      photos: [photo],
+      uploadedObjectOverrides: {
+        cleanupLockedAt: new Date(Date.now() - 20 * 60 * 1000),
+      },
+    });
+
+    const res = await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.120')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(201);
+    const order = await CartoonOrder.findById(res.body.orderId).lean();
+    const session = await CartoonUploadSession.findOne({ sessionId: 'cartoon-session-1' }).lean();
+
+    expect(order).toBeTruthy();
+    expect(checkCartoonOrderPhotoExists).toHaveBeenCalledWith(photo.objectName);
+    expect(session.uploadedObjects[0].cleanupLockedAt).toBeNull();
+    expect(String(session.uploadedObjects[0].claimedOrderId)).toBe(String(order._id));
+  });
+
+  it('rejects stale cleanup locks when storage existence cannot be safely confirmed', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto();
+    await createUploadSession({
+      photos: [photo],
+      uploadedObjectOverrides: {
+        cleanupLockedAt: new Date(Date.now() - 20 * 60 * 1000),
+      },
+    });
+    checkCartoonOrderPhotoExists.mockResolvedValueOnce({
+      status: 'not_found',
+      errorCategory: '',
+      code: '',
+      name: '',
+    });
+
+    await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.121')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(409);
+    const session = await CartoonUploadSession.findOne({ sessionId: 'cartoon-session-1' }).lean();
+
+    expect(await CartoonOrder.countDocuments()).toBe(0);
+    expect(session.uploadedObjects[0].cleanupLockedAt).toBeInstanceOf(Date);
+    expect(session.uploadedObjects[0].claimedAt).toBeNull();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it('prevents the same uploaded photo from creating a second order', async () => {
     process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
     const app = createExpressApp();
@@ -2095,6 +2628,55 @@ describe('cartoon orders integration', () => {
 
     expect(await CartoonOrder.countDocuments()).toBe(0);
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not create an order when orphan reaping owns the claimed photo marker', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto();
+    const orphanReapingAt = new Date();
+    await createUploadSession({
+      photos: [photo],
+      uploadedObjectOverrides: { orphanReapingAt },
+    });
+
+    await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.119')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(409);
+    const session = await CartoonUploadSession.findOne({ sessionId: 'cartoon-session-1' }).lean();
+
+    expect(await CartoonOrder.countDocuments()).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(session.uploadedObjects[0].claimedAt).toBeNull();
+    expect(session.uploadedObjects[0].claimedOrderId).toBeNull();
+    expect(session.uploadedObjects[0].orderPersistingAt).toBeNull();
+    expect(session.uploadedObjects[0].orphanReapingAt).toEqual(orphanReapingAt);
+  });
+
+  it('clears order persistence markers and claims when durable order creation fails', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const product = await createProduct();
+    const photo = buildPhoto();
+    await createUploadSession({ photos: [photo] });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(CartoonOrder, 'create').mockRejectedValueOnce(new Error('database down'));
+
+    await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.120')
+      .send(buildCartoonOrderPayload({ product, photos: [photo] }))
+      .expect(500);
+    const session = await CartoonUploadSession.findOne({ sessionId: 'cartoon-session-1' }).lean();
+
+    expect(await CartoonOrder.countDocuments()).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(session.uploadedObjects[0].claimedAt).toBeNull();
+    expect(session.uploadedObjects[0].claimedOrderId).toBeNull();
+    expect(session.uploadedObjects[0].orderPersistingAt).toBeNull();
   });
 
   it('does not create an order when cleanup locks a photo between validation and claim', async () => {
