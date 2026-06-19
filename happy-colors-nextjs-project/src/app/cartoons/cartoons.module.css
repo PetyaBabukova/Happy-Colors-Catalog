@@ -26,7 +26,6 @@
 
 .inquiryLink {
   color: var(--dark-green);
-  font-weight: 600;
   text-decoration: underline;
 }
 
@@ -35,9 +34,37 @@
   color: var(--dark-orange);
 }
 
+.inquiryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 2.75rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid var(--dark-green);
+  border-radius: 4px;
+  background: var(--dark-green);
+  color:var(--lighter-green);
+  font-size: 1.2em;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.inquiryButton:hover,
+.inquiryButton:focus-visible {
+  border-color: var(--dark-orange);
+  background: var(--dark-orange);
+  color: #fff;
+}
+
 @media (max-width: 640px) {
   .page {
     gap: 2.25rem;
     padding-top: 2rem;
+  }
+
+  .inquiryButton {
+    width: 100%;
   }
 }

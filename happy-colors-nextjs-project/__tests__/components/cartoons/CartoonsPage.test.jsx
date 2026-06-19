@@ -94,7 +94,11 @@ describe('CartoonsPage', () => {
 
     expect(screen.getByTestId('cartoons-hero')).toHaveTextContent('1');
     expect(screen.getByRole('heading', { name: 'Шарж по снимка за подарък с усмивка' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'изпратете запитване.' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'контактна форма' })).toHaveAttribute(
+      'href',
+      '/contacts'
+    );
+    expect(screen.getByRole('link', { name: 'Изпрати запитване и снимки' })).toHaveAttribute(
       'href',
       '/contacts?service=cartoons'
     );
