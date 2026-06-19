@@ -63,10 +63,10 @@
 }
 
 .hero h1 {
-  max-width: 48rem;
-  font-size: clamp(2.2rem, 6vw, 5.2rem);
-  font-weight: 200;
-  line-height: 1.03;
+  /* max-width: 48rem; */
+  /* font-size: clamp(2.2rem, 6vw, 5.2rem); */
+  /* font-weight: 200; */
+  /* line-height: 1.03; */
 }
 
 .lead {
@@ -138,14 +138,6 @@
   display: grid;
   gap: 0.2rem;
   max-width: 54rem;
-}
-
-.sectionHeader h2,
-.addOnsPanel h2,
-.noteSection h2 {
-  font-size: clamp(1.75rem, 4vw, 3rem);
-  font-weight: 200;
-  line-height: 1.1;
 }
 
 .packageGrid {

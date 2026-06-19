@@ -6,37 +6,37 @@ import { buildPageMetadata } from '@/config/siteSeo';
 import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
 import styles from './offer.module.css';
 
-const PAGE_TITLE = 'Условия и цени за персонален шарж';
+const PAGE_TITLE = 'Варианти и ориентировъчни цени';
 const PAGE_DESCRIPTION =
   'Вижте draft оферта за персонален шарж: печат на фотохартия, рамка, постер, добавки, подаръчни опаковки и срокове за изработка.';
 
 const BASE_PACKAGES = [
   {
-    title: 'А4 шарж в рамка',
-    eyebrow: '1 лице',
-    price: '38 евро',
-    description: 'Отпечатана карикатура на фотохартия, подготвена за подарък в рамка.',
+    title: 'Намален размер с печат и рамка',
+    eyebrow: 'формат А4 - 297 x 210 мм',
+    price: 'от 38 евро',
+    description: 'Отпечатан шарж на луксозна хартия, подготвен като завършен подарък в рамка.',
   },
   {
-    title: 'А3 шарж в рамка',
-    eyebrow: '1 лице',
-    price: '48 евро',
-    description: 'По-голям формат за юбилеи, сватби, екипни подаръци и специални поводи.',
+    title: 'Базов размер с печат и рамка',
+    eyebrow: 'формат А3 - 420 x297 мм',
+    price: 'от 48 евро',
+    description: 'Подходящ за рождени дни, юбилеи, сватби, екипни подаръци и специални поводи.',
   },
   {
     title: 'Постер в тубус',
-    eyebrow: 'размер по уточнение',
+    eyebrow: 'произволен формат до ...',
     price: 'по запитване',
-    description: 'Отпечатан постер, навит и опакован в тубус за удобно подаряване.',
+    description: 'Отпечатан постер, навит и опакован в тубус за удобно транспортиране, пращане по куриер и пр.',
   },
 ];
 
 const ADD_ONS = [
   ['+1 лице', 'по запитване'],
-  ['+ животинка (куче, коте и пр.)', 'по запитване'],
+  ['+ домашен любимец (куче, коте и пр.)', 'по запитване'],
   ['Дигитален файл на флашка', 'по запитване'],
-  ['Чаша с карикатура', 'по запитване'],
-  ['Фланелка с карикатура', 'по запитване'],
+  ['Чаша с шарж', 'по запитване'],
+  ['Фланелка с шарж', 'по запитване'],
   ['Опаковане в подаръчна кутия', 'по запитване'],
 ];
 
@@ -104,11 +104,10 @@ export default function CartoonsOfferPage() {
             height={191}
             priority
           />
-          <p className={styles.kicker}>Draft оферта</p>
+          <p className={styles.kicker}>ИНФОРМАЦИЯ ЗА ШАРЖОВЕ</p>
           <h1>{PAGE_TITLE}</h1>
           <p className={styles.lead}>
-            Персонален шарж по снимка, отпечатан и опакован според повода. Цените по-долу са
-            ориентировъчни, а финалната оферта зависи от броя лица, формата и избраните добавки.
+            Персонален шарж по снимка, подготвен като красив подарък според повода. Посочените цени са ориентировъчни, а финалната оферта зависи от броя лица, сложността на сцената, избрания формат и допълнителните варианти за печат или опаковка.
           </p>
           <div className={styles.heroActions}>
             <Link href={buildCartoonServiceContactHref()} className={styles.primaryButton}>
@@ -124,7 +123,7 @@ export default function CartoonsOfferPage() {
       <section className={`${styles.priceSection} pageInline`} aria-labelledby="base-prices">
         <div className={styles.sectionHeader}>
           <p className={styles.kicker}>Основни варианти</p>
-          <h2 id="base-prices">Отпечатана карикатура на 1 лице</h2>
+          <h2 id="base-prices">Шарж на 1 лице — печат и рамка</h2>
         </div>
         <div className={styles.packageGrid}>
           {BASE_PACKAGES.map((item) => (
@@ -148,7 +147,7 @@ export default function CartoonsOfferPage() {
           />
         </div>
         <div className={styles.addOnsPanel}>
-          <p className={styles.kicker}>Допълнително</p>
+          <p className={styles.kicker}>Допълнителни опции</p>
           <h2>Добавки и подаръчни варианти</h2>
           <dl className={styles.addOnsList}>
             {ADD_ONS.map(([label, price]) => (
@@ -164,7 +163,7 @@ export default function CartoonsOfferPage() {
       <section className={`${styles.timelineSection} pageInline`} aria-labelledby="timeline-title">
         <div className={styles.sectionHeader}>
           <p className={styles.kicker}>Срокове</p>
-          <h2 id="timeline-title">Срокове за изработка</h2>
+          <h2 id="timeline-title">Ориентировъчни срокове за изработка</h2>
         </div>
         <div className={styles.timelineGrid}>
           {TIMELINES.map((item) => (
@@ -182,9 +181,8 @@ export default function CartoonsOfferPage() {
           <p className={styles.kicker}>Как да продължим</p>
           <h2>Изпратете идея, повод и снимки</h2>
           <p>
-            Ако все още не желаете да изпращате снимки, пишете ни през универсалната{' '}
-            <Link href="/contacts">контактна форма</Link>. За точна оферта със снимки използвайте
-            формата за шаржове.
+            Ако все още не сте готови да изпратите снимки, пишете ни през  {' '}
+            <Link href="/contacts">контактната форма.</Link> За по-точна индивидуална оферта използвайте формата за шаржове и прикачете референтни снимки.
           </p>
         </div>
         <Link href={buildCartoonServiceContactHref()} className={styles.primaryButton}>
