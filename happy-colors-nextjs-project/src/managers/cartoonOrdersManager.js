@@ -169,13 +169,16 @@ export async function fetchCartoonUploadCleanupStatus() {
   );
 }
 
-export async function runCartoonUploadCleanup({ recordlessSweep = true } = {}) {
+export async function runCartoonUploadCleanup({
+  recordlessSweep = true,
+  reconcileByteGauge = true,
+} = {}) {
   const response = await fetch(`${baseURL}/cartoon-orders/upload-cleanup/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     cache: 'no-store',
-    body: JSON.stringify({ recordlessSweep }),
+    body: JSON.stringify({ recordlessSweep, reconcileByteGauge }),
   });
 
   return assertCartoonOrderResponse(

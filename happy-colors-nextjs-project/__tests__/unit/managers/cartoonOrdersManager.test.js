@@ -302,7 +302,7 @@ describe('cartoonOrdersManager', () => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         cache: 'no-store',
-        body: JSON.stringify({ recordlessSweep: true }),
+        body: JSON.stringify({ recordlessSweep: true, reconcileByteGauge: true }),
       }
     );
   });

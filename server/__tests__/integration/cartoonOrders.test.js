@@ -676,6 +676,59 @@ describe('cartoon orders integration', () => {
     expect(JSON.stringify(res.body)).not.toContain('manual-cleanup.webp');
   });
 
+  it('leaves freshly uploaded unsubmitted photos for the retention window', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
+    process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    await CartoonUploadSession.create({
+      sessionId: 'fresh-unsubmitted-session',
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 20 * 60 * 1000),
+      uploadCount: 2,
+      uploadedObjects: [
+        {
+          objectName: 'cartoon-orders/reference-photos/fresh-one.webp',
+          contentType: 'image/webp',
+          size: 1000,
+          originalName: 'fresh-one.webp',
+          uploadedAt: new Date(),
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+        {
+          objectName: 'cartoon-orders/reference-photos/fresh-two.webp',
+          contentType: 'image/webp',
+          size: 1000,
+          originalName: 'fresh-two.webp',
+          uploadedAt: new Date(),
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+      ],
+    });
+
+    const res = await request(app)
+      .post('/cartoon-orders/upload-cleanup/run')
+      .set('Cookie', authCookie(admin))
+      .set('Origin', 'http://localhost:3000')
+      .send({ recordlessSweep: false })
+      .expect(200);
+    const session = await CartoonUploadSession.findOne({
+      sessionId: 'fresh-unsubmitted-session',
+    }).lean();
+
+    expect(res.body).toMatchObject({
+      status: 'success',
+      unclaimed: {
+        candidateCount: 0,
+        deletedCount: 0,
+      },
+    });
+    expect(deleteGcsObjectByName).not.toHaveBeenCalled();
+    expect(session.uploadedObjects).toHaveLength(2);
+  });
+
   it('returns aggregate partial failure when manual upload cleanup cannot delete storage', async () => {
     process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'false';
     process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
