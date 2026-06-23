@@ -34,12 +34,13 @@ describe('CartoonsHeroCarousel', () => {
   });
 
   it('renders image-only banners without text or CTA overlay', () => {
-    render(<CartoonsHeroCarousel banners={banners} />);
+    const { container } = render(<CartoonsHeroCarousel banners={banners} />);
 
     expect(screen.getByAltText('Шарж първи')).toHaveAttribute(
       'src',
       'https://storage.googleapis.com/test-bucket/home-banners/cartoons-one.webp'
     );
+    expect(container.firstChild.className).toContain('cartoonsCarousel');
     expect(screen.queryByRole('heading', { name: 'Шарж първи' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Не показвай CTA/ })).not.toBeInTheDocument();
   });
