@@ -106,7 +106,7 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
   }
 
   return (
-    <section className={`${styles.carousel} ${styles.cartoonsCarousel} pageInline`} aria-label="Шарж банери">
+    <section className={`${styles.carousel} pageInline`} aria-label="Шарж банери">
       <div
         className={`${styles.mediaFrame} ${isDragging ? styles.mediaFrameDragging : ''}`}
         onPointerDown={handlePointerDown}

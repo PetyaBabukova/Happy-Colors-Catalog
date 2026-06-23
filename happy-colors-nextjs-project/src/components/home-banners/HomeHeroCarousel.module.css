@@ -43,11 +43,11 @@
 }
 
 @media (min-width: 769px) {
-  .cartoonsCarousel .mediaFrame {
+  .carousel .mediaFrame {
     min-height: clamp(360px, 31.25vw, 600px);
   }
 
-  .cartoonsCarousel .bannerImage {
+  .carousel .bannerImage {
     height: clamp(360px, 31.25vw, 600px);
     object-fit: contain;
   }
