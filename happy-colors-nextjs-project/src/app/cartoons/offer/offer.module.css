@@ -322,17 +322,36 @@
 
 @media (max-width: 640px) {
   .hero {
-    min-height: 34rem;
+    display: block;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .heroPicture {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
   }
 
   .heroContent {
-    padding-top: 2rem;
+    width: 100%;
+    padding-top: 1.5rem;
     padding-bottom: 2.5rem;
   }
 
   .logo {
-    width: 100%;
+    width: min(100%, 26rem);
     margin-bottom: 1.2rem;
+  }
+
+  .timelineItem h3 {
+    font-size: 1.05rem;
+  }
+
+  .timelineTime {
+    font-size: 1em;
   }
 
   .heroActions,
