@@ -7,6 +7,12 @@ import {
 } from '../../_lib/cartoonOrderUploadToken';
 import { appendCartoonUploadedObject } from '../../_lib/cartoonUploadSessionStore';
 import {
+  confirmUploadByteQuotaReservations,
+  releaseUploadByteQuotaReservations,
+  reserveUploadByteQuota,
+} from '../../_lib/cartoonUploadQuotaGuards';
+import { getBrowserGuardCookieOptions } from '../../_lib/cartoonUploadGuards';
+import {
   checkCartoonUploadRateLimit,
   validateCartoonUploadSameOrigin,
 } from '../../_lib/cartoonOrderUploadSecurity';
@@ -67,6 +73,7 @@ export async function POST(request) {
   let savedObjectName = '';
   let savedFileRef = null;
   let uploadRecorded = false;
+  let byteQuotaReservation = { reservations: [] };
 
   try {
     if (!isCartoonsServiceEnabled) {
@@ -151,6 +158,28 @@ export async function POST(request) {
       );
     }
 
+    byteQuotaReservation = await reserveUploadByteQuota({
+      request,
+      amount: buffer.length,
+    });
+
+    if (!byteQuotaReservation.ok) {
+      const response = jsonNoStore(
+        { message: 'Upload could not be accepted right now. Please try again later.' },
+        { status: 429 }
+      );
+
+      if (byteQuotaReservation.enabled && byteQuotaReservation.browserGuard?.shouldSetCookie) {
+        response.cookies.set(
+          byteQuotaReservation.browserGuard.cookieName,
+          byteQuotaReservation.browserGuard.value,
+          getBrowserGuardCookieOptions()
+        );
+      }
+
+      return response;
+    }
+
     const objectName = buildStorageObjectName(
       CARTOON_ORDER_PHOTO_PREFIX,
       file.name,
@@ -184,10 +213,12 @@ export async function POST(request) {
       size: buffer.length,
       originalName: file.name,
       uploadedAt,
+      guard: byteQuotaReservation.guard,
     });
 
     if (!appendResult.ok) {
       await cleanupSavedObject({ fileRef, objectName });
+      await releaseUploadByteQuotaReservations(byteQuotaReservation.reservations);
 
       const reason = appendResult.reason || 'unknown';
       const messages = {
@@ -207,8 +238,9 @@ export async function POST(request) {
     }
 
     uploadRecorded = true;
+    await confirmUploadByteQuotaReservations(byteQuotaReservation.reservations);
 
-    return jsonNoStore(
+    const response = jsonNoStore(
       {
         objectName,
         uploadConfirmationToken,
@@ -218,11 +250,22 @@ export async function POST(request) {
       },
       { status: 200 }
     );
+
+    if (byteQuotaReservation.enabled && byteQuotaReservation.browserGuard?.shouldSetCookie) {
+      response.cookies.set(
+        byteQuotaReservation.browserGuard.cookieName,
+        byteQuotaReservation.browserGuard.value,
+        getBrowserGuardCookieOptions()
+      );
+    }
+
+    return response;
   } catch (error) {
     console.error('Error in /api/cartoon-orders/uploads:', error);
 
     if (!uploadRecorded) {
       await cleanupSavedObject({ fileRef: savedFileRef, objectName: savedObjectName });
+      await releaseUploadByteQuotaReservations(byteQuotaReservation.reservations).catch(() => {});
     }
 
     return jsonNoStore({ message: 'Cartoon order upload failed.' }, { status: 500 });

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { CARTOON_UPLOAD_CLEANUP_ERROR_CATEGORIES } from '../helpers/cartoonUploadGuardConstants.js';
 
 const uploadedObjectSchema = new mongoose.Schema(
   {
@@ -36,6 +37,44 @@ const uploadedObjectSchema = new mongoose.Schema(
     cleanupLockedAt: {
       type: Date,
       default: null,
+    },
+    cleanupRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    cleanupFailedAt: {
+      type: Date,
+      default: null,
+    },
+    cleanupFailureCategory: {
+      type: String,
+      enum: CARTOON_UPLOAD_CLEANUP_ERROR_CATEGORIES,
+      default: 'none',
+      trim: true,
+    },
+    byteGaugeReleasedAt: {
+      type: Date,
+      default: null,
+    },
+    orphanReapingAt: {
+      type: Date,
+      default: null,
+    },
+    orderPersistingAt: {
+      type: Date,
+      default: null,
+    },
+    guard: {
+      browserHmac: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      ipHmac: {
+        type: String,
+        default: '',
+        trim: true,
+      },
     },
   },
   { _id: false }

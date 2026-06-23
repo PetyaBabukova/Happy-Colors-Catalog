@@ -41,7 +41,9 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
     return null;
   }
 
-  const currentBanner = activeBanners[currentIndex];
+  const safeCurrentIndex = currentIndex < activeBanners.length ? currentIndex : 0;
+  const currentBanner = activeBanners[safeCurrentIndex];
+  const canManageBanners = user?.role === 'full_admin';
 
   async function handleDeleteBanner(bannerId) {
     if (!window.confirm('Сигурни ли сте, че искате да изтриете този шарж банер?')) {
@@ -121,11 +123,11 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
             alt={currentBanner.title || 'Шарж банер'}
             className={styles.bannerImage}
             draggable="false"
-            fetchPriority={currentIndex === 0 ? 'high' : 'auto'}
+            fetchPriority={safeCurrentIndex === 0 ? 'high' : 'auto'}
           />
         </picture>
 
-        {user && (
+        {canManageBanners && (
           <div className={styles.operatorControls} aria-label="Управление на банера">
             <Link
               href={`/home-banners/${currentBanner._id}/edit`}

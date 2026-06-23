@@ -42,6 +42,17 @@
   object-fit: cover;
 }
 
+@media (min-width: 769px) {
+  .carousel .mediaFrame {
+    min-height: clamp(360px, 31.25vw, 600px);
+  }
+
+  .carousel .bannerImage {
+    height: clamp(360px, 31.25vw, 600px);
+    object-fit: contain;
+  }
+}
+
 .content,
 .fallbackContent {
   position: absolute;

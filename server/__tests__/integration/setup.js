@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { Readable } from 'node:stream';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, vi } from 'vitest';
 import { resetRateLimiterState } from '../../middlewares/rateLimit.js';
@@ -16,13 +17,38 @@ vi.mock('../../helpers/gcsImageHelper.js', () => {
   return {
     deleteImageFromGCS: vi.fn().mockResolvedValue(undefined),
     deleteGcsObjectByName: vi.fn().mockResolvedValue(undefined),
+    listCartoonOrderPhotoObjects: vi.fn(async () => ({
+      ok: true,
+      objects: [],
+      errorCategory: 'none',
+    })),
     getBucketName,
     getCartoonOrdersBucketName: vi.fn(() => 'test-bucket'),
+    getSafeCartoonPhotoStorageContext: vi.fn(() => ({
+      runtimeSurface: 'express-admin',
+      runtimeEnvClass: 'test',
+      privateBucketConfigured: false,
+      privateDiffersFromPublic: false,
+      publicBucketFallbackActive: true,
+      credentialSource: 'application_default_credentials',
+      credentialFileResolved: false,
+      usingApplicationDefaultCredentials: true,
+    })),
     isCartoonOrderPhotoObjectName: vi.fn((objectName) => (
       typeof objectName === 'string' &&
       objectName.startsWith('cartoon-orders/reference-photos/') &&
       !objectName.split('/').some((part) => part === '..' || part === '.' || part.includes('\\'))
     )),
+    checkCartoonOrderPhotoExists: vi.fn(async () => ({
+      status: 'exists',
+      errorCategory: '',
+      code: '',
+      name: '',
+    })),
+    createCartoonOrderPhotoDiagnosticSignedReadProbe: vi.fn(async () => (
+      'https://signed.example.com/diagnostic-probe'
+    )),
+    createCartoonOrderPhotoReadStream: vi.fn(() => Readable.from([Buffer.from('mock-photo-bytes')])),
     createCartoonOrderPhotoSignedReadUrl: vi.fn(async ({ objectName }) => (
       `https://signed.example.com/${encodeURIComponent(objectName)}`
     )),
@@ -71,6 +97,7 @@ beforeAll(async () => {
   process.env.CATALOG_MODE = 'false';
   process.env.CLIENT_URL = 'http://localhost:3000';
   process.env.GCS_BUCKET_NAME = 'test-bucket';
+  process.env.CARTOON_ORDER_ADMIN_EMAIL = 'cartoon-admin@example.com';
   process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'test-newsletter-unsubscribe-secret';
   process.env.NEWSLETTER_TEST_RECIPIENTS = 'test-owner@example.com,test-copy@example.com';
   process.env.NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
@@ -102,6 +129,7 @@ afterAll(async () => {
   delete process.env.CATALOG_MODE;
   delete process.env.CLIENT_URL;
   delete process.env.GCS_BUCKET_NAME;
+  delete process.env.CARTOON_ORDER_ADMIN_EMAIL;
   delete process.env.NEWSLETTER_UNSUBSCRIBE_SECRET;
   delete process.env.NEWSLETTER_TEST_RECIPIENTS;
   delete process.env.NEWSLETTER_PUBLIC_SITE_URL;

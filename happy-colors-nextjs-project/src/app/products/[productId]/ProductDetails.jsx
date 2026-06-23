@@ -15,6 +15,8 @@ import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import MessageBox from '@/components/ui/MessageBox';
 import { approveAdminProduct, rejectAdminProduct } from '@/managers/usersAdminManager';
+import { isCartoonsServiceContext } from '@/config/cartoonsFeature';
+import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
 import styles from './details.module.css';
 
 const deliveryContent = `
@@ -73,6 +75,7 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
 	const isFullAdmin = user?.role === 'full_admin';
+	const isCartoonServiceContext = isCartoonsServiceContext(serviceContext);
 	const canEdit = isFullAdmin || isOwner(product, user);
 	const isPendingReview = product?.publicationStatus === 'pending_review' || product?.reviewStatus === 'pending_review';
 	const router = useRouter();
@@ -214,10 +217,12 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	}, [activeSlide?.key, activeSlide?.type, prefersReducedMotion]);
 
 	const isAvailable = product?.availability !== 'unavailable';
+	const shouldUseInquiryAction = isCartoonServiceContext || isCatalogMode || !isAvailable;
 
 	const availabilityLabel = isAvailable
-		? 'Продуктът е наличен'
-		: 'Продуктът не е наличен';
+		? 'Налична готова бройка — изпратете запитване за потвърждение'
+		: 'Възможна изработка след потвърждение.';
+	const cartoonAvailabilityLabel = 'Изработва се по индивидуално запитване.';
 
 	const handleAddToCart = () => {
 		addToCart({
@@ -297,8 +302,8 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 	};
 
 	const handleInquiry = () => {
-		if (serviceContext === 'cartoons') {
-			router.push(`/contacts?service=cartoons&productId=${product._id}`);
+		if (isCartoonServiceContext) {
+			router.push(buildCartoonServiceContactHref({ productId: product._id }));
 			return;
 		}
 
@@ -476,34 +481,41 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 				{activeTab === 'description' && (
 					<>
 						<p className={isAvailable ? styles.available : styles.unavailable}>
-							<b>Наличност:</b> {availabilityLabel}
+							<b>Наличност:</b> {isCartoonServiceContext ? cartoonAvailabilityLabel : availabilityLabel}
 						</p>
 
-						{isCatalogMode ? (
+						{isCartoonServiceContext ? (
+							<p className={styles.cartoonPriceNote}>
+								Ориентировъчна цена от {product.price} €.
+								<br />
+								Крайната цена зависи от броя лица, сложността, стила и срока за изработка. Вижте подробности за цени и варианти{' '}
+								<Link href="/cartoons/offer" className={styles.cartoonOfferLink}>
+									тук
+									<span aria-hidden="true" className={styles.cartoonOfferArrows}>
+										<span>›</span>
+										<span>›</span>
+										<span>›</span>
+									</span>
+								</Link>
+							</p>
+						) : isCatalogMode ? (
 							<p>Цена {product.price} €. За наличност и уточнения, моля изпратете запитване.</p>
 						) : (
 							<p>Цена {product.price} €</p>
 						)}
 
 						<div className={styles.actionButtonsContainer}>
-							{isCatalogMode ? (
+							{shouldUseInquiryAction ? (
 								<button onClick={handleInquiry} className={styles.actionBtn}>
 									Попитай
 								</button>
-							) : isAvailable ? (
+							) : (
 								<button
 									onClick={handleAddToCart}
 									className={styles.actionBtn}
 									data-testid="add-to-cart-button"
 								>
 									Добави в количката
-								</button>
-							) : (
-								<button
-									onClick={handleInquiry}
-									className={styles.actionBtn}
-								>
-									Попитай
 								</button>
 							)}
 

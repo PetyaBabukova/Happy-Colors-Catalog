@@ -50,6 +50,14 @@ align-items: center;
     margin-bottom: 0.5em;
 }
 
+.registerForm > button[type="submit"]:disabled {
+  background-color: #e5e7eb;
+  border-color: #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .invalidField {
     border-color: var(--dark-orange);
     /* background-color: #fff8f1;  */
@@ -81,6 +89,13 @@ align-items: center;
   color: var(--dark-green);
   margin-top: -1em;
   margin-bottom: 0.8em;
+}
+
+.registerForm .cartoonInquirySubtitle {
+  color: var(--dark-green);
+  font-size: 1.2em;
+  line-height: 1.4;
+  margin: -0.5rem 0 1rem;
 }
 
 .errorHint {
@@ -142,6 +157,31 @@ align-items: center;
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.successPopupBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.successPopup {
+  width: min(100%, 30rem);
+  padding: 1.5rem 1.75rem;
+  border: 1px solid var(--light-green);
+  border-radius: 0.5rem;
+  background: var(--lighter-green);
+  color: var(--dark-green);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.2);
 }
 
 .imagePreviewItem {
@@ -232,6 +272,10 @@ align-items: center;
   background: white;
 }
 
+.photoPreviewItem {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .videoPreviewPoster {
   width: 4.5rem;
   height: 4.5rem;
@@ -294,6 +338,10 @@ align-items: center;
 
     .registerForm p{
         font-size: 0.7em;
+    }
+
+    .registerForm .cartoonInquirySubtitle {
+        font-size: 1em;
     }
 
     .registerForm button {

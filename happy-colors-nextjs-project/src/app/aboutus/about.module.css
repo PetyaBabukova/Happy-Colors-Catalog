@@ -81,6 +81,12 @@
   margin-bottom: 0;
 }
 
+.linksIntro p a {
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.16em;
+}
+
 .thankYou {
   font-style: italic;
 }

@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 
 import { createUploadSessionToken } from '../../_lib/cartoonOrderUploadToken';
 import { createCartoonUploadSession } from '../../_lib/cartoonUploadSessionStore';
+import { getOrCreateBrowserGuardValue } from '../../_lib/cartoonUploadQuotaGuards';
+import {
+  arePersistentCartoonGuardsEnabled,
+  getBrowserGuardCookieOptions,
+} from '../../_lib/cartoonUploadGuards';
 import {
   checkCartoonUploadSessionRateLimit,
   validateCartoonUploadSameOrigin,
@@ -41,12 +46,16 @@ export async function POST(request) {
     }
 
     const uploadSession = await createCartoonUploadSession();
+    const persistentGuardsEnabled = arePersistentCartoonGuardsEnabled();
+    const browserGuard = persistentGuardsEnabled
+      ? getOrCreateBrowserGuardValue(request)
+      : null;
     const uploadSessionToken = createUploadSessionToken({
       sessionId: uploadSession.sessionId,
       expiresAt: uploadSession.expiresAt.getTime(),
     });
 
-    return jsonNoStore(
+    const response = jsonNoStore(
       {
         uploadSessionToken,
         sessionId: uploadSession.sessionId,
@@ -56,6 +65,16 @@ export async function POST(request) {
       },
       { status: 200 }
     );
+
+    if (browserGuard?.shouldSetCookie) {
+      response.cookies.set(
+        browserGuard.cookieName,
+        browserGuard.value,
+        getBrowserGuardCookieOptions()
+      );
+    }
+
+    return response;
   } catch (error) {
     console.error('Error in /api/cartoon-orders/upload-session:', error);
 

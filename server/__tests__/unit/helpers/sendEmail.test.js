@@ -84,7 +84,7 @@ describe('sendEmail', () => {
       socketTimeout: 10_000,
     });
     expect(sendMail).toHaveBeenCalledWith({
-      from: 'Happy Colors <admin@example.com>',
+      from: 'Happy Colors | Creative Studio <admin@example.com>',
       to: 'admin@example.com',
       subject: 'New order',
       text: 'Order details',
@@ -124,7 +124,7 @@ describe('sendEmail', () => {
     });
 
     expect(sendMail).toHaveBeenCalledWith({
-      from: 'Happy Colors <admin@example.com>',
+      from: 'Happy Colors | Creative Studio <admin@example.com>',
       to: 'customer@example.com',
       subject: 'Новини от Happy Colors',
       text: 'Виж повече',

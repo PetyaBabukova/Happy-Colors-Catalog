@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let cleanupUnclaimedCartoonOrderUploads;
+let expireStalePersistentGuardReservations;
+let reapClaimedOrphanCartoonOrderUploads;
+let reconcileUploadByteGaugeCounters;
+let sweepRecordlessCartoonOrderPhotoObjects;
 let connect;
 let disconnect;
 let dotenvConfig;
@@ -20,6 +24,8 @@ describe('cleanupCartoonOrderUploads script', () => {
     delete process.env.GCS_CARTOON_ORDERS_BUCKET_NAME;
     delete process.env.CARTOON_UPLOAD_CLEANUP_RETENTION_DAYS;
     delete process.env.CARTOON_UPLOAD_CLEANUP_LIMIT;
+    delete process.env.CARTOON_UPLOAD_CLEANUP_MODE;
+    delete process.env.CARTOON_UPLOAD_RECORDLESS_SWEEP_ENABLED;
 
     cleanupUnclaimedCartoonOrderUploads = vi.fn(async () => ({
       cutoff: new Date('2026-06-01T00:00:00.000Z'),
@@ -30,6 +36,38 @@ describe('cleanupCartoonOrderUploads script', () => {
       skippedLockedCount: 2,
       skippedUnsafeCount: 0,
       failedCount: 0,
+    }));
+    expireStalePersistentGuardReservations = vi.fn(async () => ({
+      expiredCount: 2,
+      expiredAmount: 1234,
+      confirmedCount: 1,
+      confirmedAmount: 1,
+    }));
+    reapClaimedOrphanCartoonOrderUploads = vi.fn(async () => ({
+      cutoff: new Date('2026-06-01T00:00:00.000Z'),
+      scannedSessions: 1,
+      candidateCount: 2,
+      deletedCount: 1,
+      preservedOrderLinkedCount: 1,
+      skippedLockedCount: 0,
+      skippedUnsafeCount: 0,
+      failedCount: 0,
+    }));
+    sweepRecordlessCartoonOrderPhotoObjects = vi.fn(async () => ({
+      cutoff: new Date('2026-06-01T00:00:00.000Z'),
+      scannedObjectCount: 1,
+      candidateCount: 1,
+      deletedCount: 1,
+      skippedReferencedCount: 0,
+      skippedUnsafeCount: 0,
+      failedCount: 0,
+      errorCategory: 'none',
+    }));
+    reconcileUploadByteGaugeCounters = vi.fn(async () => ({
+      repairedCounterCount: 0,
+      repairedBytes: 0,
+      skippedMissingGuardCount: 0,
+      expectedCounterCount: 0,
     }));
     connect = vi.fn(async () => {});
     disconnect = vi.fn(async () => {});
@@ -66,6 +104,10 @@ describe('cleanupCartoonOrderUploads script', () => {
     }));
     vi.doMock('../../../../server/services/cartoonOrdersService.js', () => ({
       cleanupUnclaimedCartoonOrderUploads,
+      expireStalePersistentGuardReservations,
+      reapClaimedOrphanCartoonOrderUploads,
+      reconcileUploadByteGaugeCounters,
+      sweepRecordlessCartoonOrderPhotoObjects,
     }));
   });
 
@@ -83,18 +125,41 @@ describe('cleanupCartoonOrderUploads script', () => {
     const { cleanupCartoonOrderUploadsFromEnv } = await loadScript();
 
     await expect(cleanupCartoonOrderUploadsFromEnv({ loadEnv })).resolves.toMatchObject({
-      cutoff: '2026-06-01T00:00:00.000Z',
-      deletedCount: 1,
-      skippedLockedCount: 2,
-      failedCount: 0,
+      mode: 'daily',
+      unclaimed: {
+        cutoff: '2026-06-01T00:00:00.000Z',
+        deletedCount: 1,
+        skippedLockedCount: 2,
+        failedCount: 0,
+      },
+      claimedOrphans: {
+        deletedCount: 1,
+        failedCount: 0,
+      },
+      byteGaugeReconciliation: {
+        repairedCounterCount: 0,
+      },
+      staleReservationExpiry: {
+        expiredCount: 2,
+        expiredAmount: 1234,
+        confirmedCount: 1,
+        confirmedAmount: 1,
+      },
     });
 
     expect(loadEnv).toHaveBeenCalled();
     expect(connect).toHaveBeenCalledWith('mongodb://env-loaded');
     expect(cleanupUnclaimedCartoonOrderUploads).toHaveBeenCalledWith({
-      retentionDays: 14,
+      retentionDays: 1,
       limit: 200,
     });
+    expect(reapClaimedOrphanCartoonOrderUploads).toHaveBeenCalledWith({
+      graceMinutes: 60,
+      limit: 200,
+    });
+    expect(sweepRecordlessCartoonOrderPhotoObjects).not.toHaveBeenCalled();
+    expect(expireStalePersistentGuardReservations).toHaveBeenCalled();
+    expect(reconcileUploadByteGaugeCounters).toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalled();
   });
 
@@ -115,6 +180,16 @@ describe('cleanupCartoonOrderUploads script', () => {
       deletedObjectNames: ['cartoon-orders/reference-photos/deleted.webp'],
       failedObjectNames: ['cartoon-orders/reference-photos/failed.webp'],
     });
+    reapClaimedOrphanCartoonOrderUploads.mockResolvedValueOnce({
+      cutoff: new Date('2026-06-01T00:00:00.000Z'),
+      scannedSessions: 0,
+      candidateCount: 0,
+      deletedCount: 0,
+      preservedOrderLinkedCount: 0,
+      skippedLockedCount: 0,
+      skippedUnsafeCount: 0,
+      failedCount: 0,
+    });
     const stdout = vi.fn();
     const stderr = vi.fn();
     const { runCleanupCartoonOrderUploadsCli } = await loadScript();
@@ -125,6 +200,10 @@ describe('cleanupCartoonOrderUploads script', () => {
     expect(connect).toHaveBeenCalledWith('mongodb://direct-env');
     expect(cleanupUnclaimedCartoonOrderUploads).toHaveBeenCalledWith({
       retentionDays: 7,
+      limit: 25,
+    });
+    expect(reapClaimedOrphanCartoonOrderUploads).toHaveBeenCalledWith({
+      graceMinutes: 60,
       limit: 25,
     });
     expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"failedCount": 1'));
@@ -146,6 +225,92 @@ describe('cleanupCartoonOrderUploads script', () => {
       retentionDays: 1,
       limit: 200,
     });
+  });
+
+  it('runs the recordless sweep only when explicitly enabled', async () => {
+    vi.stubEnv('MONGO_URI', 'mongodb://direct-env');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', 'cartoon-orders-bucket');
+    vi.stubEnv('CARTOON_UPLOAD_RECORDLESS_SWEEP_ENABLED', 'true');
+    const { cleanupCartoonOrderUploadsFromEnv } = await loadScript();
+
+    await expect(cleanupCartoonOrderUploadsFromEnv()).resolves.toMatchObject({
+      mode: 'all',
+      recordlessSweep: {
+        deletedCount: 1,
+        failedCount: 0,
+        errorCategory: 'none',
+      },
+    });
+
+    expect(sweepRecordlessCartoonOrderPhotoObjects).toHaveBeenCalledWith({
+      retentionDays: 1,
+      limit: 1000,
+    });
+  });
+
+  it('runs only the weekly recordless sweep in weekly-recordless mode', async () => {
+    vi.stubEnv('MONGO_URI', 'mongodb://direct-env');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', 'cartoon-orders-bucket');
+    const { cleanupCartoonOrderUploadsFromEnv } = await loadScript();
+
+    await expect(
+      cleanupCartoonOrderUploadsFromEnv({ mode: 'weekly-recordless' })
+    ).resolves.toMatchObject({
+      mode: 'weekly-recordless',
+      recordlessSweep: {
+        deletedCount: 1,
+        failedCount: 0,
+      },
+    });
+
+    expect(cleanupUnclaimedCartoonOrderUploads).not.toHaveBeenCalled();
+    expect(reapClaimedOrphanCartoonOrderUploads).not.toHaveBeenCalled();
+    expect(expireStalePersistentGuardReservations).not.toHaveBeenCalled();
+    expect(reconcileUploadByteGaugeCounters).not.toHaveBeenCalled();
+    expect(sweepRecordlessCartoonOrderPhotoObjects).toHaveBeenCalledWith({
+      retentionDays: 1,
+      limit: 1000,
+    });
+  });
+
+  it('passes CLI mode flags to the scheduled cleanup entrypoint', async () => {
+    vi.stubEnv('MONGO_URI', 'mongodb://direct-env');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', 'cartoon-orders-bucket');
+    const stdout = vi.fn();
+    const stderr = vi.fn();
+    const { runCleanupCartoonOrderUploadsCli } = await loadScript();
+
+    await expect(
+      runCleanupCartoonOrderUploadsCli({
+        stdout,
+        stderr,
+        argv: ['--mode=weekly-recordless'],
+      })
+    ).resolves.toBe(0);
+
+    expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"mode": "weekly-recordless"'));
+    expect(sweepRecordlessCartoonOrderPhotoObjects).toHaveBeenCalled();
+    expect(cleanupUnclaimedCartoonOrderUploads).not.toHaveBeenCalled();
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on an invalid cleanup mode', async () => {
+    vi.stubEnv('MONGO_URI', 'mongodb://direct-env');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', 'cartoon-orders-bucket');
+    const stderr = vi.fn();
+    const { runCleanupCartoonOrderUploadsCli } = await loadScript();
+
+    await expect(
+      runCleanupCartoonOrderUploadsCli({
+        stdout: vi.fn(),
+        stderr,
+        argv: ['--mode=typo'],
+      })
+    ).resolves.toBe(1);
+
+    expect(connect).not.toHaveBeenCalled();
+    expect(cleanupUnclaimedCartoonOrderUploads).not.toHaveBeenCalled();
+    expect(stderr).toHaveBeenCalledWith('Invalid CARTOON_UPLOAD_CLEANUP_MODE.');
   });
 
   it('fails before connecting when storage bucket config is missing', async () => {

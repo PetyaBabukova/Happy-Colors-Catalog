@@ -14,6 +14,7 @@ import { sendContactForm } from '../../managers/contactsManager';
 import {
   createCartoonOrder,
   createCartoonOrderUploadSession,
+  cleanupCartoonOrderUploadedPhotos,
   uploadCartoonOrderPhoto,
 } from '../../managers/cartoonOrdersManager';
 import {
@@ -31,6 +32,61 @@ const initialValues = {
 };
 
 const cartoonPhotoMaxSizeMb = Math.floor(MAX_CARTOON_ORDER_PHOTO_SIZE_BYTES / (1024 * 1024));
+const PHOTO_STATUS_LABELS = {
+  selected: 'Избрана',
+  uploading: 'Качване...',
+  uploaded: 'Качена',
+  failed: 'Неуспешно',
+  removed: 'Премахната',
+  stale: 'Изтекла сесия',
+};
+const PHOTO_CLEANUP_ERROR_MESSAGE =
+  '\u0421\u043d\u0438\u043c\u043a\u0430\u0442\u0430 \u043d\u0435 \u043c\u043e\u0436\u0430 \u0434\u0430 \u0431\u044a\u0434\u0435 \u043f\u0440\u0435\u043c\u0430\u0445\u043d\u0430\u0442\u0430. \u041c\u043e\u043b\u044f, \u043e\u043f\u0438\u0442\u0430\u0439\u0442\u0435 \u043e\u0442\u043d\u043e\u0432\u043e.';
+const PHOTO_REMOVING_LABEL =
+  '\u041f\u0440\u0435\u043c\u0430\u0445\u0432\u0430\u043d\u0435...';
+
+function createPhotoItem(file, id) {
+  return {
+    id: `photo-${id}`,
+    file,
+    originalName: file.name || 'Снимка',
+    contentType: file.type,
+    size: file.size,
+    status: 'selected',
+    error: '',
+    uploadedPhoto: null,
+  };
+}
+
+function formatPhotoSize(size) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return '0 KB';
+  }
+
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.ceil(size / 1024)} KB`;
+}
+
+function getPhotoDisplayName(photo) {
+  return photo?.originalName || photo?.file?.name || 'Снимка';
+}
+
+function isUploadSessionResetError(err) {
+  const errorCode = err?.data?.code || '';
+
+  return (
+    err?.status === 401 ||
+    errorCode === 'upload_session_expired' ||
+    errorCode === 'upload_session_full'
+  );
+}
+
+function hasPartialCleanupProgress(err) {
+  return Number(err?.data?.deletedCount) > 0 && Number(err?.data?.failedCount) > 0;
+}
 
 export default function ContactForm({ product, productId = null, serviceContext = '' }) {
   const resolvedProductId = product?._id || productId;
@@ -54,25 +110,42 @@ export default function ContactForm({ product, productId = null, serviceContext 
 
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState(null);
-  const [cartoonPhotos, setCartoonPhotos] = useState([]);
+  const [cartoonPhotoItems, setCartoonPhotoItems] = useState([]);
   const [cartoonPhotoSlotsUsed, setCartoonPhotoSlotsUsed] = useState(0);
   const [photoError, setPhotoError] = useState('');
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isCleaningPhotos, setIsCleaningPhotos] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [website, setWebsite] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const uploadSessionTokenRef = useRef('');
+  const photoItemIdRef = useRef(0);
 
   const router = useRouter();
+  const uploadedCartoonPhotos = cartoonPhotoItems
+    .filter((photo) => photo.status === 'uploaded' && photo.uploadedPhoto)
+    .map((photo) => photo.uploadedPhoto);
+  const canResetCartoonPhotos = cartoonPhotoItems.length > 0;
+  const hasCartoonRequiredFields =
+    !isCartoonInquiry ||
+    (
+      formValues.name.trim() &&
+      formValues.email.trim() &&
+      formValues.message.trim() &&
+      uploadedCartoonPhotos.length > 0 &&
+      consentAccepted
+    );
+  const isSubmitDisabled =
+    isSubmitting || isUploadingPhotos || isCleaningPhotos || !hasCartoonRequiredFields;
+  const showCartoonSuccessPopup =
+    isCartoonInquiry && notificationMessage && notificationType === 'success';
 
   useEffect(() => {
     if (notificationMessage && notificationType === 'success') {
       const timer = setTimeout(() => {
         setNotificationMessage('');
         setNotificationType(null);
-        if (!isCartoonInquiry) {
-          router.push('/products');
-        }
+        router.push(isCartoonInquiry ? '/cartoons' : '/products');
       }, 3000);
 
       return () => clearTimeout(timer);
@@ -131,6 +204,79 @@ export default function ContactForm({ product, productId = null, serviceContext 
     return '';
   };
 
+  const markCartoonPhotosStale = (message) => {
+    clearCartoonUploadSession();
+    setCartoonPhotoSlotsUsed(0);
+    setCartoonPhotoItems((currentPhotos) => (
+      currentPhotos.map((photo) => ({
+        ...photo,
+        status: 'stale',
+        error: '',
+        uploadedPhoto: null,
+      }))
+    ));
+    setPhotoError(message);
+  };
+
+  const updateCartoonPhotoItem = (photoId, update) => {
+    setCartoonPhotoItems((currentPhotos) => (
+      currentPhotos.map((photo) => (
+        photo.id === photoId
+          ? {
+              ...photo,
+              ...(typeof update === 'function' ? update(photo) : update),
+            }
+          : photo
+      ))
+    ));
+  };
+
+  const uploadCartoonPhotoItem = async (photoItem) => {
+    updateCartoonPhotoItem(photoItem.id, { status: 'uploading', error: '' });
+
+    try {
+      const uploadSessionToken = await ensureCartoonUploadSession();
+      const uploadedPhoto = await uploadCartoonOrderPhoto({
+        file: photoItem.file,
+        uploadSessionToken,
+      });
+      const normalizedPhoto = {
+        objectName: uploadedPhoto.objectName,
+        uploadConfirmationToken: uploadedPhoto.uploadConfirmationToken,
+        originalName: uploadedPhoto.originalName || photoItem.originalName || 'Снимка',
+        contentType: uploadedPhoto.contentType,
+        size: uploadedPhoto.size,
+      };
+
+      updateCartoonPhotoItem(photoItem.id, {
+        status: 'uploaded',
+        error: '',
+        originalName: normalizedPhoto.originalName,
+        contentType: normalizedPhoto.contentType,
+        size: normalizedPhoto.size,
+        uploadedPhoto: normalizedPhoto,
+      });
+      setCartoonPhotoSlotsUsed((currentCount) => currentCount + 1);
+      return true;
+    } catch (err) {
+      const message = err?.message || 'Качването на снимката не беше успешно.';
+
+      if (isUploadSessionResetError(err)) {
+        markCartoonPhotosStale('Сесията за качване трябва да се поднови. Моля изберете снимките отново.');
+        return false;
+      }
+
+      const errorCode = err?.data?.code || '';
+      updateCartoonPhotoItem(photoItem.id, {
+        status: 'failed',
+        error: errorCode === 'upload_session_duplicate'
+          ? 'Тази снимка вече е качена към текущата заявка.'
+          : message,
+      });
+      return true;
+    }
+  };
+
   const handleCartoonPhotoSelection = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
@@ -147,73 +293,156 @@ export default function ContactForm({ product, productId = null, serviceContext 
     }
 
     setPhotoError('');
+    const photoItems = files.map((file) => {
+      const photoItem = createPhotoItem(file, photoItemIdRef.current);
+      photoItemIdRef.current += 1;
+      return photoItem;
+    });
+    setCartoonPhotoItems((currentPhotos) => [
+      ...currentPhotos,
+      ...photoItems,
+    ]);
     setIsUploadingPhotos(true);
 
     try {
-      const uploadSessionToken = await ensureCartoonUploadSession();
+      for (const photoItem of photoItems) {
+        const shouldContinue = await uploadCartoonPhotoItem(photoItem);
 
-      for (const file of files) {
-        const uploadedPhoto = await uploadCartoonOrderPhoto({
-          file,
-          uploadSessionToken,
-        });
-
-        setCartoonPhotos((currentPhotos) => [
-          ...currentPhotos,
-          {
-            objectName: uploadedPhoto.objectName,
-            uploadConfirmationToken: uploadedPhoto.uploadConfirmationToken,
-            originalName: uploadedPhoto.originalName || file.name,
-            contentType: uploadedPhoto.contentType,
-            size: uploadedPhoto.size,
-          },
-        ]);
-        setCartoonPhotoSlotsUsed((currentCount) => currentCount + 1);
-      }
-    } catch (err) {
-      const message = err?.message || 'Качването на снимката не беше успешно.';
-
-      const errorCode = err?.data?.code || '';
-
-      if (
-        err?.status === 401 ||
-        errorCode === 'upload_session_expired' ||
-        errorCode === 'upload_session_full'
-      ) {
-        clearCartoonUploadSession();
-        setCartoonPhotos([]);
-        setCartoonPhotoSlotsUsed(0);
-        setPhotoError('Сесията за качване трябва да се поднови. Моля изберете снимките отново.');
-      } else if (errorCode === 'upload_session_duplicate') {
-        setPhotoError('Тази снимка вече е качена към текущата заявка.');
-      } else {
-        setPhotoError(message);
+        if (!shouldContinue) {
+          break;
+        }
       }
     } finally {
       setIsUploadingPhotos(false);
     }
   };
 
-  const removeCartoonPhoto = (indexToRemove) => {
-    setCartoonPhotos((currentPhotos) => (
-      currentPhotos.filter((_, index) => index !== indexToRemove)
-    ));
+  const retryCartoonPhoto = async (photoId) => {
+    const photoItem = cartoonPhotoItems.find((photo) => photo.id === photoId);
+
+    if (!photoItem?.file || photoItem.status !== 'failed') {
+      return;
+    }
+
+    if (cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS) {
+      updateCartoonPhotoItem(photoId, {
+        error: 'Няма свободни места в текущата сесия. Изберете снимките отново.',
+      });
+      return;
+    }
+
     setPhotoError('');
+    setIsUploadingPhotos(true);
+
+    try {
+      await uploadCartoonPhotoItem(photoItem);
+    } finally {
+      setIsUploadingPhotos(false);
+    }
   };
 
-  const resetCartoonOrderState = () => {
+  const cleanupUploadedCartoonPhotos = async (uploadedPhotos) => {
+    const uploadConfirmationTokens = uploadedPhotos
+      .map((photo) => photo?.uploadConfirmationToken)
+      .filter(Boolean);
+
+    if (uploadConfirmationTokens.length === 0) {
+      return;
+    }
+
+    const result = await cleanupCartoonOrderUploadedPhotos({
+      uploadSessionToken: uploadSessionTokenRef.current,
+      uploadConfirmationTokens,
+    });
+
+    if (Number(result?.failedCount) > 0) {
+      const error = new Error(PHOTO_CLEANUP_ERROR_MESSAGE);
+
+      error.data = result;
+      throw error;
+    }
+  };
+
+  const removeCartoonPhoto = async (photoId) => {
+    const photoItem = cartoonPhotoItems.find((photo) => photo.id === photoId);
+
+    if (!photoItem || photoItem.status === 'uploading' || photoItem.status === 'removing') {
+      return;
+    }
+
+    setPhotoError('');
+
+    if (!photoItem.uploadedPhoto) {
+      setCartoonPhotoItems((currentPhotos) => (
+        currentPhotos.filter((photo) => photo.id !== photoId)
+      ));
+      return;
+    }
+
+    updateCartoonPhotoItem(photoId, { status: 'removing', error: '' });
+    setIsCleaningPhotos(true);
+
+    try {
+      await cleanupUploadedCartoonPhotos([photoItem.uploadedPhoto]);
+      setCartoonPhotoItems((currentPhotos) => (
+        currentPhotos.filter((photo) => photo.id !== photoId)
+      ));
+      setCartoonPhotoSlotsUsed((currentCount) => Math.max(currentCount - 1, 0));
+    } catch {
+      updateCartoonPhotoItem(photoId, {
+        status: 'uploaded',
+        error: PHOTO_CLEANUP_ERROR_MESSAGE,
+      });
+      setPhotoError(PHOTO_CLEANUP_ERROR_MESSAGE);
+    } finally {
+      setIsCleaningPhotos(false);
+    }
+  };
+
+  const clearCartoonOrderLocalState = () => {
     clearCartoonUploadSession();
-    setCartoonPhotos([]);
+    setCartoonPhotoItems([]);
     setCartoonPhotoSlotsUsed(0);
     setPhotoError('');
     setConsentAccepted(false);
     setWebsite('');
   };
 
+  const cleanupAndResetCartoonOrderState = async () => {
+    if (isCleaningPhotos || isUploadingPhotos || isSubmitting) {
+      return;
+    }
+
+    const uploadedPhotos = cartoonPhotoItems
+      .filter((photo) => photo.status === 'uploaded' && photo.uploadedPhoto)
+      .map((photo) => photo.uploadedPhoto);
+
+    if (uploadedPhotos.length === 0) {
+      clearCartoonOrderLocalState();
+      return;
+    }
+
+    setPhotoError('');
+    setIsCleaningPhotos(true);
+
+    try {
+      await cleanupUploadedCartoonPhotos(uploadedPhotos);
+      clearCartoonOrderLocalState();
+    } catch (err) {
+      if (hasPartialCleanupProgress(err)) {
+        clearCartoonOrderLocalState();
+      }
+
+      setPhotoError(PHOTO_CLEANUP_ERROR_MESSAGE);
+    } finally {
+      setIsCleaningPhotos(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (isSubmitting || isUploadingPhotos) {
+    if (isSubmitting || isUploadingPhotos || isCleaningPhotos) {
       return;
     }
 
@@ -243,7 +472,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
 
     if (isCartoonInquiry) {
       // productId е опционален — общите запитвания са само свободен текст + снимки.
-      if (cartoonPhotos.length === 0) {
+      if (uploadedCartoonPhotos.length === 0) {
         setPhotoError('Моля качете поне една референтна снимка.');
         return;
       }
@@ -258,7 +487,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
       ? {
           ...sanitizedValues,
           productId: resolvedProductId || null,
-          photos: cartoonPhotos,
+          photos: uploadedCartoonPhotos,
           consentAccepted,
           website,
         }
@@ -289,11 +518,11 @@ export default function ContactForm({ product, productId = null, serviceContext 
       setNotificationType('success');
       resetForm();
       if (isCartoonInquiry) {
-        resetCartoonOrderState();
+        clearCartoonOrderLocalState();
       }
     } catch (err) {
       if (isCartoonInquiry && err?.status === 409) {
-        resetCartoonOrderState();
+        markCartoonPhotosStale('Снимките вече не могат да бъдат използвани. Моля качете ги отново и изпратете заявката пак.');
         setNotificationMessage('Снимките вече не могат да бъдат използвани. Моля качете ги отново и изпратете заявката пак.');
       } else if (err?.status === 409) {
         setNotificationMessage(err?.message || 'Заявката не може да бъде обработена. Моля опитайте отново.');
@@ -308,7 +537,15 @@ export default function ContactForm({ product, productId = null, serviceContext 
 
   return (
     <div className={styles.registerFormContainer}>
-      {notificationMessage ? (
+      {showCartoonSuccessPopup ? (
+        <div className={styles.successPopupBackdrop}>
+          <div className={styles.successPopup} role="status" aria-live="polite">
+            {notificationMessage}
+          </div>
+        </div>
+      ) : null}
+
+      {!showCartoonSuccessPopup && notificationMessage ? (
         <MessageBox type={notificationType} message={notificationMessage} />
       ) : error ? (
         <MessageBox type="error" message={error} />
@@ -318,6 +555,11 @@ export default function ContactForm({ product, productId = null, serviceContext 
 
       <form className={styles.registerForm} onSubmit={handleSubmit}>
         <h3>{isCartoonInquiry ? 'Запитване за шарж' : 'Свържете се с нас'}</h3>
+        {isCartoonInquiry && (
+          <p className={styles.cartoonInquirySubtitle}>
+            Изпратете запитване. Ще се свържем с вас за уточнение на цена, срок, вариант и начин на изработка.
+          </p>
+        )}
         {!isCartoonInquiry && product?.title && (
           <p><b>Изпращате запитване за: {product.title}</b></p>
         )}
@@ -391,7 +633,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                 accept={ALLOWED_CARTOON_ORDER_PHOTO_MIME_TYPES.join(',')}
                 multiple
                 onChange={handleCartoonPhotoSelection}
-                disabled={isUploadingPhotos || cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS}
+                disabled={isUploadingPhotos || isCleaningPhotos || cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS}
               />
               <p className={styles.fieldHint}>
                 До {MAX_CARTOON_ORDER_PHOTOS} снимки, всяка до {cartoonPhotoMaxSizeMb} MB. Поддържани формати: JPG, PNG, WEBP.
@@ -402,32 +644,56 @@ export default function ContactForm({ product, productId = null, serviceContext 
               {isUploadingPhotos && (
                 <p className={styles.videoInlineStatus}>Качване...</p>
               )}
-              {cartoonPhotos.length > 0 && (
+              {isCleaningPhotos && (
+                <p className={styles.videoInlineStatus}>{PHOTO_REMOVING_LABEL}</p>
+              )}
+              {cartoonPhotoItems.length > 0 && (
                 <ul className={styles.videoPreviewList} data-testid="cartoon-photo-list">
-                  {cartoonPhotos.map((photo, index) => (
-                    <li key={photo.objectName} className={styles.videoPreviewItem}>
+                  {cartoonPhotoItems.map((photo) => (
+                    <li
+                      key={photo.id}
+                      className={`${styles.videoPreviewItem} ${styles.photoPreviewItem}`}
+                      data-photo-status={photo.status}
+                    >
                       <div className={styles.videoPreviewContent}>
-                        <strong>{photo.originalName || 'Снимка'}</strong>
-                        <p>{photo.contentType} · {Math.ceil(photo.size / 1024)} KB</p>
+                        <strong>{getPhotoDisplayName(photo)}</strong>
+                        <p>
+                          {photo.contentType || 'image'} · {formatPhotoSize(photo.size)} · {PHOTO_STATUS_LABELS[photo.status] || PHOTO_REMOVING_LABEL}
+                        </p>
+                        {photo.error && (
+                          <p className={styles.errorHint}>{photo.error}</p>
+                        )}
                       </div>
                       <div className={styles.videoPreviewActions}>
-                        <button
-                          type="button"
-                          onClick={() => removeCartoonPhoto(index)}
-                          disabled={isSubmitting}
-                        >
-                          Премахни
-                        </button>
+                        {photo.status === 'failed' && (
+                          <button
+                            type="button"
+                            onClick={() => retryCartoonPhoto(photo.id)}
+                            disabled={isSubmitting || isUploadingPhotos || isCleaningPhotos}
+                          >
+                            Опитай пак
+                          </button>
+                        )}
+                        {photo.status !== 'removed' && photo.status !== 'stale' && (
+                          <button
+                            type="button"
+                            onClick={() => removeCartoonPhoto(photo.id)}
+                            disabled={isSubmitting || isCleaningPhotos || photo.status === 'uploading' || photo.status === 'removing'}
+                          >
+                            Премахни
+                          </button>
+                        )}
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-              {cartoonPhotoSlotsUsed >= MAX_CARTOON_ORDER_PHOTOS && cartoonPhotos.length < MAX_CARTOON_ORDER_PHOTOS && (
+              {canResetCartoonPhotos && (
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={resetCartoonOrderState}
+                  onClick={cleanupAndResetCartoonOrderState}
+                  disabled={isSubmitting || isUploadingPhotos || isCleaningPhotos}
                 >
                   Избери снимките отново
                 </button>
@@ -442,7 +708,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
                 checked={consentAccepted}
                 onChange={(event) => setConsentAccepted(event.target.checked)}
               />
-              Съгласявам се качените снимки да бъдат използвани за изготвяне на запитването/поръчката за шарж.
+              Съгласявам се качените снимки да бъдат използвани единствено за разглеждане на запитването и изготвяне на индивидуална оферта за шарж.
             </label>
 
             <input
@@ -458,7 +724,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
           </>
         )}
 
-        <button type="submit">Изпрати</button>
+        <button type="submit" disabled={isSubmitDisabled}>Изпрати</button>
       </form>
     </div>
   );

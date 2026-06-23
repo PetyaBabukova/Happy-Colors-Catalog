@@ -13,6 +13,9 @@ const fileRef = vi.fn(() => ({ save, delete: deleteFile }));
 const bucket = vi.fn(() => ({ file: fileRef }));
 const getStorage = vi.fn(() => ({ bucket }));
 const buildStorageObjectName = vi.fn(() => 'cartoon-orders/reference-photos/photo.webp');
+const reserveUploadByteQuota = vi.fn();
+const confirmUploadByteQuotaReservations = vi.fn();
+const releaseUploadByteQuotaReservations = vi.fn();
 let bucketName;
 
 function webpFile({ name = 'photo.webp', type = 'image/webp', sizePadding = 0 } = {}) {
@@ -98,6 +101,22 @@ describe('/api/cartoon-orders/uploads', () => {
         objectName: 'cartoon-orders/reference-photos/photo.webp',
       },
     });
+    reserveUploadByteQuota.mockResolvedValue({
+      ok: true,
+      enabled: true,
+      reservations: [{ reservationId: 'byte-reservation-1' }],
+      browserGuard: {
+        cookieName: 'hc_cartoon_guard',
+        value: 'browser-cookie',
+        shouldSetCookie: false,
+      },
+      guard: {
+        browserHmac: 'browser-hmac',
+        ipHmac: 'ip-hmac',
+      },
+    });
+    confirmUploadByteQuotaReservations.mockResolvedValue(undefined);
+    releaseUploadByteQuotaReservations.mockResolvedValue(undefined);
 
     vi.doMock('../../../src/app/api/_lib/gcs.js', () => ({
       buildStorageObjectName,
@@ -106,6 +125,11 @@ describe('/api/cartoon-orders/uploads', () => {
     }));
     vi.doMock('../../../src/app/api/_lib/cartoonUploadSessionStore.js', () => ({
       appendCartoonUploadedObject,
+    }));
+    vi.doMock('../../../src/app/api/_lib/cartoonUploadQuotaGuards.js', () => ({
+      reserveUploadByteQuota,
+      confirmUploadByteQuotaReservations,
+      releaseUploadByteQuotaReservations,
     }));
   });
 
@@ -116,6 +140,7 @@ describe('/api/cartoon-orders/uploads', () => {
 
     expect(response.status).toBe(401);
     expect(save).not.toHaveBeenCalled();
+    expect(reserveUploadByteQuota).not.toHaveBeenCalled();
   });
 
   it('does not expose uploads while the cartoons service gate is disabled', async () => {
@@ -303,8 +328,19 @@ describe('/api/cartoon-orders/uploads', () => {
         contentType: 'image/webp',
         size: 12,
         originalName: 'photo.webp',
+        guard: {
+          browserHmac: 'browser-hmac',
+          ipHmac: 'ip-hmac',
+        },
       })
     );
+    expect(reserveUploadByteQuota).toHaveBeenCalledWith({
+      request: expect.any(Object),
+      amount: 12,
+    });
+    expect(confirmUploadByteQuotaReservations).toHaveBeenCalledWith([
+      { reservationId: 'byte-reservation-1' },
+    ]);
     expect(
       verifyCartoonOrderUploadToken({
         token: body.uploadConfirmationToken,
@@ -331,6 +367,65 @@ describe('/api/cartoon-orders/uploads', () => {
       message: 'This photo has already been uploaded in the current session.',
     });
     expect(deleteFile).toHaveBeenCalledWith({ ignoreNotFound: true });
+    expect(releaseUploadByteQuotaReservations).toHaveBeenCalledWith([
+      { reservationId: 'byte-reservation-1' },
+    ]);
+  });
+
+  it('blocks uploads that exceed the persistent byte quota before storage writes', async () => {
+    reserveUploadByteQuota.mockResolvedValueOnce({
+      ok: false,
+      enabled: true,
+      reservations: [],
+      browserGuard: {
+        cookieName: 'hc_cartoon_guard',
+        value: 'browser-cookie',
+        shouldSetCookie: true,
+      },
+      guard: {
+        browserHmac: 'browser-hmac',
+        ipHmac: 'ip-hmac',
+      },
+    });
+    const token = createUploadSessionToken({ sessionId: 'session-1' });
+    const { POST } = await loadRoute();
+
+    const response = await POST(createFormRequest({ token }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(429);
+    expect(body).toEqual({
+      message: 'Upload could not be accepted right now. Please try again later.',
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(appendCartoonUploadedObject).not.toHaveBeenCalled();
+    expect(confirmUploadByteQuotaReservations).not.toHaveBeenCalled();
+    expect(releaseUploadByteQuotaReservations).not.toHaveBeenCalled();
+  });
+
+  it('sets the browser guard cookie on successful upload when a new persistent guard is issued', async () => {
+    reserveUploadByteQuota.mockResolvedValueOnce({
+      ok: true,
+      enabled: true,
+      reservations: [{ reservationId: 'byte-reservation-cookie' }],
+      browserGuard: {
+        cookieName: 'hc_cartoon_guard',
+        value: 'browser-cookie',
+        shouldSetCookie: true,
+      },
+      guard: {
+        browserHmac: 'browser-hmac',
+        ipHmac: 'ip-hmac',
+      },
+    });
+    const token = createUploadSessionToken({ sessionId: 'session-1' });
+    const { POST } = await loadRoute();
+
+    const response = await POST(createFormRequest({ token }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toContain('hc_cartoon_guard=browser-cookie');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
   });
 
   it('attempts cleanup when storage save fails after creating the file reference', async () => {
@@ -344,6 +439,9 @@ describe('/api/cartoon-orders/uploads', () => {
     expect(response.status).toBe(500);
     expect(deleteFile).toHaveBeenCalledWith({ ignoreNotFound: true });
     expect(appendCartoonUploadedObject).not.toHaveBeenCalled();
+    expect(releaseUploadByteQuotaReservations).toHaveBeenCalledWith([
+      { reservationId: 'byte-reservation-1' },
+    ]);
   });
 
   it('deletes the just-saved object when persistence throws after storage save', async () => {

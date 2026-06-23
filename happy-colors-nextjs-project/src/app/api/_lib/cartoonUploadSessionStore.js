@@ -6,6 +6,7 @@ import { MAX_CARTOON_ORDER_PHOTOS } from '@/config/productLimits';
 export const CARTOON_UPLOAD_SESSIONS_COLLECTION = 'cartoon_upload_sessions';
 
 const UPLOAD_SESSION_TTL_MS = 20 * 60 * 1000;
+const DEFAULT_CLEANUP_LOCK_LEASE_MINUTES = 15;
 let indexesEnsured = false;
 
 async function getCollection() {
@@ -68,9 +69,11 @@ export async function appendCartoonUploadedObject({
   size,
   originalName,
   uploadedAt = new Date(),
+  guard = {},
 } = {}) {
   const collection = await getCollection();
   await ensureUploadSessionIndexes(collection);
+  const guardRefs = guard || {};
 
   const uploadedObject = {
     objectName,
@@ -81,6 +84,16 @@ export async function appendCartoonUploadedObject({
     claimedAt: null,
     claimedOrderId: null,
     cleanupLockedAt: null,
+    cleanupRequestedAt: null,
+    cleanupFailedAt: null,
+    cleanupFailureCategory: 'none',
+    byteGaugeReleasedAt: null,
+    orphanReapingAt: null,
+    orderPersistingAt: null,
+    guard: {
+      browserHmac: String(guardRefs.browserHmac || ''),
+      ipHmac: String(guardRefs.ipHmac || ''),
+    },
   };
 
   const result = await collection.updateOne(
@@ -118,6 +131,168 @@ export async function appendCartoonUploadedObject({
   }
 
   return { ok: true, uploadedObject };
+}
+
+function getCleanupLockLeaseMs() {
+  const minutes = Number.parseInt(process.env.CARTOON_UPLOAD_CLEANUP_LOCK_LEASE_MINUTES, 10);
+  const safeMinutes = Number.isFinite(minutes) && minutes > 0
+    ? minutes
+    : DEFAULT_CLEANUP_LOCK_LEASE_MINUTES;
+
+  return safeMinutes * 60 * 1000;
+}
+
+export async function acquireCartoonUploadCleanupLock({
+  sessionId,
+  objectName,
+  now = new Date(),
+} = {}) {
+  const collection = await getCollection();
+  const cleanupLockedAt = new Date(now);
+  const staleLockCutoff = new Date(cleanupLockedAt.getTime() - getCleanupLockLeaseMs());
+  const result = await collection.updateOne(
+    {
+      sessionId,
+      uploadedObjects: {
+        $elemMatch: {
+          objectName,
+          claimedAt: null,
+          claimedOrderId: null,
+          $or: [
+            { cleanupLockedAt: null },
+            { cleanupLockedAt: { $lt: staleLockCutoff } },
+          ],
+        },
+      },
+    },
+    {
+      $set: {
+        'uploadedObjects.$.cleanupLockedAt': cleanupLockedAt,
+        'uploadedObjects.$.cleanupRequestedAt': cleanupLockedAt,
+        'uploadedObjects.$.cleanupFailedAt': null,
+        'uploadedObjects.$.cleanupFailureCategory': 'none',
+      },
+    }
+  );
+
+  return {
+    ok: result.modifiedCount === 1,
+    cleanupLockedAt,
+  };
+}
+
+export async function removeCartoonUploadedObjectAfterCleanup({
+  sessionId,
+  objectName,
+  cleanupLockedAt,
+} = {}) {
+  const collection = await getCollection();
+  const result = await collection.updateOne(
+    {
+      sessionId,
+      uploadedObjects: {
+        $elemMatch: {
+          objectName,
+          cleanupLockedAt,
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+      },
+    },
+    {
+      $pull: {
+        uploadedObjects: {
+          objectName,
+          cleanupLockedAt,
+        },
+      },
+      $inc: { uploadCount: -1 },
+    }
+  );
+
+  return { ok: result.modifiedCount === 1 };
+}
+
+export async function markCartoonUploadedObjectByteGaugeReleased({
+  sessionId,
+  objectName,
+  cleanupLockedAt,
+  now = new Date(),
+} = {}) {
+  const collection = await getCollection();
+  const result = await collection.findOneAndUpdate(
+    {
+      sessionId,
+      uploadedObjects: {
+        $elemMatch: {
+          objectName,
+          cleanupLockedAt,
+          claimedAt: null,
+          claimedOrderId: null,
+          byteGaugeReleasedAt: null,
+        },
+      },
+    },
+    {
+      $set: {
+        'uploadedObjects.$.byteGaugeReleasedAt': now,
+      },
+    },
+    {
+      returnDocument: 'before',
+      projection: {
+        uploadedObjects: 1,
+      },
+    }
+  );
+  const record = result?.value || result;
+  const uploadedObject = (record?.uploadedObjects || [])
+    .find((photo) => photo.objectName === objectName && !photo.byteGaugeReleasedAt);
+
+  return {
+    ok: Boolean(uploadedObject),
+    uploadedObject,
+  };
+}
+
+export async function releaseCartoonUploadCleanupLock({
+  sessionId,
+  objectName,
+  cleanupLockedAt,
+  failureCategory = 'unknown_cleanup_error',
+  now = new Date(),
+} = {}) {
+  const collection = await getCollection();
+  await collection.updateOne(
+    {
+      sessionId,
+      uploadedObjects: {
+        $elemMatch: {
+          objectName,
+          cleanupLockedAt,
+          claimedAt: null,
+          claimedOrderId: null,
+        },
+      },
+    },
+    {
+      $set: {
+        'uploadedObjects.$[photo].cleanupLockedAt': null,
+        'uploadedObjects.$[photo].cleanupFailedAt': now,
+        'uploadedObjects.$[photo].cleanupFailureCategory': failureCategory,
+      },
+    },
+    {
+      arrayFilters: [
+        {
+          'photo.objectName': objectName,
+          'photo.cleanupLockedAt': cleanupLockedAt,
+          'photo.claimedAt': null,
+          'photo.claimedOrderId': null,
+        },
+      ],
+    }
+  );
 }
 
 export function resetCartoonUploadSessionIndexCacheForTests() {

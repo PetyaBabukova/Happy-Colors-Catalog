@@ -14,8 +14,14 @@ function setupCartoonsPage({
   const carousel = vi.fn(({ banners: renderedBanners }) => (
     <div data-testid="cartoons-hero">{renderedBanners.length}</div>
   ));
+  const productCard = vi.fn(({ product, serviceContext }) => (
+    <a href={`/products/${product._id}${serviceContext === 'cartoons' ? '?service=cartoons' : ''}`}>
+      {product.title}
+    </a>
+  ));
 
   vi.doMock('@/config/cartoonsFeature', () => ({
+    CARTOONS_SERVICE_QUERY_VALUE: 'cartoons',
     isCartoonsServiceEnabled: enabled,
   }));
   vi.doMock('@/managers/homeBannersManager', () => ({
@@ -28,14 +34,13 @@ function setupCartoonsPage({
     default: carousel,
   }));
   vi.doMock('@/app/products/ProductCard', () => ({
-    default: ({ product }) => (
-      <a href={`/products/${product._id}`}>{product.title}</a>
-    ),
+    default: productCard,
   }));
 
   return {
     getCartoonHeroBanners,
     getCartoonGalleryProducts,
+    productCard,
     importPage: () => import('@/app/cartoons/page.jsx'),
   };
 }
@@ -76,10 +81,11 @@ describe('CartoonsPage', () => {
   });
 
   it('renders hero, CTA, and service-context gallery when the release gate is on', async () => {
-    const { importPage } = setupCartoonsPage({
+    const galleryProduct = { _id: 'product-1', title: 'Cartoon Sample' };
+    const { importPage, productCard } = setupCartoonsPage({
       enabled: true,
       banners: [{ _id: 'banner-1', imageUrl: '/banner.webp' }],
-      galleryProducts: [{ _id: 'product-1', title: 'Cartoon Sample' }],
+      galleryProducts: [galleryProduct],
     });
     const { default: CartoonsPage } = await importPage();
     const element = await CartoonsPage();
@@ -88,13 +94,21 @@ describe('CartoonsPage', () => {
 
     expect(screen.getByTestId('cartoons-hero')).toHaveTextContent('1');
     expect(screen.getByRole('heading', { name: 'Шарж по снимка за подарък с усмивка' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'изпратете запитване.' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'контактната форма' })).toHaveAttribute(
       'href',
       '/contacts'
     );
+    expect(screen.getByRole('link', { name: 'Изпрати запитване и снимки' })).toHaveAttribute(
+      'href',
+      '/contacts?service=cartoons'
+    );
+    expect(productCard.mock.calls[0][0]).toMatchObject({
+      product: galleryProduct,
+      serviceContext: 'cartoons',
+    });
     expect(screen.getByRole('link', { name: 'Cartoon Sample' })).toHaveAttribute(
       'href',
-      '/products/product-1'
+      '/products/product-1?service=cartoons'
     );
   });
 

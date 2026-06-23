@@ -13,6 +13,16 @@ vi.mock('@/managers/usersAdminManager', () => ({
   rejectAdminProduct: vi.fn(),
 }));
 
+const catalogModeState = vi.hoisted(() => ({
+  value: false,
+}));
+
+vi.mock('@/utils/catalogMode', () => ({
+  get isCatalogMode() {
+    return catalogModeState.value;
+  },
+}));
+
 const showPrev = vi.fn();
 const showNext = vi.fn();
 const pause = vi.fn();
@@ -68,6 +78,7 @@ describe('ProductDetails', () => {
     });
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    catalogModeState.value = false;
     mockSlideshow();
   });
 
@@ -128,6 +139,20 @@ describe('ProductDetails', () => {
     expect(routerPush).toHaveBeenCalledWith('/contacts?productId=product-1');
   });
 
+  it('shows product availability copy for available and unavailable product pages', () => {
+    const availableRender = render(<ProductDetails product={product} />);
+
+    expect(
+      screen.getByText(/Налична готова бройка — изпратете запитване за потвърждение/)
+    ).toBeInTheDocument();
+
+    availableRender.unmount();
+
+    render(<ProductDetails product={{ ...product, availability: 'unavailable' }} />);
+
+    expect(screen.getByText(/Възможна изработка след потвърждение\./)).toBeInTheDocument();
+  });
+
   it('preserves cartoon service context for inquiry links when provided', () => {
     mockSlideshow({ hasMultiple: false });
     const routerPush = vi.fn();
@@ -143,6 +168,30 @@ describe('ProductDetails', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
+    expect(routerPush).toHaveBeenCalledWith('/contacts?service=cartoons&productId=product-1');
+  });
+
+  it('routes available cartoon-context products to inquiry before the shop cart branch', () => {
+    catalogModeState.value = false;
+    mockSlideshow({ hasMultiple: false });
+    const addToCart = vi.fn();
+    const routerPush = vi.fn();
+    render(<ProductDetails product={product} serviceContext="cartoons" />, {
+      cartOverrides: { addToCart },
+      routerOverrides: { push: routerPush },
+    });
+
+    expect(screen.queryByTestId('add-to-cart-button')).not.toBeInTheDocument();
+    expect(screen.getByText(/Изработва се по индивидуално запитване\./)).toBeInTheDocument();
+    expect(screen.getByText(/Ориентировъчна цена от 18 €/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Крайната цена зависи от броя лица, сложността, стила и срока за изработка. Вижте подробности за цени и варианти/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'тук' })).toHaveAttribute('href', '/cartoons/offer');
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(addToCart).not.toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith('/contacts?service=cartoons&productId=product-1');
   });
 

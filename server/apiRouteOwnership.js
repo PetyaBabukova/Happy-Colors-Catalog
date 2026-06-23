@@ -14,15 +14,21 @@ export const BACKEND_API_PREFIXES = Object.freeze([
 
 export const BACKEND_API_EXACT_PATHS = Object.freeze([
   '/api/cartoon-orders',
+  '/api/cartoon-orders/purge-old-completed',
+  '/api/cartoon-orders/upload-cleanup/status',
+  '/api/cartoon-orders/upload-cleanup/run',
 ]);
 
 export const NEXT_API_EXACT_PATHS = Object.freeze([
   '/api/cartoon-orders/upload-session',
   '/api/cartoon-orders/uploads',
+  '/api/cartoon-orders/uploads/cleanup',
 ]);
 
 const CARTOON_ORDER_ADMIN_API_PATH_RE =
-  /^\/api\/cartoon-orders\/[a-fA-F0-9]{24}(?:\/(?:statuses|admin-notes|complete))?$/;
+  /^\/api\/cartoon-orders\/[a-fA-F0-9]{24}(?:\/(?:statuses|admin-notes|workflow|reject|complete|photo-diagnostics|notifications\/retry))?$/;
+const CARTOON_ORDER_ADMIN_PHOTO_API_PATH_RE =
+  /^\/api\/cartoon-orders\/[a-fA-F0-9]{24}\/photos\/[A-Za-z0-9_-]{1,80}$/;
 
 function normalizePathname(pathname) {
   const normalized = String(pathname || '').trim() || '/';
@@ -66,6 +72,10 @@ export function isBackendApiPath(value = '') {
   }
 
   if (CARTOON_ORDER_ADMIN_API_PATH_RE.test(pathname)) {
+    return true;
+  }
+
+  if (CARTOON_ORDER_ADMIN_PHOTO_API_PATH_RE.test(pathname)) {
     return true;
   }
 

@@ -56,6 +56,24 @@
   font-size: 1.2em;
 }
 
+.cartoonPriceNote {
+  max-width: 50%;
+  font-size: 1em;
+}
+
+.cartoonOfferLink {
+  font-weight: 700;
+}
+
+.cartoonOfferArrows {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.15em;
+  font-size: 0.85em;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
 .productDetailsBodyTabsContainer {
   display: flex;
   justify-content: center;
@@ -322,6 +340,11 @@
   .productDescriptionBody p {
     max-width: 100%;
     font-size: 1.1em;
+  }
+
+  .cartoonPriceNote {
+    max-width: 100%;
+    font-size: 0.95em;
   }
 
   .actionButtonsContainer {

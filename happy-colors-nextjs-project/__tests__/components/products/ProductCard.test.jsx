@@ -58,6 +58,19 @@ describe('ProductCard', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1');
   });
 
+  it('preserves cartoon service context when requested', () => {
+    render(<ProductCard product={product} serviceContext="cartoons" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1?service=cartoons');
+    expect(screen.queryByText('Налично')).not.toBeInTheDocument();
+  });
+
+  it('ignores unrelated service context values', () => {
+    render(<ProductCard product={product} serviceContext="not-cartoons" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1');
+  });
+
   it('builds image and video slides for the slideshow hook', () => {
     render(<ProductCard product={product} />);
 

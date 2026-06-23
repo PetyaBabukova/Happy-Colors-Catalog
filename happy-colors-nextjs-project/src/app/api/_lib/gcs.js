@@ -7,6 +7,8 @@ import { CARTOON_ORDER_PHOTO_PREFIX } from '@/config/productLimits';
 
 let storageInstance = null;
 let keyFilenameCache = null;
+const projectRoot = process.cwd();
+const repoRoot = path.resolve(projectRoot, '..');
 
 const DEFAULT_EXTENSION_BY_MIME_TYPE = {
   'image/jpeg': '.jpg',
@@ -20,7 +22,10 @@ function resolveGoogleCredentialsPath() {
   const candidates = [
     process.env.GOOGLE_APPLICATION_CREDENTIALS,
     '/etc/secrets/gcp-service-account.json',
-    path.join(process.cwd(), 'gcp-service-account.json'),
+    path.join(projectRoot, 'gcp-service-account.json'),
+    path.join(repoRoot, 'gcp-service-account.json'),
+    path.join(repoRoot, 'server', 'gcp-service-account.json'),
+    path.join(repoRoot, '..', 'Happy-Colors-SECRETS', 'gcp-service-account.json'),
   ].filter(Boolean);
 
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
@@ -113,6 +118,7 @@ export async function createCartoonOrderPhotoSignedReadUrl({
     .getSignedUrl({
       action: 'read',
       expires: Date.now() + expiresInMs,
+      version: 'v4',
     });
 
   return signedUrl;
