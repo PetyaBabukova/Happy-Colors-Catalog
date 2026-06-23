@@ -47,18 +47,26 @@ describe('CartoonsOfferPage', () => {
     const { importPage } = setupCartoonsOfferPage({ enabled: true });
     const { default: CartoonsOfferPage } = await importPage();
 
-    render(<CartoonsOfferPage />);
+    const { container } = render(<CartoonsOfferPage />);
 
     expect(screen.getByRole('img', { name: 'Шарж Арт студио' })).toHaveAttribute('src', '/LOGO.webp');
-    expect(screen.getByRole('heading', { name: 'Условия и цени за персонален шарж' })).toBeInTheDocument();
-    expect(screen.getByText('38 евро')).toBeInTheDocument();
-    expect(screen.getByText('48 евро')).toBeInTheDocument();
-    expect(screen.getByText('до 7 работни дни')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Изпрати запитване и снимки' })).toHaveAttribute(
-      'href',
-      '/contacts?service=cartoons'
+    expect(container.querySelector('img[src="/Offer_page_hero_banner.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('source[media="(max-width: 640px)"]')).toHaveAttribute(
+      'srcset',
+      '/Offer_page_hero_banner_MOBILE.webp'
     );
-    expect(screen.getByRole('link', { name: 'контактна форма' })).toHaveAttribute('href', '/contacts');
+    expect(screen.getByRole('img', { name: 'Ръчно изработен подарък в ателие' })).toHaveAttribute(
+      'src',
+      '/Offer_page__bdy_image.webp'
+    );
+    expect(screen.getByRole('heading', { name: 'Варианти и ориентировъчни цени' })).toBeInTheDocument();
+    expect(screen.getByText('от 39 €')).toBeInTheDocument();
+    expect(screen.getByText('от 49 €')).toBeInTheDocument();
+    expect(screen.getByText('до 7 работни дни')).toBeInTheDocument();
+    screen.getAllByRole('link', { name: 'Изпрати запитване и снимки' }).forEach((link) => {
+      expect(link).toHaveAttribute('href', '/contacts?service=cartoons');
+    });
+    expect(screen.getByRole('link', { name: 'контактната форма.' })).toHaveAttribute('href', '/contacts');
     expect(screen.getByRole('link', { name: 'Виж галерията' })).toHaveAttribute('href', '/cartoons');
   });
 });

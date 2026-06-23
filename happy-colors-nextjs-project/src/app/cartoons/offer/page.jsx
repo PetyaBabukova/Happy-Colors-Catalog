@@ -25,7 +25,7 @@ const BASE_PACKAGES = [
   },
   {
     title: 'Постер в тубус',
-    eyebrow: 'произволен формат до ...',
+    eyebrow: 'произволен формат до 470x315 мм',
     price: 'по запитване',
     description: 'Отпечатан постер, навит и опакован в тубус за удобно транспортиране, пращане по куриер и пр.',
   },
@@ -86,15 +86,20 @@ export default function CartoonsOfferPage() {
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
-        <Image
-          className={styles.heroImage}
-          src="/homepage_background_cropped.webp"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-        />
-        <div className={styles.heroOverlay} />
+        <picture className={styles.heroPicture}>
+          <source
+            media="(max-width: 640px)"
+            srcSet="/Offer_page_hero_banner_MOBILE.webp"
+          />
+          <Image
+            className={styles.heroImage}
+            src="/Offer_page_hero_banner.webp"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+          />
+        </picture>
         <div className={`${styles.heroContent} pageInline`}>
           <Image
             className={styles.logo}
@@ -140,7 +145,7 @@ export default function CartoonsOfferPage() {
       <section className={`${styles.splitSection} pageInline`}>
         <div className={styles.photoPanel}>
           <Image
-            src="/lion_banner.webp"
+            src="/Offer_page__bdy_image.webp"
             alt="Ръчно изработен подарък в ателие"
             fill
             sizes="(max-width: 768px) 100vw, 42vw"
