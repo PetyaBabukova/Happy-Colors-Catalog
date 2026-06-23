@@ -15,17 +15,14 @@
   align-items: flex-end;
 }
 
+.heroPicture {
+  position: absolute;
+  inset: 0;
+}
+
 .heroImage {
   object-fit: cover;
   object-position: center;
-}
-
-.heroOverlay {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(240, 249, 247, 0.96) 0%, rgba(240, 249, 247, 0.84) 42%, rgba(240, 249, 247, 0.2) 100%),
-    linear-gradient(0deg, rgba(240, 249, 247, 0.9) 0%, rgba(240, 249, 247, 0) 42%);
 }
 
 .heroContent {
@@ -42,6 +39,7 @@
   width: min(100%, 34rem);
   height: auto;
   margin-bottom: 1.75rem;
+  mix-blend-mode: multiply;
 }
 
 .kicker {
@@ -324,17 +322,40 @@
 
 @media (max-width: 640px) {
   .hero {
-    min-height: 34rem;
+    display: block;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .heroPicture {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
   }
 
   .heroContent {
-    padding-top: 2rem;
+    width: 100%;
+    padding-top: 1.5rem;
     padding-bottom: 2.5rem;
   }
 
   .logo {
-    width: 100%;
+    width: min(100%, 26rem);
     margin-bottom: 1.2rem;
+  }
+
+  .timelineItem h3 {
+    font-size: 1.05rem;
+  }
+
+  .timelineTime {
+    font-size: 1em;
+  }
+
+  .price {
+    font-size: 1.5em;
   }
 
   .heroActions,
