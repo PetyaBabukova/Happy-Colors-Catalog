@@ -354,6 +354,10 @@
     font-size: 1em;
   }
 
+  .price {
+    font-size: 1.5em;
+  }
+
   .heroActions,
   .primaryButton,
   .secondaryButton,
