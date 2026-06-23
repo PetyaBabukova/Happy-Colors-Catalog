@@ -488,7 +488,15 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 							<p className={styles.cartoonPriceNote}>
 								Ориентировъчна цена от {product.price} €.
 								<br />
-								Крайната цена зависи от броя лица, сложността, стила, срока и желания вариант. Изпратете запитване за конкретна оферта.
+								Крайната цена зависи от броя лица, сложността, стила и срока за изработка. Вижте подробности за цени и варианти{' '}
+								<Link href="/cartoons/offer" className={styles.cartoonOfferLink}>
+									тук
+									<span aria-hidden="true" className={styles.cartoonOfferArrows}>
+										<span>›</span>
+										<span>›</span>
+										<span>›</span>
+									</span>
+								</Link>
 							</p>
 						) : isCatalogMode ? (
 							<p>Цена {product.price} €. За наличност и уточнения, моля изпратете запитване.</p>

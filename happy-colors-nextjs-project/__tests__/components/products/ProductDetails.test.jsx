@@ -185,8 +185,9 @@ describe('ProductDetails', () => {
     expect(screen.getByText(/Изработва се по индивидуално запитване\./)).toBeInTheDocument();
     expect(screen.getByText(/Ориентировъчна цена от 18 €/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Крайната цена зависи от броя лица, сложността, стила, срока и желания вариант/)
+      screen.getByText(/Крайната цена зависи от броя лица, сложността, стила и срока за изработка. Вижте подробности за цени и варианти/)
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'тук' })).toHaveAttribute('href', '/cartoons/offer');
 
     fireEvent.click(screen.getByRole('button'));
 
