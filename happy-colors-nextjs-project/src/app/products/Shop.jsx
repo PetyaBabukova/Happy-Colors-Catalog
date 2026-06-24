@@ -9,7 +9,7 @@ function getAvailabilityRank(product) {
   return product?.availability === 'unavailable' ? 1 : 0;
 }
 
-export default function Shop({ products }) {
+export default function Shop({ products, showTitle = true }) {
   const grouped = {};
 
   // Групиране на продуктите по категория
@@ -39,7 +39,9 @@ if (grouped['Други']) {
   return (
     <>
     <section className={styles.shopPage}>
-      <h1 className={styles.shopPageTitle}>Плетени играчки, аксесоари и декорация</h1>
+      {showTitle && (
+        <h1 className={styles.shopPageTitle}>Плетени играчки, аксесоари и декорация</h1>
+      )}
 
       <section className={`${styles.categories} pageInline`}>
         {categories.map((category) => (

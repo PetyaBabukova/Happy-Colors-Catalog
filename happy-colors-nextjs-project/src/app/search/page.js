@@ -36,7 +36,7 @@ export default async function SearchPage({ searchParams }) {
   return (
     <>
       {query && <h1>Резултати от търсенето на: {query}</h1>}
-      <Shop products={products} />
+      <Shop products={products} showTitle={false} />
     </>
   );
 }

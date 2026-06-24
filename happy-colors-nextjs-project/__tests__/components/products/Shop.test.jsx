@@ -29,6 +29,17 @@ describe('Shop', () => {
     expect(screen.queryAllByTestId(/product-/)).toHaveLength(0);
   });
 
+  it('can hide the catalog title when embedded in search results', () => {
+    render(<Shop products={[]} showTitle={false} />);
+
+    expect(
+      screen.queryByRole('heading', {
+        level: 1,
+        name: 'Плетени играчки, аксесоари и декорация',
+      })
+    ).not.toBeInTheDocument();
+  });
+
   it('groups products by category and puts unavailable products last within each group', () => {
     render(
       <Shop
