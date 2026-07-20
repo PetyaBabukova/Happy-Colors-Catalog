@@ -41,6 +41,103 @@ describe('home banners integration', () => {
     expect(res.body.map((banner) => banner.title)).toEqual(['First', 'Second']);
   });
 
+  it('projects only translated active banners for English public requests', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const translated = await createHomeBanner({
+      owner,
+      title: 'Source Hero',
+      description: 'Source hero description',
+      ctaLabel: 'Source CTA',
+      sourceRevision: 2,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/source-hero.webp',
+      translations: {
+        en: {
+          title: 'English Hero',
+          description: 'English hero description',
+          ctaLabel: 'English CTA',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    await createHomeBanner({
+      owner,
+      title: 'Bulgarian Only Hero',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/bg-only-hero.webp',
+    });
+    await createHomeBanner({
+      owner,
+      title: 'Fresh Hero Source',
+      ctaLabel: 'Fresh CTA',
+      sourceRevision: 3,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/stale-hero.webp',
+      translations: {
+        en: {
+          title: 'Stale English Hero',
+          ctaLabel: 'Stale CTA',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+
+    const enRes = await request(app).get('/home-banners').query({ locale: 'en' }).expect(200);
+    const bgRes = await request(app).get('/home-banners').expect(200);
+
+    expect(enRes.body).toEqual([
+      expect.objectContaining({
+        _id: String(translated._id),
+        title: 'English Hero',
+        description: 'English hero description',
+        ctaLabel: 'English CTA',
+        contentLocale: 'en',
+        translationPending: false,
+      }),
+    ]);
+    expect(enRes.body[0]).not.toHaveProperty('translations');
+    expect(enRes.body[0]).not.toHaveProperty('translationDrafts');
+    expect(enRes.body[0]).not.toHaveProperty('sourceRevision');
+    expect(bgRes.body.map((banner) => banner.title)).toEqual([
+      'Source Hero',
+      'Bulgarian Only Hero',
+      'Fresh Hero Source',
+    ]);
+    expect(bgRes.body[0]).not.toHaveProperty('translations');
+    expect(bgRes.body[0]).not.toHaveProperty('translationDrafts');
+    expect(bgRes.body[0]).not.toHaveProperty('sourceRevision');
+  });
+
+  it('bumps home banner sourceRevision when source copy is edited', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner,
+      title: 'Original Hero',
+      description: 'Original description',
+      ctaLabel: 'Original CTA',
+      sourceRevision: 1,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/original-hero.webp',
+    });
+
+    const res = await request(app)
+      .put(`/home-banners/${banner._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ title: 'Updated Hero' })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      title: 'Updated Hero',
+      sourceRevision: 2,
+    });
+  });
+
+  it('rejects unsupported public home banner locales', async () => {
+    const app = createExpressApp();
+
+    await request(app).get('/home-banners').query({ locale: 'fr' }).expect(400);
+  });
+
   it('lists home banners by default while preserving legacy banners without placement', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();

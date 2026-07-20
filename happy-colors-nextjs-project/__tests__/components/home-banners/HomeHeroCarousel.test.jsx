@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import HomeHeroCarousel from '@/components/home-banners/HomeHeroCarousel';
 import { deleteHomeBanner } from '@/managers/homeBannersManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
+import { setMockNavigation } from '../setup.js';
 
 vi.mock('@/managers/homeBannersManager', () => ({
   deleteHomeBanner: vi.fn(),
@@ -33,6 +34,10 @@ describe('HomeHeroCarousel', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('renders active banner content and switches slides manually', () => {
     render(<HomeHeroCarousel banners={banners} />);
 
@@ -43,6 +48,38 @@ describe('HomeHeroCarousel', () => {
 
     expect(screen.getByRole('heading', { name: 'Декорация' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Виж декорация' })).toHaveAttribute('href', '/search?q=декорация');
+  });
+
+  it('uses localized chrome for admin banner CTA labels on English routes', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en' });
+
+    render(<HomeHeroCarousel banners={banners} />, { locale: 'en' });
+
+    expect(screen.queryByRole('heading', { name: banners[0].title })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Handmade crochet toys, accessories, and home decor' })).toBeInTheDocument();
+    expect(screen.getByAltText('Crocheted lion and colorful yarn from Happy Colors')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: banners[0].ctaLabel })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Catalog' })).toHaveAttribute(
+      'href',
+      `/en/search?q=${encodeURIComponent('животинки')}`
+    );
+  });
+
+  it('keeps admin banner content on Bulgarian localized routes', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/bg' });
+
+    render(<HomeHeroCarousel banners={banners} />);
+
+    expect(screen.getByRole('heading', { name: banners[0].title })).toBeInTheDocument();
+    expect(screen.getByAltText(banners[0].title)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: banners[0].ctaLabel })).toHaveAttribute(
+      'href',
+      `/bg/search?q=${encodeURIComponent('животинки')}`
+    );
   });
 
   it('renders a mobile picture source when a mobile image exists', () => {
@@ -103,6 +140,23 @@ describe('HomeHeroCarousel', () => {
       expect(deleteHomeBanner).toHaveBeenCalledWith('banner-1', { placement: 'home' });
     });
     expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it('renders localized English fallback hero when no banners are available', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en' });
+
+    render(<HomeHeroCarousel banners={[]} />, { locale: 'en' });
+
+    expect(
+      screen.getByRole('heading', {
+        level: 2,
+        name: 'Handmade crochet toys, accessories, and home decor',
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByAltText('Crocheted lion and colorful yarn from Happy Colors')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Catalog' })).toHaveAttribute('href', '/en/products');
   });
 
   it('renders fallback hero when there are no banners', () => {

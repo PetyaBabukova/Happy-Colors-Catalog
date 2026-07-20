@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createNewsletterConfirmationPageUrl,
   createNewsletterConfirmationToken,
+  createUnsubscribePageUrl,
   createSubscribeFormToken,
   createUnsubscribeToken,
   verifyNewsletterConfirmationToken,
@@ -146,6 +147,30 @@ describe('newsletterService token helpers', () => {
     });
   });
 
+  it('can bind confirmation tokens and public page URLs to an allowed newsletter locale', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const subscriber = buildSubscriber({ unsubscribeTokenVersion: 4 });
+    const token = createNewsletterConfirmationToken(' Petya@Example.COM ', subscriber, {
+      locale: 'en',
+      localeChangeRequestVersion: 3,
+    });
+    const decoded = verifyNewsletterConfirmationToken(token);
+
+    expect(decoded).toMatchObject({
+      purpose: 'newsletter-confirm',
+      email: 'petya@example.com',
+      ver: 4,
+      locale: 'en',
+      localeVer: 3,
+    });
+    expect(createNewsletterConfirmationPageUrl(token, { locale: 'en' })).toBe(
+      `https://happycolors.eu/en/newsletter/confirm#token=${encodeURIComponent(token)}`
+    );
+    expect(createUnsubscribePageUrl('unsubscribe-token', { locale: 'en' })).toBe(
+      'https://happycolors.eu/en/newsletter/unsubscribe?token=unsubscribe-token'
+    );
+  });
+
   it('rejects tampered, expired, wrong-purpose, unsubscribe, and subscribe form tokens at confirmation verification', () => {
     process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
     const confirmationToken = createNewsletterConfirmationToken('petya@example.com');
@@ -217,11 +242,11 @@ describe('newsletterService token helpers', () => {
       const token = createNewsletterConfirmationToken('petya@example.com');
       const url = createNewsletterConfirmationPageUrl(token);
 
-      expect(url).toBe(`https://happycolors.eu/newsletter/confirm#token=${encodeURIComponent(token)}`);
+      expect(url).toBe(`https://happycolors.eu/bg/newsletter/confirm#token=${encodeURIComponent(token)}`);
       expect(url).not.toContain('?token=');
       process.env.NEWSLETTER_PUBLIC_SITE_URL = 'https://newsletter.example';
       expect(createNewsletterConfirmationPageUrl(token)).toBe(
-        `https://newsletter.example/newsletter/confirm#token=${encodeURIComponent(token)}`
+        `https://newsletter.example/bg/newsletter/confirm#token=${encodeURIComponent(token)}`
       );
     } finally {
       process.env.CLIENT_URL = previousClientUrl;

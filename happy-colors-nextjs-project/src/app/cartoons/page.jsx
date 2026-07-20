@@ -5,20 +5,37 @@ import shopStyles from '@/app/products/shop.module.css';
 import CartoonsHeroCarousel from '@/components/home-banners/CartoonsHeroCarousel';
 import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
 import { buildPageMetadata } from '@/config/siteSeo';
+import { getCartoonsPageContent } from '@/content/publicPages/cartoons';
+import { DEFAULT_LOCALE } from '@/i18n/config';
+import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getCartoonHeroBanners } from '@/managers/homeBannersManager';
 import { getCartoonGalleryProducts } from '@/managers/productsManager';
 import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
 import styles from './cartoons.module.css';
 
-const PAGE_TITLE = 'Шарж по снимка за подарък с усмивка';
-const PAGE_DESCRIPTION =
-  'Превърнете любима снимка в забавен персонален шарж — за рожден ден, юбилей, сватба, годишнина или друг специален повод. Кажете ни идеята, изпратете снимка, а ние, ще създадем артистичен портрет с настроение, характер и щипка закачка. Ако желаете можем да разпечатаме карикатурата на фото хартия, на чаша или тениска. За повече информация изпратете запитване и снимки.';
+function renderRichTextParts(parts, publicHref) {
+  return parts.map((part, index) => {
+    if (typeof part === 'string') {
+      return part;
+    }
 
-export function generateMetadata() {
+    return (
+      <Link key={`${part.href}-${index}`} href={publicHref(part.href)} className={styles.inquiryLink}>
+        {part.label}
+      </Link>
+    );
+  });
+}
+
+export async function generateMetadata(props = {}) {
+  const params = await props.params;
+  const locale = params?.locale || DEFAULT_LOCALE;
+  const content = getCartoonsPageContent(locale);
+
   if (!isCartoonsServiceEnabled) {
     return {
-      title: 'Страницата не е намерена',
-      description: 'Тази страница не е достъпна.',
+      title: content.unavailable.title,
+      description: content.unavailable.description,
       robots: {
         index: false,
         follow: false,
@@ -27,21 +44,27 @@ export function generateMetadata() {
   }
 
   return buildPageMetadata({
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
+    title: content.metadata.title,
+    description: content.metadata.description,
     path: '/cartoons',
+    locale,
     indexable: true,
   });
 }
 
-export default async function CartoonsPage() {
+export default async function CartoonsPage(props = {}) {
   if (!isCartoonsServiceEnabled) {
     notFound();
   }
 
+  const params = await props.params;
+  const locale = params?.locale || DEFAULT_LOCALE;
+  const content = getCartoonsPageContent(locale);
+  const publicHref = (href) => getServerPublicHref(href, locale);
+
   const [banners, galleryProducts] = await Promise.all([
-    getCartoonHeroBanners(),
-    getCartoonGalleryProducts(),
+    getCartoonHeroBanners({ locale }),
+    getCartoonGalleryProducts({ locale }),
   ]);
 
   return (
@@ -50,27 +73,17 @@ export default async function CartoonsPage() {
 
       <main className={styles.page}>
         <section className={`${styles.introSection} pageInline`}>
-          <h1>{PAGE_TITLE}</h1>
-          <p>
-            Превърнете любима снимка в забавен персонален шарж — за рожден ден, юбилей,
-            сватба, годишнина или друг специален повод. Кажете ни идеята, изпратете снимка,
-            а ние, ще създадем артистичен портрет с настроение, характер и щипка закачка.
-            Ако желаете можем да разпечатаме карикатурата на фото хартия, на чаша или тениска.
-            За повече информация вижте <Link href="/cartoons/offer" className={styles.inquiryLink}>тук</Link> или изпратете запитване и снимки. Ако на този етап все още не
-            желаете да предоставите снимки - ползвайте {' '}
-            <Link href="/contacts" className={styles.inquiryLink}>контактната форма</Link>.
-          </p>
-          <p>
-            Всеки шарж е изработен индивидуално по снимка и идея на клиента. Рисунката се създава дигитално от графичен дизайнер. Ползват се различни инструменти и софтуери, както и няколко модела AI. Усещането за истинска авторска рисунка остава. Безкомпромисни сме към фините детайли и качеството на печата. Резултатът е персонално произведение на изкуството, създадено специално за вас. Получавате уникален подарък с настроение — подходящ за рожден ден, юбилей, сватба, нов дом, пенсиониране, професионален повод или просто като мил спомен.
-          </p>
-          <Link href={buildCartoonServiceContactHref()} className={styles.inquiryButton}>
-            Изпрати запитване и снимки
+          <h1>{content.intro.title}</h1>
+          {content.intro.paragraphs.map((parts, index) => (
+            <p key={index}>{renderRichTextParts(parts, publicHref)}</p>
+          ))}
+          <Link href={publicHref(buildCartoonServiceContactHref())} className={styles.inquiryButton}>
+            {content.intro.ctaLabel}
           </Link>
         </section>
 
         {galleryProducts.length > 0 && (
           <section className={`${styles.gallerySection} pageInline`}>
-            {/* <h2>Шаржове направени от нас</h2> */}
             <div className={shopStyles.productList}>
               {galleryProducts.map((product) => (
                 <ProductCard key={product._id} product={product} serviceContext="cartoons" />

@@ -61,6 +61,35 @@ describe('homeBannersManager', () => {
     );
   });
 
+  it('threads locale params through public banner reads', async () => {
+    const cartoonBanner = { ...banner, placement: 'cartoons' };
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: [banner] }))
+      .mockResolvedValueOnce(jsonResponse({ body: [cartoonBanner] }));
+
+    await expect(getHomeBanners({ locale: 'en' })).resolves.toEqual([banner]);
+    await expect(getCartoonHeroBanners({ locale: 'en' })).resolves.toEqual([cartoonBanner]);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/home-banners?locale=en',
+      expect.objectContaining({
+        next: expect.objectContaining({
+          tags: ['home-banners'],
+        }),
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/home-banners?placement=cartoons&locale=en',
+      expect.objectContaining({
+        next: expect.objectContaining({
+          tags: ['cartoon-hero-banners'],
+        }),
+      })
+    );
+  });
+
   it('returns an empty list when banner loading fails', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 

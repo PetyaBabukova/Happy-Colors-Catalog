@@ -1,4 +1,8 @@
-import { currentSiteUrl, SITE_OG_IMAGE_PATH } from '@/config/siteSeo';
+import {
+  currentSiteUrl,
+  getLocalizedCanonicalPath,
+  SITE_OG_IMAGE_PATH,
+} from '@/config/siteSeo';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 
 function absoluteUrl(url) {
@@ -101,9 +105,10 @@ export function stringifyJsonLd(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
-export function buildProductMetadata(product, productId) {
+export function buildProductMetadata(product, productId, locale) {
   const title = buildProductSeoTitle(product);
   const description = buildProductSeoDescription(product);
+  const canonicalPath = getLocalizedCanonicalPath(`/products/${productId}`, locale);
   const imageUrls = normalizeImageUrls(product).map(absoluteUrl);
   const videos = normalizeProductVideosForSeo(product.videos);
   const posterUrls = videos.map((video) => absoluteUrl(video.posterUrl));
@@ -116,13 +121,13 @@ export function buildProductMetadata(product, productId) {
     title,
     description,
     alternates: {
-      canonical: `/products/${productId}`,
+      canonical: canonicalPath,
     },
     openGraph: {
       title,
       description,
       type: videos.length ? 'video.other' : 'website',
-      url: `/products/${productId}`,
+      url: canonicalPath,
       siteName: 'Happy Colors | Хепи Колорс',
       images: metadataImages.map((url) => ({
         url,

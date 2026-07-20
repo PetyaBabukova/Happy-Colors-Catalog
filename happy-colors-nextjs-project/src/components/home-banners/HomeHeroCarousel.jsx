@@ -4,15 +4,29 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
+import useTranslations from '@/i18n/useTranslations';
 import { deleteHomeBanner } from '@/managers/homeBannersManager';
 import styles from './HomeHeroCarousel.module.css';
 
 const ROTATION_INTERVAL_MS = 6000;
 const SWIPE_THRESHOLD_PX = 50;
+const PREVIOUS_SYMBOL = '\u2039';
+const NEXT_SYMBOL = '\u203a';
+const DELETE_SYMBOL = '\u00d7';
+const EDIT_SYMBOL = '\u270e';
+const ADMIN_LABELS = {
+  confirmDelete: '\u0421\u0438\u0433\u0443\u0440\u043d\u0438 \u043b\u0438 \u0441\u0442\u0435, \u0447\u0435 \u0438\u0441\u043a\u0430\u0442\u0435 \u0434\u0430 \u0438\u0437\u0442\u0440\u0438\u0435\u0442\u0435 \u0442\u043e\u0437\u0438 \u0445\u043e\u0443\u043c \u0431\u0430\u043d\u0435\u0440?',
+  controls: '\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u043d\u0430 \u0431\u0430\u043d\u0435\u0440\u0430',
+  edit: '\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u0430\u0439 \u0431\u0430\u043d\u0435\u0440\u0430',
+  delete: '\u0418\u0437\u0442\u0440\u0438\u0439 \u0431\u0430\u043d\u0435\u0440\u0430',
+};
 
 export default function HomeHeroCarousel({ banners = [] }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { locale, publicHref } = useLocaleNavigation();
+  const { t } = useTranslations('homeHero');
   const activeBanners = useMemo(() => banners.filter((banner) => banner?.imageUrl), [banners]);
   const pointerIdRef = useRef(null);
   const dragStartXRef = useRef(0);
@@ -39,20 +53,49 @@ export default function HomeHeroCarousel({ banners = [] }) {
 
   if (activeBanners.length === 0) {
     return (
-      <section className={`${styles.emptyHero} pageInline`}>
-        <div className={styles.fallbackContent}>
-          <h2>Плетени играчки, аксесоари и декорация за дома</h2>
-          <p>Ръчно изработени изделия за подарък, уют и специални поводи.</p>
-          <Link href="/products" className={styles.ctaLink}>Каталог</Link>
+      <section className={`${styles.carousel} pageInline`} aria-label={t('carouselAriaLabel')}>
+        <div className={`${styles.mediaFrame} ${styles.staticHero}`}>
+          <picture className={styles.picture}>
+            <source media="(max-width: 768px)" srcSet="/lion_banner_MOBILE.webp" />
+            <img
+              src="/lion_banner.webp"
+              alt={t('fallbackImageAlt')}
+              className={styles.bannerImage}
+              draggable="false"
+              fetchPriority="high"
+            />
+          </picture>
+          <div className={styles.content}>
+            <div className={styles.textPanel}>
+              <h2>{t('fallbackTitle')}</h2>
+              <p>{t('fallbackDescription')}</p>
+            </div>
+            <div className={styles.ctaBar}>
+              <Link href={publicHref('/products')} className={styles.ctaLink}>
+                {t('fallbackCta')}
+                <span aria-hidden="true" className={styles.arrowGroup}>
+                  <span>{NEXT_SYMBOL}</span>
+                  <span>{NEXT_SYMBOL}</span>
+                  <span>{NEXT_SYMBOL}</span>
+                </span>
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
     );
   }
 
   const currentBanner = activeBanners[currentIndex];
+  const bannerTitle = locale === 'en' ? t('fallbackTitle') : currentBanner.title;
+  const bannerDescription = locale === 'en' ? '' : currentBanner.description;
+  const bannerImageAlt = locale === 'en' ? t('fallbackImageAlt') : currentBanner.title;
+  const bannerCtaLabel = locale === 'en'
+    ? t('bannerCta')
+    : currentBanner.ctaLabel || t('bannerCta');
 
   async function handleDeleteBanner(bannerId) {
-    if (!window.confirm('Сигурни ли сте, че искате да изтриете този хоум банер?')) {
+    if (!window.confirm(ADMIN_LABELS.confirmDelete)) {
       return;
     }
 
@@ -115,7 +158,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
   }
 
   return (
-    <section className={`${styles.carousel} pageInline`} aria-label="Начални банери">
+    <section className={`${styles.carousel} pageInline`} aria-label={t('carouselAriaLabel')}>
       <div
         className={`${styles.mediaFrame} ${isDragging ? styles.mediaFrameDragging : ''}`}
         onPointerDown={handlePointerDown}
@@ -129,7 +172,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
           ) : null}
           <img
             src={currentBanner.imageUrl}
-            alt={currentBanner.title}
+            alt={bannerImageAlt}
             className={styles.bannerImage}
             draggable="false"
             fetchPriority={currentIndex === 0 ? 'high' : 'auto'}
@@ -137,60 +180,60 @@ export default function HomeHeroCarousel({ banners = [] }) {
         </picture>
         <div className={styles.content}>
           <div className={styles.textPanel}>
-            <h2>{currentBanner.title}</h2>
-            {currentBanner.description && <p>{currentBanner.description}</p>}
+            <h2>{bannerTitle}</h2>
+            {bannerDescription && <p>{bannerDescription}</p>}
           </div>
           <div className={styles.ctaBar}>
-            <Link href={currentBanner.ctaHref} className={styles.ctaLink}>
-              {currentBanner.ctaLabel}
+            <Link href={publicHref(currentBanner.ctaHref)} className={styles.ctaLink}>
+              {bannerCtaLabel}
               <span aria-hidden="true" className={styles.arrowGroup}>
-                <span>›</span>
-                <span>›</span>
-                <span>›</span>
+                <span>{NEXT_SYMBOL}</span>
+                <span>{NEXT_SYMBOL}</span>
+                <span>{NEXT_SYMBOL}</span>
               </span>
             </Link>
           </div>
         </div>
 
         {user && (
-          <div className={styles.operatorControls} aria-label="Управление на банера">
+          <div className={styles.operatorControls} aria-label={ADMIN_LABELS.controls}>
             <Link
               href={`/home-banners/${currentBanner._id}/edit`}
               className={styles.iconButton}
-              aria-label="Редактирай банера"
-              title="Редактирай банера"
+              aria-label={ADMIN_LABELS.edit}
+              title={ADMIN_LABELS.edit}
             >
-              ✎
+              {EDIT_SYMBOL}
             </Link>
             <button
               type="button"
               className={styles.iconButton}
-              aria-label="Изтрий банера"
-              title="Изтрий банера"
+              aria-label={ADMIN_LABELS.delete}
+              title={ADMIN_LABELS.delete}
               disabled={deletingBannerId === currentBanner._id}
               onClick={() => handleDeleteBanner(currentBanner._id)}
             >
-              ×
+              {DELETE_SYMBOL}
             </button>
           </div>
         )}
         {activeBanners.length > 1 && (
-          <div className={styles.carouselControls} aria-label="Навигация в банерите">
+          <div className={styles.carouselControls} aria-label={t('navigationAriaLabel')}>
             <button
               type="button"
               className={`${styles.carouselArrow} ${styles.previousArrow}`}
-              aria-label="Предишен банер"
+              aria-label={t('previous')}
               onClick={showPreviousBanner}
             >
-              ‹
+              {PREVIOUS_SYMBOL}
             </button>
             <button
               type="button"
               className={`${styles.carouselArrow} ${styles.nextArrow}`}
-              aria-label="Следващ банер"
+              aria-label={t('next')}
               onClick={showNextBanner}
             >
-              ›
+              {NEXT_SYMBOL}
             </button>
           </div>
         )}

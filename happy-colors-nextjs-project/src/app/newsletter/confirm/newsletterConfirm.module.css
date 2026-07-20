@@ -29,6 +29,27 @@
   line-height: 1.5;
 }
 
+.form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.fieldLabel {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.select {
+  width: min(100%, 18rem);
+  min-height: 2.6rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(1, 102, 77, 0.35);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--dark-green);
+  font-size: 1rem;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -105,7 +126,8 @@
 
   .actions,
   .primaryButton,
-  .secondaryLink {
+  .secondaryLink,
+  .select {
     width: 100%;
   }
 }

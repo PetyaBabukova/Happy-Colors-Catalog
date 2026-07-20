@@ -1,4 +1,8 @@
-import { SITE_OG_IMAGE_PATH, currentSiteUrl } from '@/config/siteSeo';
+import {
+  SITE_OG_IMAGE_PATH,
+  currentSiteUrl,
+  getLocalizedCanonicalPath,
+} from '@/config/siteSeo';
 import { stringifyJsonLd } from '@/utils/productSeo';
 
 function absoluteUrl(url) {
@@ -21,22 +25,23 @@ export function buildBlogSeoDescription(article) {
   return article?.seoDescription || article?.excerpt || article?.contentText || 'Идеи, истории и вдъхновение от Happy Colors (Хепи Колорс).';
 }
 
-export function buildBlogMetadata(article, articleId) {
+export function buildBlogMetadata(article, articleId, locale) {
   const title = buildBlogSeoTitle(article);
   const description = buildBlogSeoDescription(article);
+  const canonicalPath = getLocalizedCanonicalPath(`/blog/${articleId}`, locale);
   const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
 
   return {
     title,
     description,
     alternates: {
-      canonical: `/blog/${articleId}`,
+      canonical: canonicalPath,
     },
     openGraph: {
       title,
       description,
       type: 'article',
-      url: `/blog/${articleId}`,
+      url: canonicalPath,
       siteName: 'Happy Colors | Хепи Колорс',
       ...(article?.publishedAt ? { publishedTime: article.publishedAt } : {}),
       ...(article?.updatedAt ? { modifiedTime: article.updatedAt } : {}),
@@ -60,7 +65,8 @@ export function buildBlogMetadata(article, articleId) {
   };
 }
 
-export function buildBlogArticleJsonLd(article, articleId) {
+export function buildBlogArticleJsonLd(article, articleId, locale) {
+  const canonicalPath = getLocalizedCanonicalPath(`/blog/${articleId}`, locale);
   const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
 
   return {
@@ -68,7 +74,7 @@ export function buildBlogArticleJsonLd(article, articleId) {
     '@type': 'BlogPosting',
     headline: article?.title || '',
     description: buildBlogSeoDescription(article),
-    url: absoluteUrl(`/blog/${articleId}`),
+    url: absoluteUrl(canonicalPath),
     ...(imageUrl ? { image: [imageUrl] } : {}),
     ...(article?.publishedAt ? { datePublished: article.publishedAt } : {}),
     ...(article?.updatedAt ? { dateModified: article.updatedAt } : {}),

@@ -1,5 +1,8 @@
 import NewsletterConfirmClient from './NewsletterConfirmClient';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata = {
   title: 'Потвърждение на абонамент | Happy Colors',
   robots: {

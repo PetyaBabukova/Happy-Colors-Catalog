@@ -4,10 +4,17 @@ import { cookies } from 'next/headers';
 import baseURL from '@/config';
 import { readResponseJsonSafely } from '@/utils/errorHandler';
 
-export const getProduct = cache(async (productId) => {
+export const getProduct = cache(async (productId, { locale } = {}) => {
   try {
     const cookieHeader = (await cookies()).toString();
-    const res = await fetch(`${baseURL}/products/${productId}`, {
+    const searchParams = new URLSearchParams();
+
+    if (locale) {
+      searchParams.set('locale', locale);
+    }
+
+    const query = searchParams.toString();
+    const res = await fetch(`${baseURL}/products/${productId}${query ? `?${query}` : ''}`, {
       cache: 'no-store',
       headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
     });

@@ -1,5 +1,13 @@
 // src/config/siteSeo.js
 
+import {
+  DEFAULT_LOCALE,
+  isLocaleRoutingEnabled,
+  isSupportedLocale,
+  normalizeLocale,
+} from '@/i18n/config';
+import { localizePath } from '@/i18n/routing';
+
 const PROD_SITE_URL = 'https://happycolors.eu';
 const LOCAL_URL = 'http://localhost:3000';
 const RENDER_PREVIEW_BRANCH = 'single-deploy-refactor';
@@ -57,10 +65,27 @@ export const metadataBaseUrl = new URL(
 
 export { PROD_SITE_URL };
 
+export function getLocalizedCanonicalPath(path, locale = DEFAULT_LOCALE) {
+  const requestedLocale = normalizeLocale(locale || DEFAULT_LOCALE);
+  const normalizedLocale = isSupportedLocale(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
+  const normalizedPath = String(path || '/').startsWith('/')
+    ? String(path || '/')
+    : `/${String(path || '/')}`;
+
+  if (isLocaleRoutingEnabled()) {
+    return localizePath(normalizedPath, normalizedLocale);
+  }
+
+  return normalizedLocale === DEFAULT_LOCALE
+    ? normalizedPath
+    : localizePath(normalizedPath, normalizedLocale);
+}
+
 export function buildPageMetadata({
   title,
   description,
   path,
+  locale = DEFAULT_LOCALE,
   indexable = true,
 }) {
   const canIndexThisPage = shouldIndexSite && indexable;
@@ -75,7 +100,7 @@ export function buildPageMetadata({
     ...(canIndexThisPage && path
       ? {
           alternates: {
-            canonical: path,
+            canonical: getLocalizedCanonicalPath(path, locale),
           },
         }
       : {}),

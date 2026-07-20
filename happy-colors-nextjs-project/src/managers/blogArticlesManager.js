@@ -26,6 +26,20 @@ function pickFields(values = {}, fields) {
   }, {});
 }
 
+function buildUrl(path, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.set(key, String(value));
+    }
+  }
+
+  const query = searchParams.toString();
+
+  return `${baseURL}${path}${query ? `?${query}` : ''}`;
+}
+
 async function readOrThrow(res, fallbackMessage) {
   const data = await readResponseJsonSafely(res);
 
@@ -54,8 +68,8 @@ export async function invalidateBlogCaches(articleId) {
   }
 }
 
-export async function getBlogArticles() {
-  const res = await fetch(`${baseURL}/blog-articles`, {
+export async function getBlogArticles({ locale } = {}) {
+  const res = await fetch(buildUrl('/blog-articles', { locale }), {
     cache: 'no-store',
   });
   const data = await readOrThrow(res, 'Неуспешно зареждане на блог статиите.');
@@ -67,8 +81,8 @@ export async function getBlogArticles() {
   return data;
 }
 
-export async function getBlogArticleById(articleId) {
-  const res = await fetch(`${baseURL}/blog-articles/${articleId}`, {
+export async function getBlogArticleById(articleId, { locale } = {}) {
+  const res = await fetch(buildUrl(`/blog-articles/${articleId}`, { locale }), {
     cache: 'no-store',
   });
 

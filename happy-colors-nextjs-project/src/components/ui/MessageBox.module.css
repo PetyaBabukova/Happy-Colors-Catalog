@@ -1,25 +1,30 @@
 /* MessageBox.module.css */
 
 .message {
-    width: 100%;
-    padding: 1.2em 2em;
-    margin-bottom: 1.5rem;
-    border-radius: 0.8em;
-    font-size: 1.1rem;
-    font-weight: 500;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    text-align: center;
-  }
-  
-  .success {
-    background-color: var(--lighter-green);
-    color:var(--light-green);
-    border: 1px solid var(--light-green)
-  }
-  
-  .error {
-    background-color: var(--lighter-orange);
-    color: var(--dark-orange);
-    border: 1px solid var(--dark-orange);
-  }
-  
+  width: 100%;
+  padding: 1.2em 2em;
+  margin-bottom: 1.5rem;
+  border-radius: 0.8em;
+  font-size: 1.1rem;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.success {
+  background-color: var(--lighter-green);
+  color: var(--light-green);
+  border: 1px solid var(--light-green);
+}
+
+.error {
+  background-color: var(--lighter-orange);
+  color: var(--dark-orange);
+  border: 1px solid var(--dark-orange);
+}
+
+.info {
+  background-color: var(--lightest-green);
+  color: var(--dark-green);
+  border: 1px solid var(--light-green);
+}

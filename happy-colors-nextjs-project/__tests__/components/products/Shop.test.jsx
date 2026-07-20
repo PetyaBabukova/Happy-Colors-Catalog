@@ -6,12 +6,12 @@ vi.mock('@/app/products/ProductCard', () => ({
   default: ({ product }) => <article data-testid={`product-${product._id}`}>{product.title}</article>,
 }));
 
-function product(_id, title, categoryName, availability = 'available') {
+function product(_id, title, categoryName, availability = 'available', categoryOverrides = {}) {
   return {
     _id,
     title,
     availability,
-    category: categoryName ? { name: categoryName } : null,
+    category: categoryName ? { name: categoryName, ...categoryOverrides } : null,
   };
 }
 
@@ -78,5 +78,21 @@ describe('Shop', () => {
     const headings = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
 
     expect(headings.at(-1)).toMatch(/Други/);
+  });
+
+  it('moves localized miscellaneous categories to the end by public filter slug', () => {
+    render(
+      <Shop
+        products={[
+          product('other', 'Other Item', 'Other', 'available', { filterSlug: 'drugi' }),
+          product('aaa', 'A Item', 'Aardvark'),
+        ]}
+      />,
+      { locale: 'en' }
+    );
+
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
+
+    expect(headings.at(-1)).toMatch(/Other/);
   });
 });

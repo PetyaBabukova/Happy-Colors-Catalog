@@ -63,12 +63,28 @@ describe('NewsletterSubscribeForm', () => {
         consent: true,
         website: '',
         formToken: 'form-token-1',
+        locale: 'bg',
       })
     );
 
     expect(screen.getByRole('status')).toHaveTextContent(successMessage);
     expect(emailInput).toHaveValue('');
     expect(consentInput).not.toBeChecked();
+  });
+
+  it('defaults the newsletter language selector from the current page locale', async () => {
+    const { container } = render(<NewsletterSubscribeForm />, { locale: 'en' });
+
+    expect(screen.getByRole('radio', { name: 'English' })).toBeChecked();
+
+    fillValidForm(container);
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() =>
+      expect(subscribeToNewsletter).toHaveBeenCalledWith(
+        expect.objectContaining({ locale: 'en' })
+      )
+    );
   });
 
   it('keeps the form values and shows backend errors when submit fails', async () => {

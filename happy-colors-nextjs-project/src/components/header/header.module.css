@@ -144,6 +144,70 @@
     transform: scale(1.05);
 }
 
+.localeSelector {
+    position: relative;
+    flex-shrink: 0;
+    color: var(--dark-green);
+}
+
+.localeSelector summary {
+    width: 4.75rem;
+    min-height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid var(--dark-green);
+    border-radius: 6px;
+    background-color: white;
+    color: var(--dark-green);
+    cursor: pointer;
+    list-style: none;
+}
+
+.localeSelector summary::-webkit-details-marker {
+    display: none;
+}
+
+.localeSelector summary:hover,
+.localeSelector summary:focus-visible {
+    border-color: var(--dark-orange);
+    color: var(--dark-orange);
+    outline: none;
+}
+
+.localeMenu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.35rem);
+    z-index: 120;
+    min-width: 12rem;
+    margin: 0;
+    padding: 0.4rem;
+    list-style: none;
+    border: 1px solid rgba(1, 102, 77, 0.18);
+    border-radius: 8px;
+    background-color: white;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.localeMenu a {
+    display: block;
+    padding: 0.55rem 0.65rem;
+    color: var(--dark-green);
+    text-decoration: none;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.localeMenu a:hover,
+.localeMenu a:focus-visible,
+.localeMenu a[aria-current="true"] {
+    background-color: var(--lighter-green);
+    color: var(--dark-orange);
+    outline: none;
+}
+
 .cartIconWrapper {
     position: relative;
     display: inline-block;
@@ -317,6 +381,15 @@
         align-items: center;
         display: flex;
         flex: 1;
+    }
+
+    .localeSelector {
+        order: 4;
+    }
+
+    .localeMenu {
+        right: auto;
+        left: 0;
     }
 
     .searchInput {

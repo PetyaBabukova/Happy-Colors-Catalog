@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Header from '@/components/header/header';
 import { useProducts } from '@/context/ProductContext';
+import { getDictionary } from '@/i18n/getDictionary';
 import { fetchAdminUsers } from '@/managers/usersAdminManager';
 import { fireEvent, render, screen } from '../test-utils.jsx';
+import { setMockNavigation } from '../setup.js';
 
 const catalogModeState = vi.hoisted(() => ({
   value: false,
@@ -43,11 +45,15 @@ describe('Header', () => {
     cartoonsFeatureState.enabled = false;
     useProducts.mockReturnValue({
       visibleCategories: [
-        { _id: 'cat-1', name: 'Candles' },
-        { _id: 'cat-2', name: 'Decor' },
+        { _id: 'cat-1', name: 'Candles', filterSlug: 'candles' },
+        { _id: 'cat-2', name: 'Decor', filterSlug: 'decor' },
       ],
     });
     fetchAdminUsers.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('renders category links, cart count, and full admin navigation', () => {
@@ -60,8 +66,8 @@ describe('Header', () => {
     });
 
     expect(screen.getByRole('link', { name: /logo/i })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: 'Candles' })).toHaveAttribute('href', '/products?category=Candles');
-    expect(screen.getByRole('link', { name: 'Decor' })).toHaveAttribute('href', '/products?category=Decor');
+    expect(screen.getByRole('link', { name: 'Candles' })).toHaveAttribute('href', '/products?category=candles');
+    expect(screen.getByRole('link', { name: 'Decor' })).toHaveAttribute('href', '/products?category=decor');
     expect(screen.getByText(/Petya/)).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(container.querySelector('ul[class*="userNav"]').className).toContain('userNavVisible');
@@ -187,5 +193,89 @@ describe('Header', () => {
     fireEvent.click(catalogLink);
 
     expect(navList.className).not.toContain('showMenu');
+  });
+
+  it('renders locale switch links when English public routing is enabled', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({
+      pathname: '/bg/products',
+      searchParams: new URLSearchParams('category=Toys&utm_source=drop'),
+    });
+
+    render(<Header />);
+
+    expect(screen.getByLabelText('Език: BG')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'BG — Български' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('link', { name: 'EN — English' })).toHaveAttribute(
+      'href',
+      '/en/products?category=Toys'
+    );
+  });
+
+  it('does not render the locale switcher until two public locales are enabled', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'false');
+    setMockNavigation({ pathname: '/bg/products' });
+
+    render(<Header />);
+
+    expect(screen.queryByLabelText('Език: BG')).not.toBeInTheDocument();
+  });
+
+  it('does not render the locale switcher when locale routing is disabled', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'false');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/products' });
+
+    render(<Header />);
+
+    expect(screen.queryByLabelText('Език: BG')).not.toBeInTheDocument();
+  });
+
+  it('strips token query params from header locale switch links', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({
+      pathname: '/bg/newsletter/unsubscribe',
+      searchParams: new URLSearchParams('token=secret-token&utm_source=drop'),
+    });
+
+    render(<Header />);
+
+    expect(screen.getByRole('link', { name: 'EN — English' })).toHaveAttribute(
+      'href',
+      '/en/newsletter/unsubscribe'
+    );
+  });
+
+  it('renders Bulgarian navigation on Bulgarian routes even after an English client context', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/bg' });
+
+    render(<Header />, { locale: 'en' });
+
+    expect(screen.getByRole('link', { name: getDictionary('bg').navigation.home })).toHaveAttribute('href', '/bg');
+    expect(screen.getByRole('link', { name: getDictionary('bg').navigation.catalog })).toHaveAttribute(
+      'href',
+      '/bg/products'
+    );
+    expect(screen.queryByRole('link', { name: getDictionary('en').navigation.home })).not.toBeInTheDocument();
+  });
+
+  it('renders English navigation on English routes even after a Bulgarian client context', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en' });
+
+    render(<Header />);
+
+    expect(screen.getByRole('link', { name: getDictionary('en').navigation.home })).toHaveAttribute('href', '/en');
+    expect(screen.getByRole('link', { name: getDictionary('en').navigation.catalog })).toHaveAttribute(
+      'href',
+      '/en/products'
+    );
+    expect(screen.queryByRole('link', { name: getDictionary('bg').navigation.home })).not.toBeInTheDocument();
   });
 });

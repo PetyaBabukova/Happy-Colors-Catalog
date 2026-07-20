@@ -9,6 +9,20 @@ function normalizeBannerPlacement(value) {
   return BANNER_PLACEMENTS.has(placement) ? placement : 'home';
 }
 
+function buildUrl(path, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.set(key, String(value));
+    }
+  }
+
+  const query = searchParams.toString();
+
+  return `${baseURL}${path}${query ? `?${query}` : ''}`;
+}
+
 async function postRevalidation(path, errorMessage) {
   try {
     await fetch(path, {
@@ -45,9 +59,9 @@ async function invalidateBannerCachesForPlacements(placements = ['home']) {
   await Promise.all(tasks);
 }
 
-export async function getHomeBanners() {
+export async function getHomeBanners({ locale } = {}) {
   try {
-    const res = await fetch(`${baseURL}/home-banners`, {
+    const res = await fetch(buildUrl('/home-banners', { locale }), {
       next: {
         revalidate: 60,
         tags: ['home-banners'],
@@ -71,9 +85,9 @@ export async function getHomeBanners() {
   }
 }
 
-export async function getCartoonHeroBanners() {
+export async function getCartoonHeroBanners({ locale } = {}) {
   try {
-    const res = await fetch(`${baseURL}/home-banners?placement=cartoons`, {
+    const res = await fetch(buildUrl('/home-banners', { placement: 'cartoons', locale }), {
       next: {
         revalidate: 60,
         tags: ['cartoon-hero-banners'],

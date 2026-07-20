@@ -1,5 +1,6 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getCartoonsPageContent } from '@/content/publicPages/cartoons';
 import { render, screen } from '../test-utils.jsx';
 
 function setupCartoonsPage({
@@ -47,6 +48,7 @@ function setupCartoonsPage({
 
 describe('CartoonsPage', () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.doUnmock('@/config/cartoonsFeature');
     vi.doUnmock('@/managers/homeBannersManager');
     vi.doUnmock('@/managers/productsManager');
@@ -66,13 +68,13 @@ describe('CartoonsPage', () => {
     expect(getCartoonGalleryProducts).not.toHaveBeenCalled();
   });
 
-  it('uses generic noindex metadata while the release gate is off', async () => {
+  it('uses localized noindex metadata while the release gate is off', async () => {
     const { importPage } = setupCartoonsPage({ enabled: false });
     const { generateMetadata } = await importPage();
 
-    expect(generateMetadata()).toMatchObject({
-      title: 'Страницата не е намерена',
-      description: 'Тази страница не е достъпна.',
+    await expect(generateMetadata({ params: Promise.resolve({ locale: 'en' }) })).resolves.toMatchObject({
+      title: 'Page not found',
+      description: 'This page is not available.',
       robots: {
         index: false,
         follow: false,
@@ -80,7 +82,62 @@ describe('CartoonsPage', () => {
     });
   });
 
-  it('renders hero, CTA, and service-context gallery when the release gate is on', async () => {
+  it('uses default-locale noindex metadata while the release gate is off', async () => {
+    const { importPage } = setupCartoonsPage({ enabled: false });
+    const { generateMetadata } = await importPage();
+    const content = getCartoonsPageContent('bg');
+
+    await expect(generateMetadata()).resolves.toMatchObject({
+      title: content.unavailable.title,
+      description: content.unavailable.description,
+      robots: {
+        index: false,
+        follow: false,
+      },
+    });
+  });
+
+  it('uses localized canonical metadata while threading locale to gallery reads', async () => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+
+    const { importPage, getCartoonHeroBanners, getCartoonGalleryProducts } = setupCartoonsPage({
+      enabled: true,
+    });
+    const { default: CartoonsPage, generateMetadata } = await importPage();
+
+    await expect(generateMetadata({ params: Promise.resolve({ locale: 'en' }) })).resolves.toMatchObject({
+      title: 'Custom caricature from a photo for a memorable gift',
+      alternates: {
+        canonical: '/en/cartoons',
+      },
+    });
+    await CartoonsPage({ params: Promise.resolve({ locale: 'en' }) });
+
+    expect(getCartoonHeroBanners).toHaveBeenCalledWith({ locale: 'en' });
+    expect(getCartoonGalleryProducts).toHaveBeenCalledWith({ locale: 'en' });
+  });
+
+  it('uses default-locale canonical metadata when no locale params are provided', async () => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
+    const { importPage } = setupCartoonsPage({
+      enabled: true,
+    });
+    const { generateMetadata } = await importPage();
+    const content = getCartoonsPageContent('bg');
+
+    await expect(generateMetadata()).resolves.toMatchObject({
+      title: content.metadata.title,
+      alternates: {
+        canonical: '/cartoons',
+      },
+    });
+  });
+
+  it('renders localized hero, CTA, and service-context gallery when the release gate is on', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     const galleryProduct = { _id: 'product-1', title: 'Cartoon Sample' };
     const { importPage, productCard } = setupCartoonsPage({
       enabled: true,
@@ -88,19 +145,23 @@ describe('CartoonsPage', () => {
       galleryProducts: [galleryProduct],
     });
     const { default: CartoonsPage } = await importPage();
-    const element = await CartoonsPage();
+    const element = await CartoonsPage({ params: Promise.resolve({ locale: 'en' }) });
 
     render(element);
 
     expect(screen.getByTestId('cartoons-hero')).toHaveTextContent('1');
-    expect(screen.getByRole('heading', { name: 'Шарж по снимка за подарък с усмивка' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'контактната форма' })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Custom caricature from a photo for a memorable gift' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'options and prices' })).toHaveAttribute(
       'href',
-      '/contacts'
+      '/en/cartoons/offer'
     );
-    expect(screen.getByRole('link', { name: 'Изпрати запитване и снимки' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'contact form' })).toHaveAttribute(
       'href',
-      '/contacts?service=cartoons'
+      '/en/contacts'
+    );
+    expect(screen.getByRole('link', { name: 'Send inquiry and photos' })).toHaveAttribute(
+      'href',
+      '/en/contacts?service=cartoons'
     );
     expect(productCard.mock.calls[0][0]).toMatchObject({
       product: galleryProduct,
@@ -112,14 +173,57 @@ describe('CartoonsPage', () => {
     );
   });
 
-  it('renders the draft page without a gallery when no configured products load', async () => {
+  it('keeps default-locale links unprefixed when locale routing is off', async () => {
+    const { importPage } = setupCartoonsPage({
+      enabled: true,
+      banners: [],
+      galleryProducts: [],
+    });
+    const { default: CartoonsPage } = await importPage();
+
+    const { container } = render(await CartoonsPage());
+
+    expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('Custom caricature');
+    expect(screen.getByRole('heading', { name: getCartoonsPageContent('bg').intro.title })).toBeInTheDocument();
+    expect(container.querySelector('a[href="/cartoons/offer"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/contacts"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/contacts?service=cartoons"]')).toBeInTheDocument();
+  });
+
+  it('keeps English-route links unprefixed when locale routing is disabled', async () => {
+    const { importPage } = setupCartoonsPage({
+      enabled: true,
+      banners: [],
+      galleryProducts: [],
+    });
+    const { default: CartoonsPage } = await importPage();
+
+    render(await CartoonsPage({ params: Promise.resolve({ locale: 'en' }) }));
+
+    expect(screen.getByRole('heading', { name: 'Custom caricature from a photo for a memorable gift' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'options and prices' })).toHaveAttribute(
+      'href',
+      '/cartoons/offer'
+    );
+    expect(screen.getByRole('link', { name: 'contact form' })).toHaveAttribute(
+      'href',
+      '/contacts'
+    );
+    expect(screen.getByRole('link', { name: 'Send inquiry and photos' })).toHaveAttribute(
+      'href',
+      '/contacts?service=cartoons'
+    );
+  });
+
+  it('renders the localized page without a gallery when no configured products load', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     const { importPage } = setupCartoonsPage({ enabled: true, galleryProducts: [] });
     const { default: CartoonsPage } = await importPage();
-    const element = await CartoonsPage();
+    const element = await CartoonsPage({ params: Promise.resolve({ locale: 'en' }) });
 
     render(element);
 
-    expect(screen.getByRole('heading', { name: 'Шарж по снимка за подарък с усмивка' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Примери и варианти за шарж' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Custom caricature from a photo for a memorable gift' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Cartoon Sample' })).not.toBeInTheDocument();
   });
 });

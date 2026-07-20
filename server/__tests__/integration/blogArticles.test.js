@@ -107,6 +107,134 @@ describe('blog articles integration', () => {
     await request(app).get(`/blog-articles/${archived._id}`).expect(404);
   });
 
+  it('projects only translated blog articles for English public requests', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const translated = await createBlogArticle(
+      articleFields({
+        owner,
+        title: 'Source article',
+        contentHtml: '<p>Source body.</p>',
+        contentText: 'Source body.',
+        excerpt: 'Source excerpt',
+        heroImageAlt: 'Source alt',
+        seoTitle: 'Source SEO',
+        seoDescription: 'Source description',
+        sourceRevision: 2,
+        translations: {
+          en: {
+            title: 'English article',
+            contentHtml: '<p>English body.</p>',
+            contentText: 'English body.',
+            excerpt: 'English excerpt',
+            heroImageAlt: 'English alt',
+            seoTitle: 'English SEO',
+            seoDescription: 'English description',
+            sourceRevision: 2,
+            method: 'manual',
+          },
+        },
+      })
+    );
+    const missingTranslation = await createBlogArticle(
+      articleFields({
+        owner,
+        title: 'Bulgarian only article',
+      })
+    );
+    const staleTranslation = await createBlogArticle(
+      articleFields({
+        owner,
+        title: 'Fresh source article',
+        sourceRevision: 3,
+        translations: {
+          en: {
+            title: 'Stale English article',
+            contentHtml: '<p>Stale English body.</p>',
+            heroImageAlt: 'Stale English alt',
+            sourceRevision: 2,
+            method: 'manual',
+          },
+        },
+      })
+    );
+
+    const listRes = await request(app)
+      .get('/blog-articles')
+      .query({ locale: 'en' })
+      .expect(200);
+    const detailRes = await request(app)
+      .get(`/blog-articles/${translated._id}`)
+      .query({ locale: 'en' })
+      .expect(200);
+
+    expect(listRes.body).toEqual([
+      expect.objectContaining({
+        _id: String(translated._id),
+        title: 'English article',
+        excerpt: 'English excerpt',
+        heroImageAlt: 'English alt',
+        seoTitle: 'English SEO',
+        seoDescription: 'English description',
+        contentLocale: 'en',
+        translationPending: false,
+      }),
+    ]);
+    expect(listRes.body[0]).not.toHaveProperty('contentHtml');
+    expect(listRes.body[0]).not.toHaveProperty('translations');
+    expect(listRes.body[0]).not.toHaveProperty('sourceRevision');
+    expect(detailRes.body).toMatchObject({
+      _id: String(translated._id),
+      title: 'English article',
+      contentHtml: '<p>English body.</p>',
+      contentText: 'English body.',
+      heroImageAlt: 'English alt',
+      contentLocale: 'en',
+      translationPending: false,
+    });
+    expect(detailRes.body).not.toHaveProperty('translations');
+    expect(detailRes.body).not.toHaveProperty('sourceRevision');
+
+    await request(app)
+      .get(`/blog-articles/${missingTranslation._id}`)
+      .query({ locale: 'en' })
+      .expect(404);
+    await request(app)
+      .get(`/blog-articles/${staleTranslation._id}`)
+      .query({ locale: 'en' })
+      .expect(404);
+  });
+
+  it('bumps blog article sourceRevision when source copy is edited', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const article = await createBlogArticle(
+      articleFields({
+        owner,
+        title: 'Original article',
+        sourceRevision: 1,
+      })
+    );
+
+    const res = await request(app)
+      .put(`/blog-articles/${article._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ title: 'Updated article' })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      title: 'Updated article',
+      sourceRevision: 2,
+    });
+  });
+
+  it('rejects unsupported public blog locales', async () => {
+    const app = createExpressApp();
+
+    await request(app).get('/blog-articles').query({ locale: 'fr' }).expect(400);
+    await request(app).get(`/blog-articles/${'a'.repeat(24)}`).query({ locale: 'fr' }).expect(400);
+  });
+
   it('protects admin list and detail routes without letting /admin fall through to :articleId', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();

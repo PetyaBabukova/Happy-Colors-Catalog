@@ -2,12 +2,14 @@ import crypto from 'crypto';
 import validator from 'validator';
 import { sendEmail } from '../helpers/sendEmail.js';
 import NewsletterSubscriber from '../models/NewsletterSubscriber.js';
+import { PUBLIC_LOCALES } from '../models/localizationSchemas.js';
 
 const MAX_EMAIL_LENGTH = 254;
-const ALLOWED_SUBSCRIBE_FIELDS = new Set(['email', 'consent', 'website', 'formToken']);
+const ALLOWED_SUBSCRIBE_FIELDS = new Set(['email', 'consent', 'website', 'formToken', 'locale']);
 const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
 const SUBSCRIBE_TOKEN_PURPOSE = 'newsletter-subscribe';
 const CONFIRMATION_TOKEN_PURPOSE = 'newsletter-confirm';
+const DEFAULT_NEWSLETTER_LOCALE = 'bg';
 const SUBSCRIBE_TOKEN_MAX_AGE_SECONDS = 30 * 60;
 const CONFIRMATION_TOKEN_MAX_AGE_SECONDS = 24 * 60 * 60;
 const DEFAULT_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS = process.env.NODE_ENV === 'test' ? 0 : 2;
@@ -27,6 +29,16 @@ export class NewsletterError extends Error {
 
 function normalizeEmail(email) {
   return String(email ?? '').trim().toLowerCase();
+}
+
+function normalizeNewsletterLocale(locale) {
+  const normalizedLocale = String(locale || DEFAULT_NEWSLETTER_LOCALE).trim().toLowerCase();
+
+  if (!PUBLIC_LOCALES.includes(normalizedLocale)) {
+    throw new NewsletterError('Invalid newsletter language.', 400, 'invalid_newsletter_locale');
+  }
+
+  return normalizedLocale;
 }
 
 function getNewsletterSecret() {
@@ -149,9 +161,10 @@ export function createSubscribeFormToken() {
   return `${payload}.${signature}`;
 }
 
-export function createNewsletterConfirmationToken(email, subscriber = null) {
+export function createNewsletterConfirmationToken(email, subscriber = null, options = {}) {
   const normalizedEmail = normalizeEmail(email);
   assertValidEmail(normalizedEmail);
+  const requestedLocale = options.locale ? normalizeNewsletterLocale(options.locale) : '';
 
   const tokenPayload = {
     purpose: CONFIRMATION_TOKEN_PURPOSE,
@@ -162,6 +175,14 @@ export function createNewsletterConfirmationToken(email, subscriber = null) {
 
   if (subscriber) {
     tokenPayload.ver = Number(subscriber.unsubscribeTokenVersion || 1);
+  }
+
+  if (requestedLocale) {
+    tokenPayload.locale = requestedLocale;
+  }
+
+  if (options.localeChangeRequestVersion !== undefined) {
+    tokenPayload.localeVer = Number(options.localeChangeRequestVersion);
   }
 
   const payload = encodeBase64Url(JSON.stringify(tokenPayload));
@@ -200,21 +221,46 @@ function buildPublicSiteUrl(pathOrUrl, { allowClientUrlFallback = true } = {}) {
   return new URL(pathOrUrl, `${publicSiteUrl}/`).toString();
 }
 
-export function createUnsubscribePageUrl(token) {
-  return `${buildPublicSiteUrl('/newsletter/unsubscribe')}?token=${encodeURIComponent(token)}`;
+function buildLocalizedNewsletterPath(locale, path) {
+  return `/${normalizeNewsletterLocale(locale)}${path}`;
 }
 
-export function createNewsletterConfirmationPageUrl(token) {
-  return `${buildPublicSiteUrl('/newsletter/confirm', {
+export function createUnsubscribePageUrl(token, { locale = DEFAULT_NEWSLETTER_LOCALE } = {}) {
+  return `${buildPublicSiteUrl(buildLocalizedNewsletterPath(locale, '/newsletter/unsubscribe'))}?token=${encodeURIComponent(token)}`;
+}
+
+export function createNewsletterConfirmationPageUrl(token, { locale = DEFAULT_NEWSLETTER_LOCALE } = {}) {
+  return `${buildPublicSiteUrl(buildLocalizedNewsletterPath(locale, '/newsletter/confirm'), {
     allowClientUrlFallback: false,
   })}#token=${encodeURIComponent(token)}`;
 }
 
 function createUnsubscribeUrl(subscriber) {
-  return createUnsubscribePageUrl(createUnsubscribeToken(subscriber));
+  return createUnsubscribePageUrl(createUnsubscribeToken(subscriber), {
+    locale: subscriber?.preferredLocale || DEFAULT_NEWSLETTER_LOCALE,
+  });
 }
 
 async function sendWelcomeEmail(subscriber) {
+  const locale = normalizeNewsletterLocale(subscriber?.preferredLocale);
+
+  if (locale === 'en') {
+    const unsubscribeUrl = createUnsubscribeUrl(subscriber);
+
+    await sendEmail({
+      to: subscriber.email,
+      subject: 'Happy Colors newsletter subscription',
+      text: [
+        'You are subscribed to Happy Colors news.',
+        '',
+        'Thank you!',
+        '',
+        `You can unsubscribe at any time here: ${unsubscribeUrl}`,
+      ].join('\n'),
+    });
+    return;
+  }
+
   const unsubscribeUrl = createUnsubscribeUrl(subscriber);
   const text = [
     'Вие се абонирахте за новини от Happy Colors.',
@@ -237,7 +283,23 @@ async function sendWelcomeEmailAndMark(subscriber) {
   await subscriber.save();
 }
 
-async function sendNewsletterConfirmationEmail(email, confirmationUrl) {
+async function sendNewsletterConfirmationEmail(email, confirmationUrl, locale = DEFAULT_NEWSLETTER_LOCALE) {
+  if (normalizeNewsletterLocale(locale) === 'en') {
+    await sendEmail({
+      to: email,
+      subject: 'Confirm your Happy Colors newsletter subscription',
+      text: [
+        'We received a request to subscribe to Happy Colors news.',
+        '',
+        'Please confirm your subscription here:',
+        confirmationUrl,
+        '',
+        'This link is valid for 24 hours. If you did not request this subscription, you can ignore this email.',
+      ].join('\n'),
+    });
+    return;
+  }
+
   const text = [
     'Получихме заявка за абонамент за новини от Happy Colors.',
     '',
@@ -355,7 +417,9 @@ export function verifyNewsletterConfirmationToken(token, { nowSeconds = nowInSec
     typeof decoded.iat !== 'number' ||
     typeof decoded.nonce !== 'string' ||
     !decoded.nonce ||
-    (decoded.ver !== undefined && typeof decoded.ver !== 'number')
+    (decoded.ver !== undefined && (!Number.isInteger(decoded.ver) || decoded.ver < 1)) ||
+    (decoded.locale !== undefined && !PUBLIC_LOCALES.includes(decoded.locale)) ||
+    (decoded.localeVer !== undefined && (!Number.isInteger(decoded.localeVer) || decoded.localeVer < 1))
   ) {
     throw invalidError();
   }
@@ -401,11 +465,39 @@ export async function requestNewsletterSubscription(payload) {
   verifySubscribeFormToken(payload.formToken);
 
   const email = normalizeEmail(payload.email);
+  const locale = normalizeNewsletterLocale(payload.locale);
   assertValidEmail(email);
 
   const existing = await NewsletterSubscriber.findOne({ email });
 
   if (existing?.status === 'active') {
+    if (existing.preferredLocale === locale && existing.pendingPreferredLocale) {
+      existing.pendingPreferredLocale = null;
+      existing.pendingLocaleRequestedAt = null;
+      existing.localeChangeRequestVersion = Math.max(1, Number(existing.localeChangeRequestVersion || 1)) + 1;
+      await existing.save();
+    }
+
+    if (existing.preferredLocale !== locale) {
+      existing.pendingPreferredLocale = locale;
+      existing.pendingLocaleRequestedAt = new Date();
+      existing.localeChangeRequestVersion = Math.max(1, Number(existing.localeChangeRequestVersion || 1)) + 1;
+      await existing.save();
+
+      const confirmationToken = createNewsletterConfirmationToken(email, existing, {
+        locale,
+        localeChangeRequestVersion: existing.localeChangeRequestVersion,
+      });
+      const confirmationUrl = createNewsletterConfirmationPageUrl(confirmationToken, { locale });
+
+      return {
+        message: GENERIC_SUBSCRIBE_MESSAGE,
+        afterResponse: async () => {
+          await sendNewsletterConfirmationEmail(email, confirmationUrl, locale);
+        },
+      };
+    }
+
     return {
       message: GENERIC_SUBSCRIBE_MESSAGE,
       afterResponse: existing.welcomeEmailSentAt
@@ -416,18 +508,18 @@ export async function requestNewsletterSubscription(payload) {
     };
   }
 
-  const confirmationToken = createNewsletterConfirmationToken(email, existing);
-  const confirmationUrl = createNewsletterConfirmationPageUrl(confirmationToken);
+  const confirmationToken = createNewsletterConfirmationToken(email, existing, { locale });
+  const confirmationUrl = createNewsletterConfirmationPageUrl(confirmationToken, { locale });
 
   return {
     message: GENERIC_SUBSCRIBE_MESSAGE,
     afterResponse: async () => {
-      await sendNewsletterConfirmationEmail(email, confirmationUrl);
+      await sendNewsletterConfirmationEmail(email, confirmationUrl, locale);
     },
   };
 }
 
-async function createConfirmedSubscriber(email) {
+async function createConfirmedSubscriber(email, locale = DEFAULT_NEWSLETTER_LOCALE) {
   const now = new Date();
 
   try {
@@ -442,6 +534,9 @@ async function createConfirmedSubscriber(email) {
       hasEverUnsubscribed: false,
       lastStatusChangedAt: now,
       unsubscribedAt: null,
+      preferredLocale: normalizeNewsletterLocale(locale),
+      pendingPreferredLocale: null,
+      pendingLocaleRequestedAt: null,
     });
 
     return { subscriber, shouldSendWelcomeEmail: true };
@@ -472,7 +567,7 @@ function assertFreshConfirmationForUnsubscribed(subscriber, decoded) {
   }
 }
 
-async function reactivateConfirmedSubscriber(subscriber) {
+async function reactivateConfirmedSubscriber(subscriber, locale = DEFAULT_NEWSLETTER_LOCALE) {
   const now = new Date();
 
   subscriber.status = 'active';
@@ -486,18 +581,43 @@ async function reactivateConfirmedSubscriber(subscriber) {
   subscriber.unsubscribedAt = null;
   subscriber.unsubscribeTokenVersion += 1;
   subscriber.welcomeEmailSentAt = null;
+  subscriber.preferredLocale = normalizeNewsletterLocale(locale);
+  subscriber.pendingPreferredLocale = null;
+  subscriber.pendingLocaleRequestedAt = null;
   await subscriber.save();
 
   return { subscriber, shouldSendWelcomeEmail: true };
 }
 
+function assertLatestLocaleChangeConfirmation(subscriber, decoded) {
+  const locale = normalizeNewsletterLocale(decoded.locale);
+
+  if (
+    decoded.localeVer === Number(subscriber.localeChangeRequestVersion) &&
+    subscriber.preferredLocale === locale &&
+    !subscriber.pendingPreferredLocale
+  ) {
+    return false;
+  }
+
+  if (
+    decoded.localeVer !== Number(subscriber.localeChangeRequestVersion) ||
+    subscriber.pendingPreferredLocale !== locale
+  ) {
+    throw new NewsletterError('The newsletter language confirmation link is no longer valid.', 400, 'invalid_locale_change_token');
+  }
+
+  return true;
+}
+
 export async function confirmNewsletterSubscription(payload = {}) {
   const decoded = verifyNewsletterConfirmationToken(payload?.token);
+  const decodedLocale = decoded.locale ? normalizeNewsletterLocale(decoded.locale) : DEFAULT_NEWSLETTER_LOCALE;
   let subscriber = await NewsletterSubscriber.findOne({ email: decoded.email });
   let shouldSendWelcomeEmail = false;
 
   if (!subscriber) {
-    const created = await createConfirmedSubscriber(decoded.email);
+    const created = await createConfirmedSubscriber(decoded.email, decodedLocale);
 
     if (created) {
       subscriber = created.subscriber;
@@ -513,9 +633,16 @@ export async function confirmNewsletterSubscription(payload = {}) {
 
   if (subscriber.status === 'unsubscribed') {
     assertFreshConfirmationForUnsubscribed(subscriber, decoded);
-    const reactivated = await reactivateConfirmedSubscriber(subscriber);
+    const reactivated = await reactivateConfirmedSubscriber(subscriber, decodedLocale);
     subscriber = reactivated.subscriber;
     shouldSendWelcomeEmail = reactivated.shouldSendWelcomeEmail;
+  } else if (decoded.locale && decoded.localeVer !== undefined) {
+    if (assertLatestLocaleChangeConfirmation(subscriber, decoded)) {
+      subscriber.preferredLocale = decodedLocale;
+      subscriber.pendingPreferredLocale = null;
+      subscriber.pendingLocaleRequestedAt = null;
+      await subscriber.save();
+    }
   } else if (!subscriber.welcomeEmailSentAt) {
     shouldSendWelcomeEmail = true;
   }

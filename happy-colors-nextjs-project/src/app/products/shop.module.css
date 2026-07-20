@@ -107,6 +107,27 @@
   background: var(--dark-green);
 }
 
+.translationBadge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(123, 91, 20, 0.25);
+  border-radius: 0.35rem;
+  background: rgba(255, 249, 232, 0.94);
+  color: #6d4d0d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 0.2rem 0.6rem rgba(90, 62, 0, 0.1);
+}
+
 .product:hover {
   background-color: var(--lighter-green);
   color: var(--dark-green);

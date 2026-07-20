@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { COOKIE_CATEGORIES } from '@/config/cookieConsent';
+import useTranslations from '@/i18n/useTranslations';
 import { useCookieConsent } from './CookieConsentContext';
 import styles from './CookieConsent.module.css';
 
@@ -13,6 +14,7 @@ function buildInitialSettings(consent) {
 }
 
 export default function CookieSettingsModal() {
+  const { t } = useTranslations('privacy');
   const {
     consent,
     isSettingsOpen,
@@ -78,31 +80,29 @@ export default function CookieSettingsModal() {
       >
         <div className={styles.modalHeader}>
           <h2 id={titleId} className={styles.modalTitle}>
-            Настройки за бисквитки
+            {t('settingsTitle')}
           </h2>
           <button
             type="button"
             className={styles.closeButton}
             onClick={closeSettings}
-            aria-label="Затвори настройките за бисквитки"
+            aria-label={t('closeSettings')}
           >
-            ×
+            x
           </button>
         </div>
 
-        <p className={styles.modalIntro}>
-          Happy Colors обработва данни чрез бисквитки и подобни технологии според избора ви
-          и описаните по-долу категории.
-        </p>
+        <p className={styles.modalIntro}>{t('settingsIntro')}</p>
 
         <div className={styles.categoryList}>
           {COOKIE_CATEGORIES.map((category) => {
             const checked = category.required || Boolean(settings[category.id]);
+            const label = t(`categories.${category.id}.label`);
 
             return (
               <article key={category.id} className={styles.category}>
                 <div className={styles.categoryHeader}>
-                  <span className={styles.categoryName}>{category.label}</span>
+                  <span className={styles.categoryName}>{label}</span>
                   <label
                     className={`${styles.toggle} ${
                       category.required ? styles.toggleDisabled : ''
@@ -110,15 +110,17 @@ export default function CookieSettingsModal() {
                   >
                     <input
                       type="checkbox"
-                      aria-label={category.label}
+                      aria-label={label}
                       checked={checked}
                       disabled={category.required}
                       onChange={(event) => updateSetting(category.id, event.target.checked)}
                     />
-                    {checked ? 'Включени' : 'Изключени'}
+                    {checked ? t('enabled') : t('disabled')}
                   </label>
                 </div>
-                <p className={styles.categoryDescription}>{category.description}</p>
+                <p className={styles.categoryDescription}>
+                  {t(`categories.${category.id}.description`)}
+                </p>
               </article>
             );
           })}
@@ -131,51 +133,35 @@ export default function CookieSettingsModal() {
             onClick={() => setShowPolicy((current) => !current)}
             aria-expanded={showPolicy}
           >
-            Политика за бисквитки
+            {t('policyTitle')}
           </button>
         </div>
 
         {showPolicy && (
-          <section className={styles.policyPanel} aria-label="Политика за бисквитки">
-            <p>
-              Бисквитките и подобните технологии помагат на сайта да работи коректно,
-              сигурно и според избора ви.
-            </p>
+          <section className={styles.policyPanel} aria-label={t('policyTitle')}>
+            <p>{t('policyIntro')}</p>
             <ul>
-              <li>
-                Необходимите технологии поддържат основна и сигурна работа на сайта,
-                включително административен достъп и запазване на избора за бисквитки.
-              </li>
-              <li>
-                Функционално локално или сесийно съхранение може да се използва в
-                технически или бъдещи клиентски потоци, без сайтът да изисква публичен
-                профил или завършване на поръчка.
-              </li>
-              <li>
-                Аналитичните и маркетинговите технологии се използват само след ваше
-                съгласие.
-              </li>
+              <li>{t('policyNecessary')}</li>
+              <li>{t('policyFunctional')}</li>
+              <li>{t('policyOptional')}</li>
             </ul>
-            <p>
-              Можете да промените избора си по всяко време от линка във футъра.
-              За въпроси: happy.colors.bg@gmail.com.
-            </p>
+            <p>{t('policyContact')}</p>
           </section>
         )}
 
         <div className={styles.modalActions}>
           <button type="button" className={styles.button} onClick={acceptAll}>
-            Приемам всички
+            {t('acceptAll')}
           </button>
           <button type="button" className={styles.secondaryButton} onClick={acceptNecessaryOnly}>
-            Само необходими
+            {t('necessaryOnly')}
           </button>
           <button
             type="button"
             className={styles.secondaryButton}
             onClick={() => saveCustomConsent(settings)}
           >
-            Запази избора
+            {t('saveChoice')}
           </button>
         </div>
       </section>

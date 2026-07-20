@@ -4,6 +4,9 @@ import { vi } from 'vitest';
 
 import { AuthContext } from '@/context/AuthContext';
 import { CartContext } from '@/context/CartContext';
+import I18nProvider from '@/i18n/I18nProvider';
+import { DEFAULT_LOCALE } from '@/i18n/config';
+import { getDictionary } from '@/i18n/getDictionary';
 import { setMockRouter } from './setup.js';
 
 export * from '@testing-library/react';
@@ -15,6 +18,7 @@ export function render(
     cartItems = [],
     authOverrides = {},
     cartOverrides = {},
+    locale = DEFAULT_LOCALE,
     routerOverrides = {},
     mockRouterPush = vi.fn(),
     ...renderOptions
@@ -49,9 +53,11 @@ export function render(
 
   function Wrapper({ children }) {
     return (
-      <AuthContext.Provider value={authValue}>
-        <CartContext.Provider value={cartValue}>{children}</CartContext.Provider>
-      </AuthContext.Provider>
+      <I18nProvider locale={locale} dictionary={getDictionary(locale)}>
+        <AuthContext.Provider value={authValue}>
+          <CartContext.Provider value={cartValue}>{children}</CartContext.Provider>
+        </AuthContext.Provider>
+      </I18nProvider>
     );
   }
 

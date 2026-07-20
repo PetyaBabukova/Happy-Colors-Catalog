@@ -41,6 +41,25 @@ describe('getProduct', () => {
     });
   });
 
+  it('threads route locale to the backend product endpoint', async () => {
+    const product = { _id: 'product-1', title: 'English Candle' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => product,
+      }))
+    );
+
+    const { getProduct } = await import('../../../src/lib/getProduct.js');
+
+    await expect(getProduct('product-1', { locale: 'en' })).resolves.toEqual(product);
+    expect(fetch).toHaveBeenCalledWith('https://api.happycolors.eu/api/products/product-1?locale=en', {
+      cache: 'no-store',
+      headers: { Cookie: 'auth_token=test-token' },
+    });
+  });
+
   it('returns null for non-ok responses', async () => {
     vi.stubGlobal(
       'fetch',

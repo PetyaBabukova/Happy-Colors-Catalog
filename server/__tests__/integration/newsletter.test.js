@@ -43,7 +43,7 @@ async function waitUntil(predicate) {
 
 function extractConfirmationToken() {
   const sentText = sendEmail.mock.calls.at(-1)?.[0]?.text || '';
-  const match = sentText.match(/\/newsletter\/confirm#token=([^\s]+)/);
+  const match = sentText.match(/\/(?:bg|en)\/newsletter\/confirm#token=([^\s]+)/);
 
   return match ? decodeURIComponent(match[1]) : '';
 }
@@ -86,8 +86,8 @@ describe('newsletter integration', () => {
       subject: 'Потвърдете абонамента си за новини от Happy Colors',
       text: expect.stringContaining('Получихме заявка за абонамент за новини от Happy Colors.'),
     });
-    expect(sendEmail.mock.calls[0][0].text).toContain('/newsletter/confirm#token=');
-    expect(sendEmail.mock.calls[0][0].text).toContain('https://happycolors.eu/newsletter/confirm#token=');
+    expect(sendEmail.mock.calls[0][0].text).toContain('/bg/newsletter/confirm#token=');
+    expect(sendEmail.mock.calls[0][0].text).toContain('https://happycolors.eu/bg/newsletter/confirm#token=');
     expect(sendEmail.mock.calls[0][0].text).not.toContain('/newsletter/confirm?token=');
   });
 
@@ -136,7 +136,48 @@ describe('newsletter integration', () => {
       subject: 'Абонамент за новини от Happy Colors',
       text: expect.stringContaining('Вие се абонирахте за новини от Happy Colors.'),
     });
-    expect(sendEmail.mock.calls.at(-1)[0].text).toContain('/newsletter/unsubscribe?token=');
+    expect(sendEmail.mock.calls.at(-1)[0].text).toContain('/bg/newsletter/unsubscribe?token=');
+  });
+
+  it('binds English subscribe requests to English confirmation and welcome emails', async () => {
+    const app = createExpressApp();
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.250')
+      .send({
+        email: 'english@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.251'),
+        locale: 'en',
+      })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+
+    expect(sendEmail.mock.calls[0][0]).toMatchObject({
+      to: 'english@example.com',
+      subject: 'Confirm your Happy Colors newsletter subscription',
+      text: expect.stringContaining('Please confirm your subscription here:'),
+    });
+    expect(sendEmail.mock.calls[0][0].text).toContain('https://happycolors.eu/en/newsletter/confirm#token=');
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.252')
+      .send({ token: extractConfirmationToken() })
+      .expect(200);
+
+    const subscriber = await NewsletterSubscriber.findOne({ email: 'english@example.com' });
+
+    expect(subscriber.preferredLocale).toBe('en');
+    expect(sendEmail).toHaveBeenLastCalledWith({
+      to: 'english@example.com',
+      subject: 'Happy Colors newsletter subscription',
+      text: expect.stringContaining('You are subscribed to Happy Colors news.'),
+    });
+    expect(sendEmail.mock.calls.at(-1)[0].text).toContain('/en/newsletter/unsubscribe?token=');
   });
 
   it('keeps repeated confirmation idempotent for active subscribers', async () => {
@@ -433,6 +474,144 @@ describe('newsletter integration', () => {
     expect(sendEmail).not.toHaveBeenCalled();
     expect(res.body.message).toBeTruthy();
     expect(res.body.status).toBeUndefined();
+  });
+
+  it('changes an active subscriber newsletter language only after confirming the latest request', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({
+      email: 'language-change@example.com',
+      preferredLocale: 'bg',
+      localeChangeRequestVersion: 1,
+    });
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.253')
+      .send({
+        email: 'language-change@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.254'),
+        locale: 'en',
+      })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 1);
+    const staleToken = extractConfirmationToken();
+    let pending = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(pending).toMatchObject({
+      preferredLocale: 'bg',
+      pendingPreferredLocale: 'en',
+      localeChangeRequestVersion: 2,
+    });
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.255')
+      .send({
+        email: 'language-change@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.256'),
+        locale: 'en',
+      })
+      .expect(200);
+
+    await waitUntil(() => sendEmail.mock.calls.length === 2);
+    const latestToken = extractConfirmationToken();
+
+    const staleRes = await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.257')
+      .send({ token: staleToken })
+      .expect(400);
+
+    expect(staleRes.body.code).toBe('invalid_locale_change_token');
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.258')
+      .send({ token: latestToken })
+      .expect(200);
+
+    await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.264')
+      .send({ token: latestToken })
+      .expect(200);
+
+    pending = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(pending).toMatchObject({
+      preferredLocale: 'en',
+      pendingPreferredLocale: null,
+    });
+    expect(pending.pendingLocaleRequestedAt).toBeNull();
+  });
+
+  it('clears pending language changes when the latest subscribe request keeps the current locale', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({
+      email: 'language-cancel@example.com',
+      preferredLocale: 'bg',
+      pendingPreferredLocale: 'en',
+      pendingLocaleRequestedAt: new Date(),
+      localeChangeRequestVersion: 2,
+    });
+    const staleToken = createNewsletterConfirmationToken('language-cancel@example.com', subscriber, {
+      locale: 'en',
+      localeChangeRequestVersion: 2,
+    });
+
+    await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.261')
+      .send({
+        email: 'language-cancel@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.262'),
+        locale: 'bg',
+      })
+      .expect(200);
+
+    const updated = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(updated).toMatchObject({
+      preferredLocale: 'bg',
+      pendingPreferredLocale: null,
+      localeChangeRequestVersion: 3,
+    });
+    expect(updated.pendingLocaleRequestedAt).toBeNull();
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    const staleRes = await request(app)
+      .post('/newsletter/confirm')
+      .set('x-forwarded-for', '203.0.113.263')
+      .send({ token: staleToken })
+      .expect(400);
+
+    expect(staleRes.body.code).toBe('invalid_locale_change_token');
+  });
+
+  it('rejects unsupported newsletter subscription locales', async () => {
+    const app = createExpressApp();
+
+    const res = await request(app)
+      .post('/newsletter/subscribe')
+      .set('x-forwarded-for', '203.0.113.259')
+      .send({
+        email: 'locale@example.com',
+        consent: true,
+        website: '',
+        formToken: await getSubscribeToken(app, '203.0.113.260'),
+        locale: 'fr',
+      })
+      .expect(400);
+
+    expect(res.body.code).toBe('invalid_newsletter_locale');
+    expect(await NewsletterSubscriber.countDocuments({ email: 'locale@example.com' })).toBe(0);
   });
 
   it('retries the welcome email for active subscribers when it was not sent yet', async () => {
@@ -755,7 +934,7 @@ describe('newsletter integration', () => {
       .set('x-forwarded-for', '203.0.113.34')
       .expect(302);
 
-    expect(res.headers.location).toBe(`https://happycolors.eu/newsletter/unsubscribe?token=${encodeURIComponent(token)}`);
+    expect(res.headers.location).toBe(`https://happycolors.eu/bg/newsletter/unsubscribe?token=${encodeURIComponent(token)}`);
   });
 
   it('rate limits unsubscribe attempts separately', async () => {
