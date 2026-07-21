@@ -30,9 +30,25 @@ describe('newsletterSendManager', () => {
   });
 
   it('gets authenticated newsletter send status', async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { activeSubscribers: 7 } }));
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          activeSubscribers: 7,
+          activeSubscribersByLocale: {
+            bg: 5,
+            en: 2,
+          },
+        },
+      })
+    );
 
-    await expect(getNewsletterSendStatus()).resolves.toEqual({ activeSubscribers: 7 });
+    await expect(getNewsletterSendStatus()).resolves.toEqual({
+      activeSubscribers: 7,
+      activeSubscribersByLocale: {
+        bg: 5,
+        en: 2,
+      },
+    });
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:3000/api/newsletter/send/status', {
       credentials: 'include',
@@ -176,6 +192,57 @@ describe('newsletterSendManager', () => {
       contentText: 'Hello',
       sourceType: 'blog',
       sourceId: 'article-1',
+    });
+  });
+
+  it('keeps selected newsletter languages in broadcast payloads', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          message: 'done',
+          sent: 2,
+          failed: 0,
+          activeSubscribers: 2,
+          activeSubscribersByLocale: {
+            bg: 0,
+            en: 2,
+          },
+        },
+      })
+    );
+
+    await sendNewsletterToSubscribers({
+      ...payload,
+      locales: ['en'],
+    });
+
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      subject: 'News',
+      contentHtml: '<p>Hello</p>',
+      contentJson: { type: 'doc', content: [{ type: 'paragraph' }] },
+      contentText: 'Hello',
+      sourceType: 'custom',
+      locales: ['en'],
+    });
+  });
+
+  it('drops non-allowlisted locale-shaped fields from broadcast payloads', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ body: { message: 'done', sent: 1, failed: 0, activeSubscribers: 1 } })
+    );
+
+    await sendNewsletterToSubscribers({
+      ...payload,
+      preferredLocale: 'en',
+      locale: 'en',
+    });
+
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      subject: 'News',
+      contentHtml: '<p>Hello</p>',
+      contentJson: { type: 'doc', content: [{ type: 'paragraph' }] },
+      contentText: 'Hello',
+      sourceType: 'custom',
     });
   });
 

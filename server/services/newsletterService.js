@@ -9,9 +9,13 @@ const ALLOWED_SUBSCRIBE_FIELDS = new Set(['email', 'consent', 'website', 'formTo
 const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
 const SUBSCRIBE_TOKEN_PURPOSE = 'newsletter-subscribe';
 const CONFIRMATION_TOKEN_PURPOSE = 'newsletter-confirm';
+const PREFERENCES_TOKEN_PURPOSE = 'newsletter-preferences';
+const PREFERENCES_SESSION_PURPOSE = 'newsletter-preferences-session';
 const DEFAULT_NEWSLETTER_LOCALE = 'bg';
 const SUBSCRIBE_TOKEN_MAX_AGE_SECONDS = 30 * 60;
 const CONFIRMATION_TOKEN_MAX_AGE_SECONDS = 24 * 60 * 60;
+const PREFERENCES_TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+const PREFERENCES_SESSION_MAX_AGE_SECONDS = 10 * 60;
 const DEFAULT_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS = process.env.NODE_ENV === 'test' ? 0 : 2;
 const LEGACY_REACTIVATION_HEURISTIC_MS = 24 * 60 * 60 * 1000;
 const GENERIC_SUBSCRIBE_MESSAGE = 'Благодарим ви. Ако е необходимо потвърждение, ще получите имейл с линк за абонамента.';
@@ -130,6 +134,10 @@ function assertValidEmail(email) {
   }
 }
 
+function isValidPositiveInteger(value) {
+  return Number.isInteger(value) && value >= 1;
+}
+
 function isDuplicateKeyError(error) {
   return error?.code === 11000;
 }
@@ -191,6 +199,21 @@ export function createNewsletterConfirmationToken(email, subscriber = null, opti
   return `${payload}.${signature}`;
 }
 
+function createNewsletterSubscriberToken(subscriber, purpose) {
+  const payload = encodeBase64Url(
+    JSON.stringify({
+      purpose,
+      sub: String(subscriber?._id || ''),
+      ver: Number(subscriber?.preferenceTokenVersion || 1),
+      iat: nowInSeconds(),
+      nonce: crypto.randomBytes(16).toString('base64url'),
+    })
+  );
+  const signature = signPayload(payload);
+
+  return `${payload}.${signature}`;
+}
+
 function isLocalOrPrivateSiteUrl(value) {
   try {
     const url = new URL(value);
@@ -235,6 +258,20 @@ export function createNewsletterConfirmationPageUrl(token, { locale = DEFAULT_NE
   })}#token=${encodeURIComponent(token)}`;
 }
 
+export function createNewsletterPreferencesToken(subscriber) {
+  return createNewsletterSubscriberToken(subscriber, PREFERENCES_TOKEN_PURPOSE);
+}
+
+export function createNewsletterPreferencesPageUrl(token, { locale = DEFAULT_NEWSLETTER_LOCALE } = {}) {
+  return `${buildPublicSiteUrl(buildLocalizedNewsletterPath(locale, '/newsletter/preferences'), {
+    allowClientUrlFallback: false,
+  })}#token=${encodeURIComponent(token)}`;
+}
+
+function createNewsletterPreferencesSessionToken(subscriber) {
+  return createNewsletterSubscriberToken(subscriber, PREFERENCES_SESSION_PURPOSE);
+}
+
 function createUnsubscribeUrl(subscriber) {
   return createUnsubscribePageUrl(createUnsubscribeToken(subscriber), {
     locale: subscriber?.preferredLocale || DEFAULT_NEWSLETTER_LOCALE,
@@ -243,6 +280,7 @@ function createUnsubscribeUrl(subscriber) {
 
 async function sendWelcomeEmail(subscriber) {
   const locale = normalizeNewsletterLocale(subscriber?.preferredLocale);
+  const preferencesUrl = createNewsletterPreferencesPageUrl(createNewsletterPreferencesToken(subscriber), { locale });
 
   if (locale === 'en') {
     const unsubscribeUrl = createUnsubscribeUrl(subscriber);
@@ -255,6 +293,8 @@ async function sendWelcomeEmail(subscriber) {
         '',
         'Thank you!',
         '',
+        `You can change your newsletter language here: ${preferencesUrl}`,
+        '',
         `You can unsubscribe at any time here: ${unsubscribeUrl}`,
       ].join('\n'),
     });
@@ -266,6 +306,8 @@ async function sendWelcomeEmail(subscriber) {
     'Вие се абонирахте за новини от Happy Colors.',
     '',
     'Благодарим ви!',
+    '',
+    `Можете да смените езика на бюлетина тук: ${preferencesUrl}`,
     '',
     `Можете да се отпишете по всяко време тук: ${unsubscribeUrl}`,
   ].join('\n');
@@ -445,6 +487,129 @@ export function verifyNewsletterConfirmationToken(token, { nowSeconds = nowInSec
   return {
     ...decoded,
     email: normalizedEmail,
+  };
+}
+
+function verifyNewsletterSubscriberToken(
+  token,
+  {
+    purpose,
+    maxAgeSeconds,
+    invalidCode,
+    expiredCode,
+    invalidMessage = 'This newsletter link is invalid or expired.',
+    expiredMessage = 'This newsletter link has expired.',
+    nowSeconds = nowInSeconds(),
+  } = {}
+) {
+  const safeToken = String(token ?? '').trim();
+  const [payload, signature, extra] = safeToken.split('.');
+
+  if (!payload || !signature || extra !== undefined) {
+    throw new NewsletterError(invalidMessage, 400, invalidCode);
+  }
+
+  const expectedSignature = signPayload(payload);
+
+  if (!timingSafeEqualStrings(signature, expectedSignature)) {
+    throw new NewsletterError(invalidMessage, 400, invalidCode);
+  }
+
+  const decoded = safeJsonParse(decodeBase64Url(payload));
+
+  if (
+    !decoded ||
+    decoded.purpose !== purpose ||
+    typeof decoded.sub !== 'string' ||
+    !decoded.sub ||
+    !isValidPositiveInteger(decoded.ver) ||
+    typeof decoded.iat !== 'number' ||
+    typeof decoded.nonce !== 'string' ||
+    !decoded.nonce
+  ) {
+    throw new NewsletterError(invalidMessage, 400, invalidCode);
+  }
+
+  if (nowSeconds - decoded.iat > maxAgeSeconds) {
+    throw new NewsletterError(expiredMessage, 400, expiredCode);
+  }
+
+  return decoded;
+}
+
+export function verifyNewsletterPreferencesToken(token, options = {}) {
+  return verifyNewsletterSubscriberToken(token, {
+    purpose: PREFERENCES_TOKEN_PURPOSE,
+    maxAgeSeconds: PREFERENCES_TOKEN_MAX_AGE_SECONDS,
+    invalidCode: 'invalid_preferences_token',
+    expiredCode: 'expired_preferences_token',
+    invalidMessage: 'This newsletter preferences link is invalid or expired.',
+    expiredMessage: 'This newsletter preferences link has expired.',
+    ...options,
+  });
+}
+
+function verifyNewsletterPreferencesSessionToken(token, options = {}) {
+  return verifyNewsletterSubscriberToken(token, {
+    purpose: PREFERENCES_SESSION_PURPOSE,
+    maxAgeSeconds: PREFERENCES_SESSION_MAX_AGE_SECONDS,
+    invalidCode: 'invalid_preferences_session',
+    expiredCode: 'expired_preferences_session',
+    invalidMessage: 'This newsletter preferences session is invalid or expired.',
+    expiredMessage: 'This newsletter preferences session has expired.',
+    ...options,
+  });
+}
+
+function assertActivePreferencesSubscriber(subscriber, decoded, code = 'invalid_preferences_token') {
+  if (
+    !subscriber ||
+    subscriber.status !== 'active' ||
+    Number(subscriber.preferenceTokenVersion || 1) !== decoded.ver
+  ) {
+    throw new NewsletterError('This newsletter preferences link is invalid or expired.', 400, code);
+  }
+}
+
+function serializeNewsletterPreferences(subscriber, sessionToken) {
+  return {
+    sessionToken,
+    currentLocale: normalizeNewsletterLocale(subscriber.preferredLocale),
+    supportedLocales: [...PUBLIC_LOCALES],
+  };
+}
+
+export async function exchangeNewsletterPreferencesToken(payload = {}) {
+  const decoded = verifyNewsletterPreferencesToken(payload?.token);
+  const subscriber = await NewsletterSubscriber.findById(decoded.sub);
+
+  assertActivePreferencesSubscriber(subscriber, decoded);
+
+  return serializeNewsletterPreferences(subscriber, createNewsletterPreferencesSessionToken(subscriber));
+}
+
+export async function updateNewsletterPreferences(payload = {}) {
+  const decoded = verifyNewsletterPreferencesSessionToken(payload?.sessionToken);
+  const locale = normalizeNewsletterLocale(payload?.locale);
+  const subscriber = await NewsletterSubscriber.findById(decoded.sub);
+
+  assertActivePreferencesSubscriber(subscriber, decoded, 'invalid_preferences_session');
+
+  const hadPendingLocaleRequest = Boolean(subscriber.pendingPreferredLocale || subscriber.pendingLocaleRequestedAt);
+
+  subscriber.preferredLocale = locale;
+  subscriber.pendingPreferredLocale = null;
+  subscriber.pendingLocaleRequestedAt = null;
+
+  if (hadPendingLocaleRequest) {
+    subscriber.localeChangeRequestVersion = Math.max(1, Number(subscriber.localeChangeRequestVersion || 1)) + 1;
+  }
+
+  await subscriber.save();
+
+  return {
+    message: 'Newsletter preferences updated.',
+    currentLocale: normalizeNewsletterLocale(subscriber.preferredLocale),
   };
 }
 

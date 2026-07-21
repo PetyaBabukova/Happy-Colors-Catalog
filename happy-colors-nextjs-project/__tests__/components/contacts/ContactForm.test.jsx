@@ -759,7 +759,7 @@ describe('ContactForm', () => {
     expect(mockRouterPush).toHaveBeenCalledWith('/en/products');
   });
 
-  it('submits cartoon order inquiries without adding locale to the backend payload', async () => {
+  it('submits cartoon order inquiries with the active public locale', async () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
     setMockNavigation({ pathname: '/en/contacts' });
@@ -773,8 +773,8 @@ describe('ContactForm', () => {
     await waitFor(() => expect(createCartoonOrder).toHaveBeenCalled());
     expect(createCartoonOrder.mock.calls[0][0]).toMatchObject({
       productId: null,
+      locale: 'en',
     });
-    expect(createCartoonOrder.mock.calls[0][0]).not.toHaveProperty('locale');
   });
 
   it('does not redirect cartoon order success to products', async () => {

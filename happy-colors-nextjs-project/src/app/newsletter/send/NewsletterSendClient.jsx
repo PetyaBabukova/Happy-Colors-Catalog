@@ -30,15 +30,25 @@ const initialFormState = {
   ctaLabel: 'Виж повече',
 };
 
-function buildPayload(formValues) {
+const LOCALE_OPTIONS = [
+  { value: 'bg', label: 'Български' },
+  { value: 'en', label: 'English' },
+];
+
+function buildPayload(formValues, selectedLocales) {
   return {
     subject: formValues.subject,
     contentHtml: formValues.contentHtml,
     contentJson: formValues.contentJson,
     contentText: formValues.contentText,
     sourceType: formValues.sourceType || 'custom',
+    locales: selectedLocales,
     ...(formValues.sourceId ? { sourceId: formValues.sourceId } : {}),
   };
+}
+
+function countSelectedSubscribers(counts, selectedLocales) {
+  return selectedLocales.reduce((total, locale) => total + Number(counts?.[locale] || 0), 0);
 }
 
 export default function NewsletterSendClient() {
@@ -51,6 +61,8 @@ export default function NewsletterSendClient() {
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeSubscribers, setActiveSubscribers] = useState(null);
+  const [activeSubscribersByLocale, setActiveSubscribersByLocale] = useState({ bg: 0, en: 0 });
+  const [selectedLocales, setSelectedLocales] = useState(['bg', 'en']);
 
   useEffect(() => {
     const source = searchParams?.get('source');
@@ -115,6 +127,12 @@ export default function NewsletterSendClient() {
     }));
   }
 
+  function toggleLocale(locale) {
+    setSelectedLocales((current) =>
+      current.includes(locale) ? current.filter((value) => value !== locale) : [...current, locale]
+    );
+  }
+
   function setStatus(nextMessage, nextType) {
     setMessage(nextMessage);
     setMessageType(nextType);
@@ -131,6 +149,11 @@ export default function NewsletterSendClient() {
       return false;
     }
 
+    if (selectedLocales.length === 0) {
+      setStatus('Моля, изберете поне един език за кампанията.', 'error');
+      return false;
+    }
+
     return true;
   }
 
@@ -144,7 +167,7 @@ export default function NewsletterSendClient() {
     setIsSendingTest(true);
 
     try {
-      const result = await sendNewsletterTest(buildPayload(formValues));
+      const result = await sendNewsletterTest(buildPayload(formValues, selectedLocales));
       setStatus(result?.message || 'Тестовият имейл е изпратен.', 'success');
     } catch (error) {
       setStatus(error?.message || 'Не успяхме да изпратим тестовия имейл.', 'error');
@@ -164,11 +187,13 @@ export default function NewsletterSendClient() {
 
     try {
       const result = await getNewsletterSendStatus();
-      const count = Number(result?.activeSubscribers || 0);
+      const counts = result?.activeSubscribersByLocale || { bg: Number(result?.activeSubscribers || 0), en: 0 };
+      const count = countSelectedSubscribers(counts, selectedLocales);
       setActiveSubscribers(count);
+      setActiveSubscribersByLocale(counts);
 
       if (count === 0) {
-        setStatus('Няма активни абонати за изпращане.', 'info');
+        setStatus('Няма активни абонати за избраните езици.', 'info');
         return;
       }
 
@@ -185,7 +210,7 @@ export default function NewsletterSendClient() {
     setStatus('', '');
 
     try {
-      const result = await sendNewsletterToSubscribers(buildPayload(formValues));
+      const result = await sendNewsletterToSubscribers(buildPayload(formValues, selectedLocales));
       const failed = Number(result?.failed || 0);
 
       if (failed > 0) {
@@ -233,6 +258,22 @@ export default function NewsletterSendClient() {
             />
           </div>
 
+          <fieldset className={styles.localeField}>
+            <legend>Езици на кампанията</legend>
+            <div className={styles.localeOptions}>
+              {LOCALE_OPTIONS.map((option) => (
+                <label key={option.value} className={styles.localeOption}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLocales.includes(option.value)}
+                    onChange={() => toggleLocale(option.value)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
           {message ? (
             <p className={`${styles.message} ${styles[messageType] || ''}`} role="status">
               {message}
@@ -273,6 +314,15 @@ export default function NewsletterSendClient() {
               <dt>Бутон</dt>
               <dd>{formValues.ctaLabel}</dd>
             </div>
+            <div>
+              <dt>Езици</dt>
+              <dd>
+                {selectedLocales
+                  .map((locale) => LOCALE_OPTIONS.find((option) => option.value === locale)?.label)
+                  .filter(Boolean)
+                  .join(', ') || 'Няма избрани'}
+              </dd>
+            </div>
           </dl>
         </aside>
       </section>
@@ -289,6 +339,11 @@ export default function NewsletterSendClient() {
             <p>
               Сигурни ли сте, че искате да изпратите този имейл до {activeSubscribers} активни
               абонати?
+            </p>
+            <p className={styles.localeCounts}>
+              {LOCALE_OPTIONS.filter((option) => selectedLocales.includes(option.value))
+                .map((option) => `${option.label}: ${Number(activeSubscribersByLocale?.[option.value] || 0)}`)
+                .join(' · ')}
             </p>
             <div className={styles.modalActions}>
               <button

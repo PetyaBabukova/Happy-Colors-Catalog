@@ -1,8 +1,11 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { sendEmail } from '../../helpers/sendEmail.js';
+import NewsletterCampaign from '../../models/NewsletterCampaign.js';
+import NewsletterDelivery from '../../models/NewsletterDelivery.js';
 import NewsletterSubscriber from '../../models/NewsletterSubscriber.js';
 import { createExpressApp } from '../../server.js';
+import { processNewsletterCampaignDeliveries } from '../../services/newsletterSendService.js';
 import { authCookie, createBlogArticle, createProduct, createFullAdmin } from './factories.js';
 
 const validContentJson = {
@@ -33,6 +36,29 @@ async function createSubscriber(overrides = {}) {
     consentGivenAt: new Date(),
     confirmedAt: new Date(),
     welcomeEmailSentAt: new Date(),
+    ...overrides,
+  });
+}
+
+async function createCampaignSnapshot(overrides = {}) {
+  return NewsletterCampaign.create({
+    status: 'sending',
+    sourceType: 'custom',
+    sourceId: '',
+    selectedLocales: ['bg'],
+    subject: 'Durable newsletter',
+    title: 'Durable newsletter',
+    contentHtml: '<p>Durable body.</p>',
+    contentText: 'Durable body.',
+    contentJson: validContentJson,
+    ctaPath: '/products',
+    imageUrl: 'https://cdn.example.com/default-newsletter.webp',
+    recipientCountsByLocale: {
+      bg: 1,
+      en: 0,
+    },
+    totalRecipients: 1,
+    startedAt: new Date(),
     ...overrides,
   });
 }
@@ -70,10 +96,11 @@ describe('newsletter send integration', () => {
     expect(await NewsletterSubscriber.countDocuments()).toBe(0);
   });
 
-  it('returns active subscriber count only from the authenticated status endpoint', async () => {
+  it('returns active subscriber counts by locale from the authenticated status endpoint', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
     await createSubscriber({ email: 'active@example.com' });
+    await createSubscriber({ email: 'english-active@example.com', preferredLocale: 'en' });
     await createSubscriber({ email: 'unsubscribed@example.com', status: 'unsubscribed' });
 
     const res = await request(app)
@@ -81,8 +108,15 @@ describe('newsletter send integration', () => {
       .set('Cookie', authCookie(owner))
       .expect(200);
 
-    expect(res.body).toEqual({ activeSubscribers: 1 });
+    expect(res.body).toEqual({
+      activeSubscribers: 2,
+      activeSubscribersByLocale: {
+        bg: 1,
+        en: 1,
+      },
+    });
     expect(JSON.stringify(res.body)).not.toContain('active@example.com');
+    expect(JSON.stringify(res.body)).not.toContain('english-active@example.com');
   });
 
   it('excludes unconfirmed subscribe attempts from newsletter send targets', async () => {
@@ -107,7 +141,13 @@ describe('newsletter send integration', () => {
       .set('Cookie', authCookie(owner))
       .expect(200);
 
-    expect(res.body).toEqual({ activeSubscribers: 0 });
+    expect(res.body).toEqual({
+      activeSubscribers: 0,
+      activeSubscribersByLocale: {
+        bg: 0,
+        en: 0,
+      },
+    });
     expect(await NewsletterSubscriber.countDocuments()).toBe(0);
   });
 
@@ -174,21 +214,184 @@ describe('newsletter send integration', () => {
       message: 'Newsletter send finished.',
       sent: 2,
       failed: 0,
+      skipped: 0,
       activeSubscribers: 2,
+      activeSubscribersByLocale: {
+        bg: 2,
+        en: 0,
+      },
     });
     expect(sendEmail).toHaveBeenCalledTimes(2);
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'first@example.com',
-        html: expect.stringContaining('https://happycolors.eu/newsletter/unsubscribe?token='),
+        html: expect.stringContaining('https://happycolors.eu/bg/newsletter/unsubscribe?token='),
         headers: expect.objectContaining({
           'List-Unsubscribe': expect.stringContaining('https://happycolors.eu/api/newsletter/unsubscribe/one-click?token='),
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         }),
       })
     );
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'first@example.com',
+        html: expect.stringContaining('https://happycolors.eu/bg/newsletter/preferences#token='),
+      })
+    );
     expect(sendEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: 'skipped@example.com' }));
     expect(JSON.stringify(res.body)).not.toContain('first@example.com');
+    expect(JSON.stringify(res.body)).not.toContain('token=');
+  });
+
+  it('persists a campaign and per-recipient delivery outcomes for broadcasts', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const firstSubscriber = await createSubscriber({ email: 'durable-first@example.com' });
+    const secondSubscriber = await createSubscriber({ email: 'durable-second@example.com', preferredLocale: 'en' });
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload())
+      .expect(200);
+
+    const campaign = await NewsletterCampaign.findOne().lean();
+    const deliveries = await NewsletterDelivery.find().sort({ email: 1 }).lean();
+
+    expect(campaign).toMatchObject({
+      status: 'completed',
+      sourceType: 'custom',
+      selectedLocales: ['bg', 'en'],
+      subject: 'Newsletter update',
+      ctaPath: '/products',
+      totalRecipients: 2,
+      sentCount: 2,
+      failedCount: 0,
+      skippedCount: 0,
+      recipientCountsByLocale: {
+        bg: 1,
+        en: 1,
+      },
+    });
+    expect(campaign.finishedAt).toBeInstanceOf(Date);
+    expect(deliveries).toHaveLength(2);
+    expect(deliveries).toEqual([
+      expect.objectContaining({
+        campaignId: campaign._id,
+        subscriberId: firstSubscriber._id,
+        email: 'durable-first@example.com',
+        locale: 'bg',
+        status: 'sent',
+        attemptCount: 1,
+      }),
+      expect.objectContaining({
+        campaignId: campaign._id,
+        subscriberId: secondSubscriber._id,
+        email: 'durable-second@example.com',
+        locale: 'en',
+        status: 'sent',
+        attemptCount: 1,
+      }),
+    ]);
+  });
+
+  it('rechecks active consent immediately before processing a claimed delivery', async () => {
+    const subscriber = await createSubscriber({ email: 'revoked-before-send@example.com' });
+    const campaign = await createCampaignSnapshot();
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+    });
+    subscriber.status = 'unsubscribed';
+    subscriber.unsubscribedAt = new Date();
+    await subscriber.save();
+
+    const result = await processNewsletterCampaignDeliveries(campaign._id);
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+    const finalizedCampaign = await NewsletterCampaign.findById(campaign._id).lean();
+
+    expect(result).toMatchObject({
+      sent: 0,
+      failed: 0,
+      skipped: 1,
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(delivery).toMatchObject({
+      status: 'skipped',
+      attemptCount: 0,
+      lastErrorReason: 'Subscriber is no longer active.',
+    });
+    expect(finalizedCampaign).toMatchObject({
+      status: 'completed',
+      sentCount: 0,
+      failedCount: 0,
+      skippedCount: 1,
+    });
+  });
+
+  it('does not resend already sent campaign deliveries on repeated processing', async () => {
+    const subscriber = await createSubscriber({ email: 'single-send@example.com' });
+    const campaign = await createCampaignSnapshot();
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+    });
+
+    await processNewsletterCampaignDeliveries(campaign._id);
+    await processNewsletterCampaignDeliveries(campaign._id);
+
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(delivery).toMatchObject({
+      status: 'sent',
+      attemptCount: 1,
+    });
+  });
+
+  it('sends only selected language groups with localized recipient links', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    await createSubscriber({ email: 'bg-selected-skip@example.com', preferredLocale: 'bg' });
+    await createSubscriber({ email: 'en-selected@example.com', preferredLocale: 'en' });
+
+    const res = await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(owner))
+      .send(newsletterPayload({ locales: ['en'] }))
+      .expect(200);
+
+    expect(res.body).toEqual({
+      message: 'Newsletter send finished.',
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      activeSubscribers: 1,
+      activeSubscribersByLocale: {
+        bg: 0,
+        en: 1,
+      },
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'en-selected@example.com',
+        html: expect.stringContaining('<html lang="en">'),
+        text: expect.stringContaining('View more: https://happycolors.eu/en/products'),
+        headers: expect.objectContaining({
+          'List-Unsubscribe': expect.stringContaining('https://happycolors.eu/api/newsletter/unsubscribe/one-click?token='),
+        }),
+      })
+    );
+    const sentEmail = sendEmail.mock.calls[0][0];
+    expect(sentEmail.html).toContain('https://happycolors.eu/en/newsletter/unsubscribe?token=');
+    expect(sentEmail.html).toContain('https://happycolors.eu/en/newsletter/preferences#token=');
+    expect(sendEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: 'bg-selected-skip@example.com' }));
+    expect(JSON.stringify(res.body)).not.toContain('en-selected@example.com');
     expect(JSON.stringify(res.body)).not.toContain('token=');
   });
 
@@ -269,7 +472,12 @@ describe('newsletter send integration', () => {
       message: 'No active subscribers.',
       sent: 0,
       failed: 0,
+      skipped: 0,
       activeSubscribers: 0,
+      activeSubscribersByLocale: {
+        bg: 0,
+        en: 0,
+      },
     });
     expect(sendEmail).not.toHaveBeenCalled();
   });
@@ -289,7 +497,7 @@ describe('newsletter send integration', () => {
       expect.objectContaining({
         to: 'custom-image@example.com',
         html: expect.stringContaining('https://cdn.example.com/default-newsletter.webp'),
-        text: expect.stringContaining('Виж повече: https://happycolors.eu/products'),
+        text: expect.stringContaining('Виж повече: https://happycolors.eu/bg/products'),
       })
     );
   });
@@ -420,8 +628,8 @@ describe('newsletter send integration', () => {
   it('emails the owner a private failure report for partial broadcast failures', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
-    await createSubscriber({ email: 'bad@example.com' });
-    await createSubscriber({ email: 'good@example.com' });
+    const badSubscriber = await createSubscriber({ email: 'bad@example.com' });
+    const goodSubscriber = await createSubscriber({ email: 'good@example.com', consecutiveUndeliveredCount: 2 });
     sendEmail
       .mockRejectedValueOnce(new Error('Mailbox unavailable'))
       .mockResolvedValueOnce({ messageId: 'subscriber-ok' })
@@ -437,7 +645,12 @@ describe('newsletter send integration', () => {
       message: 'Newsletter send finished with failures.',
       sent: 1,
       failed: 1,
+      skipped: 0,
       activeSubscribers: 2,
+      activeSubscribersByLocale: {
+        bg: 2,
+        en: 0,
+      },
     });
     expect(sendEmail).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -445,7 +658,82 @@ describe('newsletter send integration', () => {
         text: expect.stringContaining('bad@example.com - Mailbox unavailable'),
       })
     );
+    const updatedBadSubscriber = await NewsletterSubscriber.findById(badSubscriber._id).lean();
+    const updatedGoodSubscriber = await NewsletterSubscriber.findById(goodSubscriber._id).lean();
+    const failedDelivery = await NewsletterDelivery.findOne({ email: 'bad@example.com' }).lean();
+
+    expect(updatedBadSubscriber.consecutiveUndeliveredCount).toBe(1);
+    expect(updatedGoodSubscriber.consecutiveUndeliveredCount).toBe(0);
+    expect(failedDelivery).toMatchObject({
+      status: 'failed',
+      attemptCount: 1,
+      lastErrorReason: 'Mailbox unavailable',
+    });
     expect(JSON.stringify(res.body)).not.toContain('bad@example.com');
+  });
+
+  it('records token/template failures for one recipient without aborting the campaign', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    await createSubscriber({ email: 'token-failure@example.com' });
+    await createSubscriber({ email: 'still-sent@example.com' });
+    const tokenFailure = new Error('Preference token signing failed');
+
+    sendEmail.mockResolvedValue({ messageId: 'subscriber-ok' });
+    const newsletterService = await import('../../services/newsletterService.js');
+    const createPreferencesTokenSpy = vi
+      .spyOn(newsletterService, 'createNewsletterPreferencesToken')
+      .mockImplementationOnce(() => {
+        throw tokenFailure;
+      });
+
+    try {
+      const res = await request(app)
+        .post('/newsletter/send')
+        .set('Cookie', authCookie(owner))
+        .send(newsletterPayload())
+        .expect(200);
+
+      const failedDelivery = await NewsletterDelivery.findOne({ email: 'token-failure@example.com' }).lean();
+      const sentDelivery = await NewsletterDelivery.findOne({ email: 'still-sent@example.com' }).lean();
+      const campaign = await NewsletterCampaign.findOne().lean();
+
+      expect(res.body).toEqual({
+        message: 'Newsletter send finished with failures.',
+        sent: 1,
+        failed: 1,
+        skipped: 0,
+        activeSubscribers: 2,
+        activeSubscribersByLocale: {
+          bg: 2,
+          en: 0,
+        },
+      });
+      expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'still-sent@example.com' }));
+      expect(sendEmail).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          subject: 'Happy Colors newsletter delivery failures',
+          text: expect.stringContaining('token-failure@example.com - Preference token signing failed'),
+        })
+      );
+      expect(failedDelivery).toMatchObject({
+        status: 'failed',
+        attemptCount: 1,
+        lastErrorReason: 'Preference token signing failed',
+      });
+      expect(sentDelivery).toMatchObject({
+        status: 'sent',
+        attemptCount: 1,
+      });
+      expect(campaign).toMatchObject({
+        status: 'completed',
+        sentCount: 1,
+        failedCount: 1,
+        skippedCount: 0,
+      });
+    } finally {
+      createPreferencesTokenSpy.mockRestore();
+    }
   });
 
   it('rejects invalid payloads before sending', async () => {
@@ -484,6 +772,13 @@ describe('newsletter send integration', () => {
       .set('Cookie', authCookie(await createFullAdmin()))
       .set('x-forwarded-for', '203.0.113.14')
       .send(newsletterPayload({ sourceType: 'product', sourceId: 'not-a-mongo-id' }))
+      .expect(400);
+
+    await request(app)
+      .post('/newsletter/send')
+      .set('Cookie', authCookie(await createFullAdmin()))
+      .set('x-forwarded-for', '203.0.113.15')
+      .send(newsletterPayload({ locales: ['en', 'fr'] }))
       .expect(400);
 
     expect(sendEmail).not.toHaveBeenCalled();
@@ -598,7 +893,7 @@ describe('newsletter send integration', () => {
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'product-subscriber@example.com',
-        html: expect.stringContaining(`https://happycolors.eu/products/${product._id}`),
+        html: expect.stringContaining(`https://happycolors.eu/bg/products/${product._id}`),
       })
     );
     expect(sendEmail).toHaveBeenCalledWith(
@@ -714,7 +1009,7 @@ describe('newsletter send integration', () => {
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'blog-subscriber@example.com',
-        html: expect.stringContaining(`https://happycolors.eu/blog/${article._id}`),
+        html: expect.stringContaining(`https://happycolors.eu/bg/blog/${article._id}`),
       })
     );
     expect(sendEmail).toHaveBeenCalledWith(

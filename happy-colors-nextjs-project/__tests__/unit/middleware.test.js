@@ -134,6 +134,26 @@ describe('middleware public locale redirects', () => {
     });
   });
 
+  it('treats newsletter preferences as a public token-safe legacy route', () => {
+    expect(isPublicLegacyPath('/newsletter/preferences')).toBe(true);
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/newsletter/preferences',
+        search: '?token=abc123&utm_source=ignored',
+        localeRoutingEnabled: true,
+        englishEnabled: true,
+      })
+    ).toEqual({
+      pathname: '/bg/newsletter/preferences',
+      search: '?token=abc123',
+      status: 307,
+      headers: {
+        'Cache-Control': 'private, max-age=0, no-store',
+        'Referrer-Policy': 'no-referrer',
+      },
+    });
+  });
+
   it('passes through already localized public routes and strips locale prefixes from non-public routes', () => {
     expect(
       resolvePublicLocaleRedirect({
@@ -171,6 +191,17 @@ describe('middleware public locale integration', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, max-age=0, no-store');
     expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
     expect(response.headers.get('x-middleware-override-headers')).toContain(LOCALE_REQUEST_HEADER);
+    expect(response.headers.get(`x-middleware-request-${LOCALE_REQUEST_HEADER}`)).toBe('en');
+  });
+
+  it('sets no-store token-page headers for localized newsletter preferences pages', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const response = middleware(new NextRequest('http://localhost:3000/en/newsletter/preferences'));
+
+    expect(response.headers.get('Cache-Control')).toBe('private, max-age=0, no-store');
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
     expect(response.headers.get(`x-middleware-request-${LOCALE_REQUEST_HEADER}`)).toBe('en');
   });
 });

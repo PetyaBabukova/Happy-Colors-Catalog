@@ -1,13 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sendEmail } from '../../../helpers/sendEmail.js';
 import NewsletterSubscriber from '../../../models/NewsletterSubscriber.js';
+import NewsletterCampaign from '../../../models/NewsletterCampaign.js';
+import NewsletterDelivery from '../../../models/NewsletterDelivery.js';
 import BlogArticle from '../../../models/BlogArticle.js';
 import { getProductById } from '../../../services/productsServices.js';
-import { createUnsubscribeToken } from '../../../services/newsletterService.js';
+import {
+  createNewsletterPreferencesPageUrl,
+  createNewsletterPreferencesToken,
+  createUnsubscribePageUrl,
+  createUnsubscribeToken,
+} from '../../../services/newsletterService.js';
 import { buildNewsletterEmailTemplate } from '../../../services/newsletterEmailTemplate.js';
 import {
   buildBlogNewsletterPrefill,
   buildProductNewsletterPrefill,
+  getNewsletterSendStatus,
   sendNewsletterTest,
   sendNewsletterToSubscribers,
 } from '../../../services/newsletterSendService.js';
@@ -20,6 +28,26 @@ vi.mock('../../../models/NewsletterSubscriber.js', () => ({
   default: {
     countDocuments: vi.fn(),
     find: vi.fn(),
+    findOne: vi.fn(),
+    updateOne: vi.fn(),
+  },
+}));
+
+vi.mock('../../../models/NewsletterCampaign.js', () => ({
+  default: {
+    create: vi.fn(),
+    findById: vi.fn(),
+    updateOne: vi.fn(),
+  },
+}));
+
+vi.mock('../../../models/NewsletterDelivery.js', () => ({
+  default: {
+    insertMany: vi.fn(),
+    find: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    updateOne: vi.fn(),
+    countDocuments: vi.fn(),
   },
 }));
 
@@ -34,6 +62,9 @@ vi.mock('../../../services/productsServices.js', () => ({
 }));
 
 vi.mock('../../../services/newsletterService.js', () => ({
+  createNewsletterPreferencesPageUrl: vi.fn(),
+  createNewsletterPreferencesToken: vi.fn(),
+  createUnsubscribePageUrl: vi.fn(),
   createUnsubscribeToken: vi.fn(),
 }));
 
@@ -59,9 +90,20 @@ function payload(overrides = {}) {
   };
 }
 
+let mockDeliveryDocs = [];
+let mockSubscriberDocs = [];
+let mockCampaignDoc = null;
+
 function mockSubscribers(subscribers) {
+  mockSubscriberDocs = subscribers.map((subscriber, index) => ({
+    _id: subscriber._id || `subscriber-${index + 1}`,
+    status: 'active',
+    ...subscriber,
+  }));
+  mockDeliveryDocs = [];
+
   NewsletterSubscriber.find.mockReturnValue({
-    sort: vi.fn().mockResolvedValue(subscribers),
+    sort: vi.fn().mockResolvedValue(mockSubscriberDocs),
   });
 }
 
@@ -72,13 +114,88 @@ describe('newsletterSendService', () => {
     process.env.NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
     process.env.NEWSLETTER_DEFAULT_IMAGE_URL = '';
     process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    mockDeliveryDocs = [];
+    mockSubscriberDocs = [];
+    mockCampaignDoc = null;
 
     sendEmail.mockResolvedValue({ messageId: 'unit-message-id' });
+    NewsletterSubscriber.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    NewsletterSubscriber.findOne.mockImplementation(async (query) => {
+      const subscriber = mockSubscriberDocs.find((candidate) => candidate._id === query?._id);
+
+      return subscriber?.status === 'active' ? subscriber : null;
+    });
+    NewsletterCampaign.create.mockImplementation(async (campaign) => {
+      mockCampaignDoc = {
+        _id: 'campaign-1',
+        ...campaign,
+      };
+
+      return mockCampaignDoc;
+    });
+    NewsletterCampaign.findById.mockImplementation(() => ({
+      lean: vi.fn().mockResolvedValue(mockCampaignDoc),
+    }));
+    NewsletterCampaign.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    NewsletterDelivery.insertMany.mockImplementation(async (deliveries) => {
+      mockDeliveryDocs = deliveries.map((delivery, index) => ({
+        _id: `delivery-${index + 1}`,
+        status: 'pending',
+        attemptCount: 0,
+        claimToken: '',
+        ...delivery,
+      }));
+      return mockDeliveryDocs;
+    });
+    NewsletterDelivery.find.mockImplementation(() => ({
+      sort: vi.fn().mockResolvedValue(mockDeliveryDocs.filter((delivery) => delivery.status === 'pending')),
+    }));
+    NewsletterDelivery.findOneAndUpdate.mockImplementation(async (query) => {
+      const delivery = mockDeliveryDocs.find(
+        (candidate) => candidate._id === query?._id && candidate.status === query?.status
+      );
+
+      if (!delivery) {
+        return null;
+      }
+
+      delivery.status = 'sending';
+      delivery.claimToken = 'claim-token';
+      delivery.claimedAt = new Date();
+      return delivery;
+    });
+    NewsletterDelivery.updateOne.mockImplementation(async (query, update) => {
+      const delivery = mockDeliveryDocs.find(
+        (candidate) =>
+          candidate._id === query?._id &&
+          candidate.status === query?.status &&
+          candidate.claimToken === query?.claimToken
+      );
+
+      if (delivery) {
+        Object.assign(delivery, update?.$set || {});
+        delivery.attemptCount += Number(update?.$inc?.attemptCount || 0);
+      }
+
+      return { modifiedCount: delivery ? 1 : 0 };
+    });
+    NewsletterDelivery.countDocuments.mockImplementation(async (query) =>
+      mockDeliveryDocs.filter(
+        (delivery) => delivery.campaignId === query?.campaignId && delivery.status === query?.status
+      ).length
+    );
     createUnsubscribeToken.mockImplementation((subscriber) => `token-${subscriber.email}`);
+    createUnsubscribePageUrl.mockImplementation(
+      (token, { locale }) => `https://happycolors.eu/${locale}/newsletter/unsubscribe?token=${encodeURIComponent(token)}`
+    );
+    createNewsletterPreferencesToken.mockImplementation((subscriber) => `preferences-${subscriber.email}`);
+    createNewsletterPreferencesPageUrl.mockImplementation(
+      (token, { locale }) => `https://happycolors.eu/${locale}/newsletter/preferences#token=${encodeURIComponent(token)}`
+    );
     buildNewsletterEmailTemplate.mockImplementation((values) => ({
       subject: values.subject,
-      text: `${values.ctaUrl || ''} ${values.unsubscribeUrl || ''}`,
-      html: `${values.imageUrl || ''} ${values.ctaUrl || ''} ${values.unsubscribeUrl || ''}`,
+      text: `${values.ctaUrl || ''} ${values.unsubscribeUrl || ''} ${values.preferencesUrl || ''}`,
+      html: `${values.imageUrl || ''} ${values.ctaUrl || ''} ${values.unsubscribeUrl || ''} ${values.preferencesUrl || ''}`,
       headers: values.unsubscribeUrl
         ? { 'List-Unsubscribe': `<${values.unsubscribeUrl}>` }
         : {},
@@ -98,7 +215,7 @@ describe('newsletterSendService', () => {
     expect(result).toEqual({ message: 'Test email sent.', recipients: 2 });
     expect(buildNewsletterEmailTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
-        ctaUrl: 'https://happycolors.eu/products',
+        ctaUrl: 'https://happycolors.eu/bg/products',
         imageUrl: 'https://happycolors.eu/logo_64pxH.svg',
         isTest: true,
       })
@@ -106,6 +223,25 @@ describe('newsletterSendService', () => {
     expect(sendEmail).toHaveBeenCalledTimes(2);
     expect(sendEmail).toHaveBeenNthCalledWith(1, expect.objectContaining({ to: 'owner@example.com' }));
     expect(sendEmail).toHaveBeenNthCalledWith(2, expect.objectContaining({ to: 'copy@example.com' }));
+  });
+
+  it('returns active subscriber counts by newsletter language without exposing addresses', async () => {
+    NewsletterSubscriber.countDocuments
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(2);
+
+    await expect(getNewsletterSendStatus()).resolves.toEqual({
+      activeSubscribers: 5,
+      activeSubscribersByLocale: {
+        bg: 3,
+        en: 2,
+      },
+    });
+    expect(NewsletterSubscriber.countDocuments).toHaveBeenNthCalledWith(1, { status: 'active' });
+    expect(NewsletterSubscriber.countDocuments).toHaveBeenNthCalledWith(2, {
+      status: 'active',
+      preferredLocale: 'en',
+    });
   });
 
   it('rejects client-provided image and CTA fields before sending', async () => {
@@ -130,7 +266,7 @@ describe('newsletterSendService', () => {
       title: 'Product newsletter',
       imageUrls: ['https://storage.googleapis.com/happy/products/product.webp'],
     });
-    mockSubscribers([{ email: 'subscriber@example.com', unsubscribeTokenVersion: 1 }]);
+    mockSubscribers([{ email: 'subscriber@example.com', preferredLocale: 'en', unsubscribeTokenVersion: 1 }]);
 
     const result = await sendNewsletterToSubscribers(
       payload({
@@ -139,16 +275,49 @@ describe('newsletterSendService', () => {
       })
     );
 
-    expect(result).toMatchObject({ sent: 1, failed: 0, activeSubscribers: 1 });
+    expect(result).toMatchObject({
+      sent: 1,
+      failed: 0,
+      activeSubscribers: 1,
+      activeSubscribersByLocale: {
+        bg: 0,
+        en: 1,
+      },
+    });
     expect(buildNewsletterEmailTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
-        ctaUrl: `https://happycolors.eu/products/${validProductId}`,
+        locale: 'en',
+        ctaUrl: `https://happycolors.eu/en/products/${validProductId}`,
         imageUrl: 'https://storage.googleapis.com/happy/products/product.webp',
-        unsubscribeUrl: 'https://happycolors.eu/newsletter/unsubscribe?token=token-subscriber%40example.com',
+        unsubscribeUrl: 'https://happycolors.eu/en/newsletter/unsubscribe?token=token-subscriber%40example.com',
         listUnsubscribeUrl:
           'https://happycolors.eu/api/newsletter/unsubscribe/one-click?token=token-subscriber%40example.com',
+        preferencesUrl:
+          'https://happycolors.eu/en/newsletter/preferences#token=preferences-subscriber%40example.com',
       })
     );
+  });
+
+  it('sends only explicitly selected newsletter language groups', async () => {
+    mockSubscribers([
+      { email: 'bg@example.com', preferredLocale: 'bg', unsubscribeTokenVersion: 1 },
+      { email: 'en@example.com', preferredLocale: 'en', unsubscribeTokenVersion: 1 },
+    ]);
+
+    const result = await sendNewsletterToSubscribers(payload({ locales: ['en'] }));
+
+    expect(result).toMatchObject({
+      sent: 1,
+      failed: 0,
+      activeSubscribers: 1,
+      activeSubscribersByLocale: {
+        bg: 0,
+        en: 1,
+      },
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'en@example.com' }));
+    expect(sendEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: 'bg@example.com' }));
   });
 
   it('validates prefill ids before querying source records', async () => {

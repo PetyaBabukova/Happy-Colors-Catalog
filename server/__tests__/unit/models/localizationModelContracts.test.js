@@ -4,6 +4,8 @@ import BlogArticle from '../../../models/BlogArticle.js';
 import CartoonOrder from '../../../models/CartoonOrder.js';
 import Category from '../../../models/Category.js';
 import HomeBanner from '../../../models/HomeBanner.js';
+import NewsletterCampaign from '../../../models/NewsletterCampaign.js';
+import NewsletterDelivery from '../../../models/NewsletterDelivery.js';
 import NewsletterSubscriber from '../../../models/NewsletterSubscriber.js';
 import Product from '../../../models/Product.js';
 
@@ -110,6 +112,32 @@ function buildCartoonOrder(overrides = {}) {
     ],
     consentAccepted: true,
     consentAcceptedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  });
+}
+
+function buildNewsletterCampaign(overrides = {}) {
+  return new NewsletterCampaign({
+    status: 'sending',
+    sourceType: 'custom',
+    selectedLocales: ['bg', 'en'],
+    subject: 'Newsletter subject',
+    title: 'Newsletter subject',
+    contentHtml: '<p>Newsletter body</p>',
+    contentText: 'Newsletter body',
+    ctaPath: '/products',
+    imageUrl: 'https://example.com/newsletter.jpg',
+    startedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  });
+}
+
+function buildNewsletterDelivery(overrides = {}) {
+  return new NewsletterDelivery({
+    campaignId: id(),
+    subscriberId: id(),
+    email: 'subscriber@example.com',
+    locale: 'bg',
     ...overrides,
   });
 }
@@ -234,5 +262,36 @@ describe('localization model contracts', () => {
 
     order.customerLocale = 'fr';
     expectInvalidPath(order, 'customerLocale');
+  });
+
+  it('stores newsletter campaign and delivery locale/status contracts', () => {
+    const campaign = buildNewsletterCampaign();
+    const delivery = buildNewsletterDelivery();
+
+    expectValid(campaign);
+    expectValid(delivery);
+    expect(campaign.status).toBe('sending');
+    expect(delivery.status).toBe('pending');
+    expect(delivery.attemptCount).toBe(0);
+
+    const invalidCampaign = buildNewsletterCampaign({
+      selectedLocales: ['fr'],
+    });
+    const invalidDelivery = buildNewsletterDelivery({
+      locale: 'fr',
+    });
+
+    expectInvalidPath(invalidCampaign, 'selectedLocales.0');
+    expectInvalidPath(invalidDelivery, 'locale');
+
+    const deliveryIndexes = NewsletterDelivery.schema.indexes();
+    expect(deliveryIndexes).toEqual(
+      expect.arrayContaining([
+        [
+          { campaignId: 1, subscriberId: 1 },
+          expect.objectContaining({ unique: true }),
+        ],
+      ])
+    );
   });
 });

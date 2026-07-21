@@ -562,6 +562,7 @@ export default function ContactForm({ product, productId = null, serviceContext 
           photos: uploadedCartoonPhotos,
           consentAccepted,
           website,
+          locale,
         }
       : {
           ...sanitizedValues,

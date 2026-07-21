@@ -4,6 +4,7 @@ import { sendEmail } from '../../helpers/sendEmail.js';
 import NewsletterSubscriber from '../../models/NewsletterSubscriber.js';
 import {
   createNewsletterConfirmationToken,
+  createNewsletterPreferencesToken,
   createSubscribeFormToken,
   createUnsubscribeToken,
 } from '../../services/newsletterService.js';
@@ -612,6 +613,158 @@ describe('newsletter integration', () => {
 
     expect(res.body.code).toBe('invalid_newsletter_locale');
     expect(await NewsletterSubscriber.countDocuments({ email: 'locale@example.com' })).toBe(0);
+  });
+
+  it('exchanges a valid preferences token for an active subscriber without exposing private subscriber data', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({
+      email: 'preferences@example.com',
+      preferredLocale: 'en',
+      preferenceTokenVersion: 2,
+    });
+    const token = createNewsletterPreferencesToken(subscriber);
+
+    const res = await request(app)
+      .post('/newsletter/preferences/exchange')
+      .set('x-forwarded-for', '203.0.113.170')
+      .send({ token })
+      .expect(200);
+
+    expect(res.headers['cache-control']).toContain('no-store');
+    expect(res.body).toEqual({
+      sessionToken: expect.any(String),
+      currentLocale: 'en',
+      supportedLocales: ['bg', 'en'],
+    });
+    expect(JSON.stringify(res.body)).not.toContain('preferences@example.com');
+  });
+
+  it('updates newsletter preferences immediately and invalidates pending subscription-form language requests', async () => {
+    const app = createExpressApp();
+    const consentGivenAt = new Date('2026-02-01T00:00:00.000Z');
+    const confirmedAt = new Date('2026-02-01T00:01:00.000Z');
+    const lastSubscribedAt = new Date('2026-02-01T00:02:00.000Z');
+    const subscriber = await createSubscriber({
+      email: 'preferences-update@example.com',
+      preferredLocale: 'bg',
+      pendingPreferredLocale: 'en',
+      pendingLocaleRequestedAt: new Date('2026-02-02T00:00:00.000Z'),
+      localeChangeRequestVersion: 4,
+      preferenceTokenVersion: 3,
+      unsubscribeTokenVersion: 7,
+      consentGivenAt,
+      confirmedAt,
+      lastSubscribedAt,
+      subscribeCount: 5,
+      hasEverUnsubscribed: true,
+    });
+    const exchangeRes = await request(app)
+      .post('/newsletter/preferences/exchange')
+      .set('x-forwarded-for', '203.0.113.171')
+      .send({ token: createNewsletterPreferencesToken(subscriber) })
+      .expect(200);
+
+    const res = await request(app)
+      .post('/newsletter/preferences')
+      .set('x-forwarded-for', '203.0.113.172')
+      .send({ sessionToken: exchangeRes.body.sessionToken, locale: 'en' })
+      .expect(200);
+
+    const updated = await NewsletterSubscriber.findById(subscriber._id);
+
+    expect(res.headers['cache-control']).toContain('no-store');
+    expect(res.body).toEqual({
+      message: 'Newsletter preferences updated.',
+      currentLocale: 'en',
+    });
+    expect(updated).toMatchObject({
+      status: 'active',
+      preferredLocale: 'en',
+      pendingPreferredLocale: null,
+      localeChangeRequestVersion: 5,
+      preferenceTokenVersion: 3,
+      unsubscribeTokenVersion: 7,
+      subscribeCount: 5,
+      hasEverUnsubscribed: true,
+    });
+    expect(updated.pendingLocaleRequestedAt).toBeNull();
+    expect(updated.consentGivenAt.getTime()).toBe(consentGivenAt.getTime());
+    expect(updated.confirmedAt.getTime()).toBe(confirmedAt.getTime());
+    expect(updated.lastSubscribedAt.getTime()).toBe(lastSubscribedAt.getTime());
+  });
+
+  it('rejects invalid, obsolete, and inactive newsletter preferences tokens', async () => {
+    const app = createExpressApp();
+    const obsoleteSubscriber = await createSubscriber({
+      email: 'preferences-obsolete@example.com',
+      preferenceTokenVersion: 1,
+    });
+    const obsoleteToken = createNewsletterPreferencesToken(obsoleteSubscriber);
+    obsoleteSubscriber.preferenceTokenVersion = 2;
+    await obsoleteSubscriber.save();
+
+    const unsubscribed = await createSubscriber({
+      email: 'preferences-unsubscribed@example.com',
+      status: 'unsubscribed',
+      unsubscribedAt: new Date(),
+    });
+
+    for (const [token, ip] of [
+      ['not-a-token', '203.0.113.173'],
+      [obsoleteToken, '203.0.113.174'],
+      [createNewsletterPreferencesToken(unsubscribed), '203.0.113.175'],
+    ]) {
+      const res = await request(app)
+        .post('/newsletter/preferences/exchange')
+        .set('x-forwarded-for', ip)
+        .send({ token })
+        .expect(400);
+
+      expect(res.headers['cache-control']).toContain('no-store');
+      expect(res.body.code).toBe('invalid_preferences_token');
+    }
+  });
+
+  it('rejects invalid preferences sessions, unsupported locales, and subscribers who unsubscribe after exchange', async () => {
+    const app = createExpressApp();
+    const subscriber = await createSubscriber({
+      email: 'preferences-session@example.com',
+      preferredLocale: 'bg',
+    });
+    const exchangeRes = await request(app)
+      .post('/newsletter/preferences/exchange')
+      .set('x-forwarded-for', '203.0.113.176')
+      .send({ token: createNewsletterPreferencesToken(subscriber) })
+      .expect(200);
+
+    const invalidSessionRes = await request(app)
+      .post('/newsletter/preferences')
+      .set('x-forwarded-for', '203.0.113.177')
+      .send({ sessionToken: 'not-a-session', locale: 'en' })
+      .expect(400);
+
+    const unsupportedLocaleRes = await request(app)
+      .post('/newsletter/preferences')
+      .set('x-forwarded-for', '203.0.113.178')
+      .send({ sessionToken: exchangeRes.body.sessionToken, locale: 'fr' })
+      .expect(400);
+
+    subscriber.status = 'unsubscribed';
+    subscriber.unsubscribedAt = new Date();
+    await subscriber.save();
+
+    const inactiveRes = await request(app)
+      .post('/newsletter/preferences')
+      .set('x-forwarded-for', '203.0.113.179')
+      .send({ sessionToken: exchangeRes.body.sessionToken, locale: 'en' })
+      .expect(400);
+
+    expect(invalidSessionRes.body.code).toBe('invalid_preferences_session');
+    expect(unsupportedLocaleRes.body.code).toBe('invalid_newsletter_locale');
+    expect(inactiveRes.body.code).toBe('invalid_preferences_session');
+
+    const updated = await NewsletterSubscriber.findById(subscriber._id);
+    expect(updated.preferredLocale).toBe('bg');
   });
 
   it('retries the welcome email for active subscribers when it was not sent yet', async () => {

@@ -4,10 +4,12 @@ import { createRateLimiter } from '../middlewares/rateLimit.js';
 import {
   confirmNewsletterSubscription,
   createSubscribeFormToken,
+  exchangeNewsletterPreferencesToken,
   createUnsubscribePageUrl,
   isHoneypotSubscribePayload,
   requestNewsletterSubscription,
   unsubscribeFromNewsletter,
+  updateNewsletterPreferences,
   verifySubscribeFormToken,
 } from '../services/newsletterService.js';
 
@@ -57,6 +59,13 @@ const unsubscribeLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 10,
   message: 'Твърде много опити за отписване. Моля, опитайте отново след малко.',
+});
+
+const preferencesLimiter = createRateLimiter({
+  keyPrefix: 'newsletter-preferences',
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: 'Твърде много опити за промяна на настройките. Моля, опитайте отново след малко.',
 });
 
 function requireJson(req, res, next) {
@@ -135,6 +144,30 @@ router.post('/confirm', confirmLimiter, requireJson, async (req, res) => {
     const result = await confirmNewsletterSubscription(req.body);
 
     return res.status(200).json({ message: result.message });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/preferences/exchange', preferencesLimiter, requireJson, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=0, no-store');
+
+  try {
+    const result = await exchangeNewsletterPreferencesToken(req.body);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+router.post('/preferences', preferencesLimiter, requireJson, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, max-age=0, no-store');
+
+  try {
+    const result = await updateNewsletterPreferences(req.body);
+
+    return res.status(200).json(result);
   } catch (error) {
     return sendError(res, error);
   }

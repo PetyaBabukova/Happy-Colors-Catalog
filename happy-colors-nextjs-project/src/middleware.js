@@ -26,6 +26,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/contacts',
   '/faq',
   '/newsletter/confirm',
+  '/newsletter/preferences',
   '/newsletter/unsubscribe',
   '/partners',
   '/products',
@@ -36,6 +37,7 @@ const BLOG_RESERVED_SEGMENTS = new Set(['create']);
 const TOKEN_QUERY_PARAM = 'token';
 const NEWSLETTER_TOKEN_PAGE_PATHS = new Set([
   '/newsletter/confirm',
+  '/newsletter/preferences',
   '/newsletter/unsubscribe',
 ]);
 const PROTECTED_PAGE_PREFIXES = [
@@ -297,6 +299,7 @@ export const config = {
     '/home-banners/:path*/edit',
     '/homepage-featured/:path*',
     '/newsletter/confirm/:path*',
+    '/newsletter/preferences/:path*',
     '/newsletter/unsubscribe/:path*',
     '/newsletter/send/:path*',
     '/partners/:path*',

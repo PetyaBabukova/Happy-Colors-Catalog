@@ -1848,6 +1848,7 @@ describe('cartoon orders integration', () => {
       email: 'petya@example.com',
       phone: '+359888123456',
     });
+    expect(order.customerLocale).toBe('bg');
     expect(order.productSnapshot).toMatchObject({
       title: 'Cartoon Portrait',
       price: 35,
@@ -1888,6 +1889,7 @@ describe('cartoon orders integration', () => {
     expect(sendEmail.mock.calls[0][0].text).toContain(
       `https://signed.example.com/${encodeURIComponent(photo.objectName)}`
     );
+    expect(sendEmail.mock.calls[0][0].text).toContain('Customer locale: BG');
     expect(sendEmail.mock.calls[0][0].text).toContain('photo-1.webp');
     expect(sendEmail.mock.calls[1][0]).toEqual(
       expect.objectContaining({
@@ -1945,6 +1947,67 @@ describe('cartoon orders integration', () => {
         text: expect.stringContaining('General inquiry'),
       })
     );
+  });
+
+  it('stores English cartoon order locale and sends the customer acknowledgement in English', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+    const photo = buildPhoto({
+      sessionId: 'cartoon-session-en',
+      objectName: 'cartoon-orders/reference-photos/en-photo.webp',
+      originalName: 'en-photo.webp',
+    });
+    await createUploadSession({ sessionId: 'cartoon-session-en', photos: [photo] });
+
+    const res = await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.112')
+      .send({
+        ...buildCartoonOrderPayload({ photos: [photo] }),
+        productId: null,
+        locale: 'en',
+      })
+      .expect(201);
+    const order = await CartoonOrder.findById(res.body.orderId).lean();
+
+    expect(order.customerLocale).toBe('en');
+    expect(sendEmail).toHaveBeenCalledTimes(2);
+    expect(sendEmail.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        to: 'cartoon-admin@example.com',
+        subject: '[EN] New cartoon order from Petya Babukova',
+      })
+    );
+    expect(sendEmail.mock.calls[0][0].text).toContain('Customer locale: EN');
+    expect(sendEmail.mock.calls[0][0].html).toContain('Customer locale:</strong> EN');
+    expect(sendEmail.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        to: 'petya@example.com',
+        subject: 'We received your caricature inquiry',
+        text: 'We received your caricature inquiry, thank you! We will contact you as soon as possible.\n\nBest regards,\nThe Happy Colors team',
+        html: expect.stringContaining('The Happy Colors team'),
+      })
+    );
+    expect(sendEmail.mock.calls[1][0].text).not.toContain('Petya Babukova');
+    expect(sendEmail.mock.calls[1][0].text).not.toContain('Please make a cheerful cartoon portrait.');
+  });
+
+  it('rejects unsupported cartoon order customer locales', async () => {
+    process.env.NEXT_PUBLIC_CARTOONS_SERVICE_ENABLED = 'true';
+    const app = createExpressApp();
+
+    const res = await request(app)
+      .post('/cartoon-orders')
+      .set('x-forwarded-for', '203.0.113.113')
+      .send({
+        ...buildCartoonOrderPayload({ product: null, photos: [] }),
+        locale: 'fr',
+      })
+      .expect(400);
+
+    expect(res.body.message).toBe('Invalid customer locale.');
+    expect(await CartoonOrder.countDocuments()).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it('confirms successful-inquiry guard counters only after durable order creation', async () => {
@@ -2575,6 +2638,63 @@ describe('cartoon orders integration', () => {
     expect(res.body.notifications.admin.status).toBe('sent');
     expect(res.body.notifications.admin.error).toBe('');
     expect(res.body.requiresAdminAttention).toBe(true);
+  });
+
+  it('retries customer cartoon acknowledgements using the stored customer locale', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const order = await createStoredCartoonOrder({
+      customerLocale: 'en',
+      notificationStatus: 'failed',
+      notificationError: 'smtp down',
+      notifications: {
+        admin: { status: 'sent', error: '', sentAt: new Date() },
+        customer: { status: 'failed', error: 'smtp down', sentAt: null },
+      },
+    });
+
+    const res = await request(app)
+      .post(`/cartoon-orders/${order._id}/notifications/retry`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'petya@example.com',
+        subject: 'We received your caricature inquiry',
+        text: expect.stringContaining('We received your caricature inquiry, thank you!'),
+      })
+    );
+    expect(res.body.notifications.customer.status).toBe('sent');
+    expect(res.body.notifications.admin.status).toBe('sent');
+  });
+
+  it('falls back to Bulgarian for invalid stored cartoon customer locales during notification retry', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const order = await createStoredCartoonOrder({
+      notificationStatus: 'failed',
+      notificationError: 'smtp down',
+      notifications: {
+        admin: { status: 'sent', error: '', sentAt: new Date() },
+        customer: { status: 'failed', error: 'smtp down', sentAt: null },
+      },
+    });
+    await CartoonOrder.updateOne({ _id: order._id }, { $set: { customerLocale: 'fr' } });
+
+    await request(app)
+      .post(`/cartoon-orders/${order._id}/notifications/retry`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'petya@example.com',
+        subject: 'Получихме запитването ви за шарж',
+      })
+    );
   });
 
   it('does not resend notifications when retry finds no failed channels', async () => {

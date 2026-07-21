@@ -46,7 +46,13 @@ function fillForm() {
 describe('NewsletterSendClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getNewsletterSendStatus.mockResolvedValue({ activeSubscribers: 3 });
+    getNewsletterSendStatus.mockResolvedValue({
+      activeSubscribers: 3,
+      activeSubscribersByLocale: {
+        bg: 2,
+        en: 1,
+      },
+    });
     getProductNewsletterPrefill.mockResolvedValue({
       sourceType: 'product',
       sourceId: 'product-1',
@@ -98,6 +104,7 @@ describe('NewsletterSendClient', () => {
       contentJson: { type: 'doc', content: [{ type: 'paragraph' }] },
       contentText: 'Ръчно изработени подаръци',
       sourceType: 'custom',
+      locales: ['bg', 'en'],
     });
     expect(screen.getByRole('status')).toHaveTextContent('Test email sent.');
   });
@@ -110,6 +117,8 @@ describe('NewsletterSendClient', () => {
 
     await waitFor(() => expect(getNewsletterSendStatus).toHaveBeenCalled());
     expect(screen.getByRole('dialog')).toHaveTextContent('3 активни');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Български: 2');
+    expect(screen.getByRole('dialog')).toHaveTextContent('English: 1');
     expect(sendNewsletterToSubscribers).not.toHaveBeenCalled();
   });
 
@@ -129,19 +138,65 @@ describe('NewsletterSendClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Потвърждавам' }));
 
     await waitFor(() => expect(sendNewsletterToSubscribers).toHaveBeenCalled());
+    expect(sendNewsletterToSubscribers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locales: ['bg', 'en'],
+      })
+    );
     expect(screen.getByRole('status')).toHaveTextContent('Newsletter send finished.');
   });
 
   it('shows zero-subscriber state without opening the confirmation modal', async () => {
-    getNewsletterSendStatus.mockResolvedValueOnce({ activeSubscribers: 0 });
+    getNewsletterSendStatus.mockResolvedValueOnce({
+      activeSubscribers: 0,
+      activeSubscribersByLocale: {
+        bg: 0,
+        en: 0,
+      },
+    });
     render(<NewsletterSendClient />);
     fillForm();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
 
     await waitFor(() => expect(getNewsletterSendStatus).toHaveBeenCalled());
-    expect(screen.getByRole('status')).toHaveTextContent('Няма активни абонати');
+    expect(screen.getByRole('status')).toHaveTextContent('Няма активни абонати за избраните езици');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('validates at least one selected language before sending', () => {
+    render(<NewsletterSendClient />);
+    fillForm();
+
+    fireEvent.click(screen.getByLabelText('Български'));
+    fireEvent.click(screen.getByLabelText('English'));
+    fireEvent.click(screen.getByRole('button', { name: 'Изпрати тест' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Моля, изберете поне един език');
+    expect(sendNewsletterTest).not.toHaveBeenCalled();
+  });
+
+  it('sends only the selected language group after confirmation', async () => {
+    render(<NewsletterSendClient />);
+    fillForm();
+
+    fireEvent.click(screen.getByLabelText('Български'));
+    fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
+
+    await waitFor(() => expect(getNewsletterSendStatus).toHaveBeenCalled());
+    expect(screen.getByRole('dialog')).toHaveTextContent('1 активни');
+    expect(screen.getByRole('dialog')).toHaveTextContent('English: 1');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Български:');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Потвърждавам' }));
+
+    await waitFor(() =>
+      expect(sendNewsletterToSubscribers).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locales: ['en'],
+        })
+      )
+    );
   });
 
   it('shows partial failure warnings without exposing subscriber emails', async () => {

@@ -32,6 +32,46 @@
   font-weight: 700;
 }
 
+.localeField {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  border: 1px solid #ded7ce;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.localeField legend {
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+.localeOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.localeOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid #cfc7bd;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #faf8f4;
+  font-weight: 700;
+}
+
+.localeOption input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f6f4e;
+}
+
 .input {
   width: 100%;
   min-height: 44px;
@@ -154,6 +194,12 @@
 .modal p {
   margin: 0 0 20px;
   line-height: 1.55;
+}
+
+.modal .localeCounts {
+  margin-top: -8px;
+  color: #5d554b;
+  font-size: 14px;
 }
 
 @media (max-width: 820px) {

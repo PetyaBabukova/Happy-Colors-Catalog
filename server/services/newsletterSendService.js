@@ -1,14 +1,24 @@
 import sanitizeHtml from 'sanitize-html';
+import crypto from 'crypto';
 import validator from 'validator';
 import { sendEmail } from '../helpers/sendEmail.js';
 import NewsletterSubscriber from '../models/NewsletterSubscriber.js';
+import NewsletterCampaign from '../models/NewsletterCampaign.js';
+import NewsletterDelivery from '../models/NewsletterDelivery.js';
 import BlogArticle from '../models/BlogArticle.js';
-import { createUnsubscribeToken } from './newsletterService.js';
+import { PUBLIC_LOCALES } from '../models/localizationSchemas.js';
+import {
+  createNewsletterPreferencesPageUrl,
+  createNewsletterPreferencesToken,
+  createUnsubscribePageUrl,
+  createUnsubscribeToken,
+} from './newsletterService.js';
 import { buildNewsletterEmailTemplate } from './newsletterEmailTemplate.js';
 import { extractContentText, validateContentJson } from './blogArticlesService.js';
 import { getProductById } from './productsServices.js';
 
 const SUBJECT_MAX_LENGTH = 160;
+const DEFAULT_NEWSLETTER_LOCALE = 'bg';
 const NEWSLETTER_DEFAULT_IMAGE_PATH = '/logo_64pxH.svg';
 const CUSTOM_CTA_PATH = '/products';
 const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
@@ -19,8 +29,10 @@ const ALLOWED_SEND_FIELDS = new Set([
   'contentText',
   'sourceType',
   'sourceId',
+  'locales',
 ]);
 const SUPPORTED_SOURCE_TYPES = new Set(['custom', 'product', 'blog']);
+const PUBLIC_LOCALE_SET = new Set(PUBLIC_LOCALES);
 
 // V1 runs on a single API instance; move this to a database lock before scaling horizontally.
 let broadcastInProgress = false;
@@ -45,6 +57,23 @@ function buildPublicSiteUrl(pathOrUrl) {
   ).replace(/\/+$/, '');
 
   return new URL(pathOrUrl, `${publicSiteUrl}/`).toString();
+}
+
+function buildLocalizedPublicSiteUrl(locale, pathOrUrl) {
+  const normalizedLocale = normalizeStoredPublicLocale(locale);
+  const publicUrl = new URL(pathOrUrl, `${buildPublicSiteUrl('/')}`);
+
+  if (!PUBLIC_LOCALE_SET.has(publicUrl.pathname.split('/')[1])) {
+    publicUrl.pathname = `/${normalizedLocale}${publicUrl.pathname.startsWith('/') ? '' : '/'}${publicUrl.pathname}`;
+  }
+
+  return publicUrl.toString();
+}
+
+function normalizeStoredPublicLocale(locale) {
+  const normalizedLocale = String(locale || DEFAULT_NEWSLETTER_LOCALE).trim().toLowerCase();
+
+  return PUBLIC_LOCALE_SET.has(normalizedLocale) ? normalizedLocale : DEFAULT_NEWSLETTER_LOCALE;
 }
 
 function getDefaultNewsletterImageUrl() {
@@ -135,6 +164,7 @@ function validateSendPayload(payload) {
 
   const sourceType = String(payload.sourceType || 'custom').trim();
   const sourceId = String(payload.sourceId || '').trim();
+  const selectedLocales = normalizeSelectedLocales(payload.locales);
 
   if (!SUPPORTED_SOURCE_TYPES.has(sourceType)) {
     throw new NewsletterSendError('Newsletter source is not supported yet.');
@@ -161,7 +191,30 @@ function validateSendPayload(payload) {
     contentText,
     sourceType,
     sourceId,
+    selectedLocales,
   };
+}
+
+function normalizeSelectedLocales(locales) {
+  if (locales === undefined) {
+    return [...PUBLIC_LOCALES];
+  }
+
+  if (!Array.isArray(locales) || locales.length === 0) {
+    throw new NewsletterSendError('Newsletter languages are required.');
+  }
+
+  const normalizedLocales = locales.map((locale) => String(locale || '').trim().toLowerCase());
+  const uniqueLocales = [...new Set(normalizedLocales)];
+
+  if (
+    uniqueLocales.length !== normalizedLocales.length ||
+    uniqueLocales.some((locale) => !PUBLIC_LOCALE_SET.has(locale))
+  ) {
+    throw new NewsletterSendError('Newsletter languages are invalid.');
+  }
+
+  return uniqueLocales;
 }
 
 function firstProductImage(product) {
@@ -224,7 +277,8 @@ async function deriveNewsletterPayload(payload) {
 
     return {
       ...newsletter,
-      ctaUrl: buildPublicSiteUrl(`/products/${newsletter.sourceId}`),
+      ctaPath: `/products/${newsletter.sourceId}`,
+      ctaUrl: buildLocalizedPublicSiteUrl(DEFAULT_NEWSLETTER_LOCALE, `/products/${newsletter.sourceId}`),
       imageUrl: buildPublicSiteUrl(firstProductImage(product) || getDefaultNewsletterImageUrl()),
     };
   }
@@ -238,14 +292,16 @@ async function deriveNewsletterPayload(payload) {
 
     return {
       ...newsletter,
-      ctaUrl: buildPublicSiteUrl(`/blog/${newsletter.sourceId}`),
+      ctaPath: `/blog/${newsletter.sourceId}`,
+      ctaUrl: buildLocalizedPublicSiteUrl(DEFAULT_NEWSLETTER_LOCALE, `/blog/${newsletter.sourceId}`),
       imageUrl: buildPublicSiteUrl(blogImage(article) || getDefaultNewsletterImageUrl()),
     };
   }
 
   return {
     ...newsletter,
-    ctaUrl: buildPublicSiteUrl(CUSTOM_CTA_PATH),
+    ctaPath: CUSTOM_CTA_PATH,
+    ctaUrl: buildLocalizedPublicSiteUrl(DEFAULT_NEWSLETTER_LOCALE, CUSTOM_CTA_PATH),
     imageUrl: buildPublicSiteUrl(getDefaultNewsletterImageUrl()),
   };
 }
@@ -273,17 +329,33 @@ function buildOneClickUnsubscribeUrl(token) {
   return `${buildPublicSiteUrl('/api/newsletter/unsubscribe/one-click')}?token=${encodeURIComponent(token)}`;
 }
 
-function buildUnsubscribeUrls(subscriber) {
+function buildSubscriberUrls(subscriber, locale) {
   const token = createUnsubscribeToken(subscriber);
+  const preferencesToken = createNewsletterPreferencesToken(subscriber);
 
   return {
-    unsubscribeUrl: `${buildPublicSiteUrl('/newsletter/unsubscribe')}?token=${encodeURIComponent(token)}`,
+    unsubscribeUrl: createUnsubscribePageUrl(token, { locale }),
     listUnsubscribeUrl: buildOneClickUnsubscribeUrl(token),
+    preferencesUrl: createNewsletterPreferencesPageUrl(preferencesToken, { locale }),
   };
+}
+
+function buildSubscriberCountsByLocale(subscribers) {
+  return subscribers.reduce(
+    (counts, subscriber) => {
+      counts[normalizeStoredPublicLocale(subscriber?.preferredLocale)] += 1;
+      return counts;
+    },
+    { bg: 0, en: 0 }
+  );
 }
 
 function getErrorReason(error) {
   return error?.message || 'Unknown email delivery error';
+}
+
+function truncateErrorReason(reason) {
+  return String(reason || 'Unknown email delivery error').slice(0, 500);
 }
 
 function buildFailureReportText(failures) {
@@ -314,10 +386,228 @@ async function sendFailureReport(failures) {
   }
 }
 
-export async function getNewsletterSendStatus() {
-  const activeSubscribers = await NewsletterSubscriber.countDocuments({ status: 'active' });
+async function createCampaignSnapshot(newsletter, subscribers, recipientCountsByLocale) {
+  const now = new Date();
+  const campaign = await NewsletterCampaign.create({
+    status: 'sending',
+    sourceType: newsletter.sourceType,
+    sourceId: newsletter.sourceId || '',
+    selectedLocales: newsletter.selectedLocales,
+    subject: newsletter.subject,
+    title: newsletter.title,
+    contentHtml: newsletter.contentHtml,
+    contentText: newsletter.contentText,
+    contentJson: newsletter.contentJson || null,
+    ctaPath: newsletter.ctaPath,
+    imageUrl: newsletter.imageUrl,
+    recipientCountsByLocale,
+    totalRecipients: subscribers.length,
+    startedAt: now,
+  });
 
-  return { activeSubscribers };
+  if (subscribers.length > 0) {
+    await NewsletterDelivery.insertMany(
+      subscribers.map((subscriber) => ({
+        campaignId: campaign._id,
+        subscriberId: subscriber._id,
+        email: subscriber.email,
+        locale: normalizeStoredPublicLocale(subscriber?.preferredLocale),
+      })),
+      { ordered: false }
+    );
+  }
+
+  return campaign;
+}
+
+async function claimNewsletterDelivery(deliveryId) {
+  return NewsletterDelivery.findOneAndUpdate(
+    {
+      _id: deliveryId,
+      status: 'pending',
+    },
+    {
+      $set: {
+        status: 'sending',
+        claimedAt: new Date(),
+        claimToken: crypto.randomBytes(16).toString('base64url'),
+      },
+    },
+    { new: true }
+  );
+}
+
+async function markNewsletterDeliverySkipped(delivery, reason) {
+  await NewsletterDelivery.updateOne(
+    {
+      _id: delivery._id,
+      status: 'sending',
+      claimToken: delivery.claimToken,
+    },
+    {
+      $set: {
+        status: 'skipped',
+        skippedAt: new Date(),
+        lastErrorReason: truncateErrorReason(reason),
+      },
+    }
+  );
+}
+
+async function markNewsletterDeliverySent(delivery) {
+  await NewsletterDelivery.updateOne(
+    {
+      _id: delivery._id,
+      status: 'sending',
+      claimToken: delivery.claimToken,
+    },
+    {
+      $set: {
+        status: 'sent',
+        sentAt: new Date(),
+        lastErrorReason: '',
+      },
+      $inc: {
+        attemptCount: 1,
+      },
+    }
+  );
+  await NewsletterSubscriber.updateOne(
+    { _id: delivery.subscriberId },
+    { $set: { consecutiveUndeliveredCount: 0 } }
+  );
+}
+
+async function markNewsletterDeliveryFailed(delivery, reason) {
+  await NewsletterDelivery.updateOne(
+    {
+      _id: delivery._id,
+      status: 'sending',
+      claimToken: delivery.claimToken,
+    },
+    {
+      $set: {
+        status: 'failed',
+        failedAt: new Date(),
+        lastErrorReason: truncateErrorReason(reason),
+      },
+      $inc: {
+        attemptCount: 1,
+      },
+    }
+  );
+  await NewsletterSubscriber.updateOne(
+    { _id: delivery.subscriberId },
+    { $inc: { consecutiveUndeliveredCount: 1 } }
+  );
+}
+
+async function finalizeNewsletterCampaign(campaignId) {
+  const [sentCount, failedCount, skippedCount] = await Promise.all([
+    NewsletterDelivery.countDocuments({ campaignId, status: 'sent' }),
+    NewsletterDelivery.countDocuments({ campaignId, status: 'failed' }),
+    NewsletterDelivery.countDocuments({ campaignId, status: 'skipped' }),
+  ]);
+
+  await NewsletterCampaign.updateOne(
+    { _id: campaignId },
+    {
+      $set: {
+        status: 'completed',
+        finishedAt: new Date(),
+        sentCount,
+        failedCount,
+        skippedCount,
+      },
+    }
+  );
+
+  return { sentCount, failedCount, skippedCount };
+}
+
+export async function processNewsletterCampaignDeliveries(campaignId) {
+  const campaign = await NewsletterCampaign.findById(campaignId).lean();
+
+  if (!campaign) {
+    throw new NewsletterSendError('Newsletter campaign was not found.', 404);
+  }
+
+  const deliveries = await NewsletterDelivery.find({
+    campaignId: campaign._id,
+    status: 'pending',
+  }).sort({ createdAt: 1 });
+  const failures = [];
+
+  for (const pendingDelivery of deliveries) {
+    const delivery = await claimNewsletterDelivery(pendingDelivery._id);
+
+    if (!delivery) {
+      continue;
+    }
+
+    const subscriber = await NewsletterSubscriber.findOne({
+      _id: delivery.subscriberId,
+      status: 'active',
+    });
+
+    if (!subscriber) {
+      await markNewsletterDeliverySkipped(delivery, 'Subscriber is no longer active.');
+      continue;
+    }
+
+    try {
+      const locale = normalizeStoredPublicLocale(delivery.locale);
+      const { unsubscribeUrl, listUnsubscribeUrl, preferencesUrl } = buildSubscriberUrls(subscriber, locale);
+      const template = buildNewsletterEmailTemplate({
+        ...campaign,
+        locale,
+        ctaUrl: buildLocalizedPublicSiteUrl(locale, campaign.ctaPath),
+        unsubscribeUrl,
+        listUnsubscribeUrl,
+        preferencesUrl,
+      });
+
+      await sendEmail({
+        to: delivery.email,
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+        headers: template.headers,
+      });
+      await markNewsletterDeliverySent(delivery);
+    } catch (error) {
+      const reason = getErrorReason(error);
+      failures.push({
+        email: delivery.email,
+        reason,
+      });
+      await markNewsletterDeliveryFailed(delivery, reason);
+    }
+  }
+
+  const summary = await finalizeNewsletterCampaign(campaign._id);
+
+  return {
+    sent: summary.sentCount,
+    failed: summary.failedCount,
+    skipped: summary.skippedCount,
+    failures,
+  };
+}
+
+export async function getNewsletterSendStatus() {
+  const [activeSubscribers, activeEnglishSubscribers] = await Promise.all([
+    NewsletterSubscriber.countDocuments({ status: 'active' }),
+    NewsletterSubscriber.countDocuments({ status: 'active', preferredLocale: 'en' }),
+  ]);
+
+  return {
+    activeSubscribers,
+    activeSubscribersByLocale: {
+      bg: Math.max(0, activeSubscribers - activeEnglishSubscribers),
+      en: activeEnglishSubscribers,
+    },
+  };
 }
 
 export async function sendNewsletterTest(payload) {
@@ -355,53 +645,38 @@ export async function sendNewsletterToSubscribers(payload) {
 
   try {
     const newsletter = await deriveNewsletterPayload(payload);
-    const subscribers = await NewsletterSubscriber.find({ status: 'active' }).sort({ createdAt: 1 });
+    const selectedLocaleSet = new Set(newsletter.selectedLocales);
+    const allActiveSubscribers = await NewsletterSubscriber.find({ status: 'active' }).sort({ createdAt: 1 });
+    const subscribers = allActiveSubscribers.filter((subscriber) =>
+      selectedLocaleSet.has(normalizeStoredPublicLocale(subscriber?.preferredLocale))
+    );
     const activeSubscribers = subscribers.length;
+    const activeSubscribersByLocale = buildSubscriberCountsByLocale(subscribers);
 
     if (activeSubscribers === 0) {
       return {
         message: 'No active subscribers.',
         sent: 0,
         failed: 0,
+        skipped: 0,
         activeSubscribers: 0,
+        activeSubscribersByLocale,
       };
     }
 
-    let sent = 0;
-    const failures = [];
-
-    for (const subscriber of subscribers) {
-      const { unsubscribeUrl, listUnsubscribeUrl } = buildUnsubscribeUrls(subscriber);
-      const template = buildNewsletterEmailTemplate({
-        ...newsletter,
-        unsubscribeUrl,
-        listUnsubscribeUrl,
-      });
-
-      try {
-        await sendEmail({
-          to: subscriber.email,
-          subject: template.subject,
-          text: template.text,
-          html: template.html,
-          headers: template.headers,
-        });
-        sent += 1;
-      } catch (error) {
-        failures.push({
-          email: subscriber.email,
-          reason: getErrorReason(error),
-        });
-      }
-    }
+    const campaign = await createCampaignSnapshot(newsletter, subscribers, activeSubscribersByLocale);
+    const deliverySummary = await processNewsletterCampaignDeliveries(campaign._id);
+    const failures = deliverySummary.failures;
 
     await sendFailureReport(failures);
 
     return {
       message: failures.length > 0 ? 'Newsletter send finished with failures.' : 'Newsletter send finished.',
-      sent,
+      sent: deliverySummary.sent,
       failed: failures.length,
+      skipped: deliverySummary.skipped,
       activeSubscribers,
+      activeSubscribersByLocale,
     };
   } finally {
     broadcastInProgress = false;
