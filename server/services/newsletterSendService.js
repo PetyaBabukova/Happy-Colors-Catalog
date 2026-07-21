@@ -22,6 +22,12 @@ const DEFAULT_NEWSLETTER_LOCALE = 'bg';
 const NEWSLETTER_DEFAULT_IMAGE_PATH = '/logo_64pxH.svg';
 const CUSTOM_CTA_PATH = '/products';
 const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
+const MAX_AUTOMATIC_DELIVERY_ATTEMPTS = 3;
+const MAX_MANUAL_DELIVERY_ATTEMPTS = 1;
+const DELIVERY_RETRY_BACKOFF_MS = [5 * 60 * 1000, 30 * 60 * 1000];
+const DELIVERY_CLAIM_STALE_AFTER_MS = 60 * 60 * 1000;
+const LOCK_COLLISION_RESCHEDULE_DELAY_MS = 60 * 1000;
+const MANUAL_DELIVERY_RETRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_SEND_FIELDS = new Set([
   'subject',
   'contentHtml',
@@ -36,6 +42,8 @@ const PUBLIC_LOCALE_SET = new Set(PUBLIC_LOCALES);
 
 // V1 runs on a single API instance; move this to a database lock before scaling horizontally.
 let broadcastInProgress = false;
+const scheduledCampaignTimers = new Map();
+const processingCampaignKeys = new Set();
 
 export class NewsletterSendError extends Error {
   constructor(message, statusCode = 400) {
@@ -358,6 +366,121 @@ function truncateErrorReason(reason) {
   return String(reason || 'Unknown email delivery error').slice(0, 500);
 }
 
+function isPermanentNewsletterDeliveryError(error) {
+  if (error?.retryable === false || error?.permanent === true) {
+    return true;
+  }
+
+  const responseCode = Number(error?.responseCode || error?.statusCode || error?.status || 0);
+
+  return responseCode >= 500 && responseCode < 600;
+}
+
+function getRetryDelayMs(attemptCount) {
+  const index = Math.max(0, Math.min(attemptCount - 1, DELIVERY_RETRY_BACKOFF_MS.length - 1));
+
+  return DELIVERY_RETRY_BACKOFF_MS[index];
+}
+
+function getManualRetryClosesAt(startedAt) {
+  const baseTime = startedAt instanceof Date ? startedAt.getTime() : new Date(startedAt || Date.now()).getTime();
+
+  return new Date(baseTime + MANUAL_DELIVERY_RETRY_WINDOW_MS);
+}
+
+function getDueDeliveryQuery(campaignId, now) {
+  return {
+    campaignId,
+    $or: [
+      { status: 'pending' },
+      {
+        status: 'failed',
+        attemptCount: { $lt: MAX_AUTOMATIC_DELIVERY_ATTEMPTS },
+        isPermanentFailure: { $ne: true },
+        nextAttemptAt: null,
+      },
+      {
+        status: 'failed',
+        attemptCount: { $lt: MAX_AUTOMATIC_DELIVERY_ATTEMPTS },
+        isPermanentFailure: { $ne: true },
+        nextAttemptAt: { $lte: now },
+      },
+    ],
+  };
+}
+
+function getManualDeliveryQuery(campaignId) {
+  return {
+    campaignId,
+    status: 'failed',
+    $and: [
+      {
+        $or: [
+          { manualAttemptCount: { $lt: MAX_MANUAL_DELIVERY_ATTEMPTS } },
+          { manualAttemptCount: null },
+        ],
+      },
+      {
+        $or: [
+          { attemptCount: { $gte: MAX_AUTOMATIC_DELIVERY_ATTEMPTS } },
+          { isPermanentFailure: true },
+        ],
+      },
+    ],
+  };
+}
+
+function getEarliestDate(dates) {
+  const timestamps = dates
+    .filter((date) => date instanceof Date && !Number.isNaN(date.getTime()))
+    .map((date) => date.getTime());
+
+  if (timestamps.length === 0) {
+    return null;
+  }
+
+  return new Date(Math.min(...timestamps));
+}
+
+async function getNextNewsletterCampaignProcessAt(campaignId, manualRetryClosesAt, now) {
+  const [pendingCount, dueAutomaticRetryCount, nextAutomaticRetry, oldestSendingDelivery, manualRetryCount] =
+    await Promise.all([
+      NewsletterDelivery.countDocuments({ campaignId, status: 'pending' }),
+      NewsletterDelivery.countDocuments(getDueDeliveryQuery(campaignId, now)),
+      NewsletterDelivery.findOne({
+        campaignId,
+        status: 'failed',
+        attemptCount: { $lt: MAX_AUTOMATIC_DELIVERY_ATTEMPTS },
+        isPermanentFailure: { $ne: true },
+        nextAttemptAt: { $gt: now },
+      }).sort({ nextAttemptAt: 1 }).lean(),
+      NewsletterDelivery.findOne({
+        campaignId,
+        status: 'sending',
+        claimedAt: { $ne: null },
+      }).sort({ claimedAt: 1 }).lean(),
+      now <= manualRetryClosesAt
+        ? NewsletterDelivery.countDocuments(getManualDeliveryQuery(campaignId))
+        : 0,
+    ]);
+
+  if (pendingCount > 0 || dueAutomaticRetryCount > 0) {
+    return now;
+  }
+
+  const oldestClaimedAt = oldestSendingDelivery?.claimedAt
+    ? new Date(oldestSendingDelivery.claimedAt)
+    : null;
+
+  return getEarliestDate([
+    nextAutomaticRetry?.nextAttemptAt ? new Date(nextAutomaticRetry.nextAttemptAt) : null,
+    oldestClaimedAt && !Number.isNaN(oldestClaimedAt.getTime())
+      ? new Date(oldestClaimedAt.getTime() + DELIVERY_CLAIM_STALE_AFTER_MS)
+      : null,
+    manualRetryCount > 0 ? manualRetryClosesAt : null,
+  ]);
+}
+
 function buildFailureReportText(failures) {
   const lines = [
     'Newsletter delivery failures:',
@@ -386,6 +509,87 @@ async function sendFailureReport(failures) {
   }
 }
 
+export function scheduleNewsletterCampaignProcessing(campaignId, runAt = new Date()) {
+  const campaignKey = String(campaignId || '').trim();
+
+  if (!campaignKey) {
+    return false;
+  }
+
+  const scheduledFor = runAt instanceof Date ? runAt : new Date(runAt || Date.now());
+  const existing = scheduledCampaignTimers.get(campaignKey);
+
+  if (existing && existing.runAt <= scheduledFor) {
+    return false;
+  }
+
+  if (existing) {
+    clearTimeout(existing.timer);
+  }
+
+  const delayMs = Math.max(0, scheduledFor.getTime() - Date.now());
+  const timer = setTimeout(async () => {
+    scheduledCampaignTimers.delete(campaignKey);
+
+    try {
+      await processNewsletterCampaignDeliveries(campaignKey);
+    } catch (error) {
+      if (error?.statusCode === 409) {
+        scheduleNewsletterCampaignProcessing(
+          campaignKey,
+          new Date(Date.now() + LOCK_COLLISION_RESCHEDULE_DELAY_MS)
+        );
+        return;
+      }
+
+      console.error('Newsletter campaign scheduled processing failed:', {
+        campaignId: campaignKey,
+        message: error?.message || 'Unknown newsletter campaign processing error',
+      });
+    }
+  }, delayMs);
+
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+
+  scheduledCampaignTimers.set(campaignKey, {
+    runAt: scheduledFor,
+    timer,
+  });
+
+  return true;
+}
+
+export async function scheduleOpenNewsletterCampaignProcessing(options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const shouldScheduleTimers = options.scheduleTimers !== false;
+  const campaigns = await NewsletterCampaign.find({ status: 'sending' })
+    .select('_id startedAt manualRetryClosesAt')
+    .lean();
+  let scheduledCampaigns = 0;
+
+  for (const campaign of campaigns) {
+    const manualRetryClosesAt = campaign.manualRetryClosesAt || getManualRetryClosesAt(campaign.startedAt);
+    const nextProcessAt = await getNextNewsletterCampaignProcessAt(campaign._id, manualRetryClosesAt, now);
+
+    if (!nextProcessAt) {
+      continue;
+    }
+
+    scheduledCampaigns += 1;
+
+    if (shouldScheduleTimers) {
+      scheduleNewsletterCampaignProcessing(campaign._id, nextProcessAt);
+    }
+  }
+
+  return {
+    openCampaigns: campaigns.length,
+    scheduledCampaigns,
+  };
+}
+
 async function createCampaignSnapshot(newsletter, subscribers, recipientCountsByLocale) {
   const now = new Date();
   const campaign = await NewsletterCampaign.create({
@@ -403,6 +607,7 @@ async function createCampaignSnapshot(newsletter, subscribers, recipientCountsBy
     recipientCountsByLocale,
     totalRecipients: subscribers.length,
     startedAt: now,
+    manualRetryClosesAt: getManualRetryClosesAt(now),
   });
 
   if (subscribers.length > 0) {
@@ -420,24 +625,44 @@ async function createCampaignSnapshot(newsletter, subscribers, recipientCountsBy
   return campaign;
 }
 
-async function claimNewsletterDelivery(deliveryId) {
+async function recoverStaleNewsletterDeliveryClaims(campaignId, now) {
+  const staleBefore = new Date(now.getTime() - DELIVERY_CLAIM_STALE_AFTER_MS);
+
+  await NewsletterDelivery.updateMany(
+    {
+      campaignId,
+      status: 'sending',
+      claimedAt: { $lte: staleBefore },
+    },
+    {
+      $set: {
+        status: 'pending',
+        claimToken: '',
+        claimedAt: null,
+      },
+    }
+  );
+}
+
+async function claimNewsletterDelivery(deliveryId, campaignId, now, { manual = false } = {}) {
   return NewsletterDelivery.findOneAndUpdate(
     {
       _id: deliveryId,
-      status: 'pending',
+      ...(manual ? getManualDeliveryQuery(campaignId) : getDueDeliveryQuery(campaignId, now)),
     },
     {
       $set: {
         status: 'sending',
-        claimedAt: new Date(),
+        claimedAt: now,
         claimToken: crypto.randomBytes(16).toString('base64url'),
+        nextAttemptAt: null,
       },
     },
     { new: true }
   );
 }
 
-async function markNewsletterDeliverySkipped(delivery, reason) {
+async function markNewsletterDeliverySkipped(delivery, reason, now) {
   await NewsletterDelivery.updateOne(
     {
       _id: delivery._id,
@@ -447,14 +672,25 @@ async function markNewsletterDeliverySkipped(delivery, reason) {
     {
       $set: {
         status: 'skipped',
-        skippedAt: new Date(),
+        skippedAt: now,
         lastErrorReason: truncateErrorReason(reason),
+        claimToken: '',
+        claimedAt: null,
+        nextAttemptAt: null,
       },
     }
   );
 }
 
-async function markNewsletterDeliverySent(delivery) {
+async function markNewsletterDeliverySent(delivery, now, { manual = false } = {}) {
+  const increment = {
+    attemptCount: 1,
+  };
+
+  if (manual) {
+    increment.manualAttemptCount = 1;
+  }
+
   await NewsletterDelivery.updateOne(
     {
       _id: delivery._id,
@@ -464,12 +700,15 @@ async function markNewsletterDeliverySent(delivery) {
     {
       $set: {
         status: 'sent',
-        sentAt: new Date(),
+        sentAt: now,
         lastErrorReason: '',
+        claimToken: '',
+        claimedAt: null,
+        nextAttemptAt: null,
+        isPermanentFailure: false,
+        subscriberCounterUpdatedAt: now,
       },
-      $inc: {
-        attemptCount: 1,
-      },
+      $inc: increment,
     }
   );
   await NewsletterSubscriber.updateOne(
@@ -478,7 +717,22 @@ async function markNewsletterDeliverySent(delivery) {
   );
 }
 
-async function markNewsletterDeliveryFailed(delivery, reason) {
+async function markNewsletterDeliveryFailed(delivery, reason, error, now, { manual = false } = {}) {
+  const nextAttemptCount = Number(delivery.attemptCount || 0) + 1;
+  const isPermanentFailure = isPermanentNewsletterDeliveryError(error);
+  const shouldRetryAutomatically =
+    !manual && !isPermanentFailure && nextAttemptCount < MAX_AUTOMATIC_DELIVERY_ATTEMPTS;
+  const nextAttemptAt = shouldRetryAutomatically
+    ? new Date(now.getTime() + getRetryDelayMs(nextAttemptCount))
+    : null;
+  const increment = {
+    attemptCount: 1,
+  };
+
+  if (manual) {
+    increment.manualAttemptCount = 1;
+  }
+
   await NewsletterDelivery.updateOne(
     {
       _id: delivery._id,
@@ -488,58 +742,189 @@ async function markNewsletterDeliveryFailed(delivery, reason) {
     {
       $set: {
         status: 'failed',
-        failedAt: new Date(),
+        failedAt: now,
         lastErrorReason: truncateErrorReason(reason),
+        claimToken: '',
+        claimedAt: null,
+        nextAttemptAt,
+        isPermanentFailure,
       },
-      $inc: {
-        attemptCount: 1,
-      },
+      $inc: increment,
     }
-  );
-  await NewsletterSubscriber.updateOne(
-    { _id: delivery.subscriberId },
-    { $inc: { consecutiveUndeliveredCount: 1 } }
   );
 }
 
-async function finalizeNewsletterCampaign(campaignId) {
-  const [sentCount, failedCount, skippedCount] = await Promise.all([
-    NewsletterDelivery.countDocuments({ campaignId, status: 'sent' }),
-    NewsletterDelivery.countDocuments({ campaignId, status: 'failed' }),
-    NewsletterDelivery.countDocuments({ campaignId, status: 'skipped' }),
-  ]);
+async function updateFinalFailedSubscriberCounters(campaignId, now) {
+  const failedDeliveries = await NewsletterDelivery.find({
+    campaignId,
+    status: 'failed',
+    subscriberCounterUpdatedAt: null,
+  });
+
+  for (const delivery of failedDeliveries) {
+    const result = await NewsletterDelivery.updateOne(
+      {
+        _id: delivery._id,
+        status: 'failed',
+        subscriberCounterUpdatedAt: null,
+      },
+      {
+        $set: {
+          subscriberCounterUpdatedAt: now,
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      await NewsletterSubscriber.updateOne(
+        { _id: delivery.subscriberId },
+        { $inc: { consecutiveUndeliveredCount: 1 } }
+      );
+    }
+  }
+}
+
+async function finalizeNewsletterCampaign(campaign, now) {
+  const campaignId = campaign._id;
+  const manualRetryClosesAt = campaign.manualRetryClosesAt || getManualRetryClosesAt(campaign.startedAt);
+  const [sentCount, failedCount, skippedCount, pendingCount, sendingCount, automaticRetryCount, manualRetryCount] =
+    await Promise.all([
+      NewsletterDelivery.countDocuments({ campaignId, status: 'sent' }),
+      NewsletterDelivery.countDocuments({ campaignId, status: 'failed' }),
+      NewsletterDelivery.countDocuments({ campaignId, status: 'skipped' }),
+      NewsletterDelivery.countDocuments({ campaignId, status: 'pending' }),
+      NewsletterDelivery.countDocuments({ campaignId, status: 'sending' }),
+      NewsletterDelivery.countDocuments({
+        campaignId,
+        status: 'failed',
+        attemptCount: { $lt: MAX_AUTOMATIC_DELIVERY_ATTEMPTS },
+        isPermanentFailure: { $ne: true },
+      }),
+      now <= manualRetryClosesAt
+        ? NewsletterDelivery.countDocuments(getManualDeliveryQuery(campaignId))
+        : 0,
+    ]);
+
+  const openCount = pendingCount + sendingCount + automaticRetryCount + manualRetryCount;
+
+  if (openCount > 0) {
+    const nextProcessAt = await getNextNewsletterCampaignProcessAt(campaignId, manualRetryClosesAt, now);
+
+    await NewsletterCampaign.updateOne(
+      { _id: campaignId },
+      {
+        $set: {
+          sentCount,
+          failedCount,
+          skippedCount,
+          manualRetryClosesAt,
+        },
+      }
+    );
+
+    return {
+      status: 'sending',
+      sentCount,
+      failedCount,
+      skippedCount,
+      openCount,
+      pendingRetryCount: automaticRetryCount + manualRetryCount,
+      nextProcessAt,
+    };
+  }
+
+  await updateFinalFailedSubscriberCounters(campaignId, now);
 
   await NewsletterCampaign.updateOne(
     { _id: campaignId },
     {
       $set: {
         status: 'completed',
-        finishedAt: new Date(),
+        finishedAt: now,
         sentCount,
         failedCount,
         skippedCount,
+        manualRetryClosesAt,
       },
     }
   );
 
-  return { sentCount, failedCount, skippedCount };
+  return {
+    status: 'completed',
+    sentCount,
+    failedCount,
+    skippedCount,
+    openCount: 0,
+    pendingRetryCount: 0,
+    nextProcessAt: null,
+  };
 }
 
-export async function processNewsletterCampaignDeliveries(campaignId) {
+async function summarizeCompletedNewsletterCampaign(campaignId) {
+  const [sentCount, failedCount, skippedCount] = await Promise.all([
+    NewsletterDelivery.countDocuments({ campaignId, status: 'sent' }),
+    NewsletterDelivery.countDocuments({ campaignId, status: 'failed' }),
+    NewsletterDelivery.countDocuments({ campaignId, status: 'skipped' }),
+  ]);
+
+  return {
+    status: 'completed',
+    sent: sentCount,
+    failed: failedCount,
+    skipped: skippedCount,
+    pendingRetries: 0,
+    nextProcessAt: null,
+    failures: [],
+  };
+}
+
+export async function processNewsletterCampaignDeliveries(campaignId, options = {}) {
+  if (!validator.isMongoId(String(campaignId || ''))) {
+    throw new NewsletterSendError('Newsletter campaign id is invalid.');
+  }
+
+  const campaignKey = String(campaignId);
+
+  if (processingCampaignKeys.has(campaignKey)) {
+    throw new NewsletterSendError('Newsletter campaign is already being processed.', 409);
+  }
+
+  processingCampaignKeys.add(campaignKey);
+
+  try {
+    return await processNewsletterCampaignDeliveriesUnlocked(campaignId, options);
+  } finally {
+    processingCampaignKeys.delete(campaignKey);
+  }
+}
+
+async function processNewsletterCampaignDeliveriesUnlocked(campaignId, options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const manual = options.manual === true;
+  const shouldScheduleNext = options.scheduleNext !== false && !options.now;
   const campaign = await NewsletterCampaign.findById(campaignId).lean();
 
   if (!campaign) {
     throw new NewsletterSendError('Newsletter campaign was not found.', 404);
   }
 
-  const deliveries = await NewsletterDelivery.find({
-    campaignId: campaign._id,
-    status: 'pending',
-  }).sort({ createdAt: 1 });
+  if (campaign.status === 'completed') {
+    return summarizeCompletedNewsletterCampaign(campaign._id);
+  }
+
+  await recoverStaleNewsletterDeliveryClaims(campaign._id, now);
+
+  const manualRetryClosesAt = campaign.manualRetryClosesAt || getManualRetryClosesAt(campaign.startedAt);
+  const deliveryQuery = manual
+    ? now <= manualRetryClosesAt
+      ? getManualDeliveryQuery(campaign._id)
+      : { campaignId: campaign._id, _id: null }
+    : getDueDeliveryQuery(campaign._id, now);
+  const deliveries = await NewsletterDelivery.find(deliveryQuery).sort({ createdAt: 1 });
   const failures = [];
 
   for (const pendingDelivery of deliveries) {
-    const delivery = await claimNewsletterDelivery(pendingDelivery._id);
+    const delivery = await claimNewsletterDelivery(pendingDelivery._id, campaign._id, now, { manual });
 
     if (!delivery) {
       continue;
@@ -551,7 +936,7 @@ export async function processNewsletterCampaignDeliveries(campaignId) {
     });
 
     if (!subscriber) {
-      await markNewsletterDeliverySkipped(delivery, 'Subscriber is no longer active.');
+      await markNewsletterDeliverySkipped(delivery, 'Subscriber is no longer active.', now);
       continue;
     }
 
@@ -574,25 +959,39 @@ export async function processNewsletterCampaignDeliveries(campaignId) {
         html: template.html,
         headers: template.headers,
       });
-      await markNewsletterDeliverySent(delivery);
+      await markNewsletterDeliverySent(delivery, now, { manual });
     } catch (error) {
       const reason = getErrorReason(error);
       failures.push({
         email: delivery.email,
         reason,
       });
-      await markNewsletterDeliveryFailed(delivery, reason);
+      await markNewsletterDeliveryFailed(delivery, reason, error, now, { manual });
     }
   }
 
-  const summary = await finalizeNewsletterCampaign(campaign._id);
+  const summary = await finalizeNewsletterCampaign(campaign, now);
+
+  if (shouldScheduleNext && summary.status !== 'completed' && summary.nextProcessAt) {
+    scheduleNewsletterCampaignProcessing(campaign._id, summary.nextProcessAt);
+  }
 
   return {
+    status: summary.status,
     sent: summary.sentCount,
     failed: summary.failedCount,
     skipped: summary.skippedCount,
+    pendingRetries: summary.pendingRetryCount,
+    nextProcessAt: summary.nextProcessAt,
     failures,
   };
+}
+
+export async function retryNewsletterCampaignFailedDeliveries(campaignId, options = {}) {
+  return processNewsletterCampaignDeliveries(campaignId, {
+    ...options,
+    manual: true,
+  });
 }
 
 export async function getNewsletterSendStatus() {
@@ -667,14 +1066,22 @@ export async function sendNewsletterToSubscribers(payload) {
     const campaign = await createCampaignSnapshot(newsletter, subscribers, activeSubscribersByLocale);
     const deliverySummary = await processNewsletterCampaignDeliveries(campaign._id);
     const failures = deliverySummary.failures;
+    const isCampaignOpen = deliverySummary.status !== 'completed';
 
     await sendFailureReport(failures);
 
     return {
-      message: failures.length > 0 ? 'Newsletter send finished with failures.' : 'Newsletter send finished.',
+      message: isCampaignOpen
+        ? 'Newsletter send has pending retries.'
+        : deliverySummary.failed > 0
+          ? 'Newsletter send finished with failures.'
+          : 'Newsletter send finished.',
+      campaignStatus: deliverySummary.status,
       sent: deliverySummary.sent,
-      failed: failures.length,
+      failed: deliverySummary.failed,
       skipped: deliverySummary.skipped,
+      pendingRetries: deliverySummary.pendingRetries,
+      nextProcessAt: deliverySummary.nextProcessAt,
       activeSubscribers,
       activeSubscribersByLocale,
     };

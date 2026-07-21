@@ -271,18 +271,37 @@ describe('localization model contracts', () => {
     expectValid(campaign);
     expectValid(delivery);
     expect(campaign.status).toBe('sending');
+    expect(campaign.manualRetryClosesAt).toBeNull();
     expect(delivery.status).toBe('pending');
     expect(delivery.attemptCount).toBe(0);
+    expect(delivery.manualAttemptCount).toBe(0);
+    expect(delivery.nextAttemptAt).toBeNull();
+    expect(delivery.isPermanentFailure).toBe(false);
+    expect(delivery.subscriberCounterUpdatedAt).toBeNull();
 
     const invalidCampaign = buildNewsletterCampaign({
       selectedLocales: ['fr'],
+    });
+    const emptyLocaleCampaign = buildNewsletterCampaign({
+      selectedLocales: [],
     });
     const invalidDelivery = buildNewsletterDelivery({
       locale: 'fr',
     });
 
     expectInvalidPath(invalidCampaign, 'selectedLocales.0');
+    expectInvalidPath(emptyLocaleCampaign, 'selectedLocales');
     expectInvalidPath(invalidDelivery, 'locale');
+
+    const campaignIndexes = NewsletterCampaign.schema.indexes();
+    expect(campaignIndexes).toEqual(
+      expect.arrayContaining([
+        [
+          { status: 1, createdAt: 1 },
+          expect.any(Object),
+        ],
+      ])
+    );
 
     const deliveryIndexes = NewsletterDelivery.schema.indexes();
     expect(deliveryIndexes).toEqual(
@@ -290,6 +309,14 @@ describe('localization model contracts', () => {
         [
           { campaignId: 1, subscriberId: 1 },
           expect.objectContaining({ unique: true }),
+        ],
+        [
+          { campaignId: 1, status: 1, nextAttemptAt: 1 },
+          expect.any(Object),
+        ],
+        [
+          { campaignId: 1, status: 1, claimedAt: 1 },
+          expect.any(Object),
         ],
       ])
     );

@@ -45,7 +45,9 @@ vi.mock('../../../models/NewsletterDelivery.js', () => ({
   default: {
     insertMany: vi.fn(),
     find: vi.fn(),
+    findOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
+    updateMany: vi.fn(),
     updateOne: vi.fn(),
     countDocuments: vi.fn(),
   },
@@ -93,6 +95,7 @@ function payload(overrides = {}) {
 let mockDeliveryDocs = [];
 let mockSubscriberDocs = [];
 let mockCampaignDoc = null;
+const mockCampaignId = '665000000000000000000101';
 
 function mockSubscribers(subscribers) {
   mockSubscriberDocs = subscribers.map((subscriber, index) => ({
@@ -104,6 +107,56 @@ function mockSubscribers(subscribers) {
 
   NewsletterSubscriber.find.mockReturnValue({
     sort: vi.fn().mockResolvedValue(mockSubscriberDocs),
+  });
+}
+
+function matchesValue(value, expected) {
+  if (expected === null) {
+    return value === null || value === undefined;
+  }
+
+  if (expected && typeof expected === 'object' && !(expected instanceof Date)) {
+    if (Object.prototype.hasOwnProperty.call(expected, '$lt') && !(value < expected.$lt)) {
+      return false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expected, '$lte') && !(value <= expected.$lte)) {
+      return false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expected, '$gt') && !(value > expected.$gt)) {
+      return false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expected, '$gte') && !(value >= expected.$gte)) {
+      return false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expected, '$ne') && value === expected.$ne) {
+      return false;
+    }
+
+    return true;
+  }
+
+  return value === expected;
+}
+
+function matchesDeliveryQuery(delivery, query = {}) {
+  if (query.$or && !query.$or.some((branch) => matchesDeliveryQuery(delivery, branch))) {
+    return false;
+  }
+
+  if (query.$and && !query.$and.every((branch) => matchesDeliveryQuery(delivery, branch))) {
+    return false;
+  }
+
+  return Object.entries(query).every(([key, expected]) => {
+    if (key === '$or' || key === '$and') {
+      return true;
+    }
+
+    return matchesValue(delivery[key], expected);
   });
 }
 
@@ -127,7 +180,7 @@ describe('newsletterSendService', () => {
     });
     NewsletterCampaign.create.mockImplementation(async (campaign) => {
       mockCampaignDoc = {
-        _id: 'campaign-1',
+        _id: mockCampaignId,
         ...campaign,
       };
 
@@ -142,17 +195,49 @@ describe('newsletterSendService', () => {
         _id: `delivery-${index + 1}`,
         status: 'pending',
         attemptCount: 0,
+        manualAttemptCount: 0,
         claimToken: '',
+        nextAttemptAt: null,
+        isPermanentFailure: false,
+        subscriberCounterUpdatedAt: null,
         ...delivery,
       }));
       return mockDeliveryDocs;
     });
-    NewsletterDelivery.find.mockImplementation(() => ({
-      sort: vi.fn().mockResolvedValue(mockDeliveryDocs.filter((delivery) => delivery.status === 'pending')),
+    NewsletterDelivery.updateMany.mockResolvedValue({ modifiedCount: 0 });
+    NewsletterDelivery.find.mockImplementation((query = {}) => {
+      const deliveries = mockDeliveryDocs.filter((delivery) => matchesDeliveryQuery(delivery, query));
+      deliveries.sort = vi.fn().mockResolvedValue(deliveries);
+
+      return deliveries;
+    });
+    NewsletterDelivery.findOne.mockImplementation((query = {}) => ({
+      sort: vi.fn((sortSpec = {}) => ({
+        lean: vi.fn().mockResolvedValue(
+          [...mockDeliveryDocs]
+            .filter((delivery) => matchesDeliveryQuery(delivery, query))
+            .sort((left, right) => {
+              const [field, direction] = Object.entries(sortSpec)[0] || [];
+
+              if (!field) {
+                return 0;
+              }
+
+              return direction >= 0
+                ? left[field] - right[field]
+                : right[field] - left[field];
+            })[0] || null
+        ),
+      })),
     }));
     NewsletterDelivery.findOneAndUpdate.mockImplementation(async (query) => {
       const delivery = mockDeliveryDocs.find(
-        (candidate) => candidate._id === query?._id && candidate.status === query?.status
+        (candidate) =>
+          candidate._id === query?._id &&
+          matchesDeliveryQuery(candidate, {
+            ...query,
+            _id: candidate._id,
+          })
       );
 
       if (!delivery) {
@@ -165,24 +250,18 @@ describe('newsletterSendService', () => {
       return delivery;
     });
     NewsletterDelivery.updateOne.mockImplementation(async (query, update) => {
-      const delivery = mockDeliveryDocs.find(
-        (candidate) =>
-          candidate._id === query?._id &&
-          candidate.status === query?.status &&
-          candidate.claimToken === query?.claimToken
-      );
+      const delivery = mockDeliveryDocs.find((candidate) => matchesDeliveryQuery(candidate, query));
 
       if (delivery) {
         Object.assign(delivery, update?.$set || {});
         delivery.attemptCount += Number(update?.$inc?.attemptCount || 0);
+        delivery.manualAttemptCount += Number(update?.$inc?.manualAttemptCount || 0);
       }
 
       return { modifiedCount: delivery ? 1 : 0 };
     });
     NewsletterDelivery.countDocuments.mockImplementation(async (query) =>
-      mockDeliveryDocs.filter(
-        (delivery) => delivery.campaignId === query?.campaignId && delivery.status === query?.status
-      ).length
+      mockDeliveryDocs.filter((delivery) => matchesDeliveryQuery(delivery, query)).length
     );
     createUnsubscribeToken.mockImplementation((subscriber) => `token-${subscriber.email}`);
     createUnsubscribePageUrl.mockImplementation(

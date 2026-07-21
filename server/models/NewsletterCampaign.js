@@ -8,7 +8,6 @@ const newsletterCampaignSchema = new mongoose.Schema(
       enum: ['sending', 'completed'],
       default: 'sending',
       required: true,
-      index: true,
     },
     sourceType: {
       type: String,
@@ -89,6 +88,10 @@ const newsletterCampaignSchema = new mongoose.Schema(
       required: true,
     },
     finishedAt: {
+      type: Date,
+      default: null,
+    },
+    manualRetryClosesAt: {
       type: Date,
       default: null,
     },

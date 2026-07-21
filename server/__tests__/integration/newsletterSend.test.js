@@ -5,7 +5,10 @@ import NewsletterCampaign from '../../models/NewsletterCampaign.js';
 import NewsletterDelivery from '../../models/NewsletterDelivery.js';
 import NewsletterSubscriber from '../../models/NewsletterSubscriber.js';
 import { createExpressApp } from '../../server.js';
-import { processNewsletterCampaignDeliveries } from '../../services/newsletterSendService.js';
+import {
+  processNewsletterCampaignDeliveries,
+  scheduleOpenNewsletterCampaignProcessing,
+} from '../../services/newsletterSendService.js';
 import { authCookie, createBlogArticle, createProduct, createFullAdmin } from './factories.js';
 
 const validContentJson = {
@@ -91,6 +94,10 @@ describe('newsletter send integration', () => {
     await request(app).get('/newsletter/send/status').expect(401);
     await request(app).post('/newsletter/send/test').send(newsletterPayload()).expect(401);
     await request(app).post('/newsletter/send').send(newsletterPayload()).expect(401);
+    await request(app)
+      .post('/newsletter/send/campaigns/665000000000000000000101/retry-failed')
+      .send({})
+      .expect(401);
 
     expect(sendEmail).not.toHaveBeenCalled();
     expect(await NewsletterSubscriber.countDocuments()).toBe(0);
@@ -212,9 +219,12 @@ describe('newsletter send integration', () => {
 
     expect(res.body).toEqual({
       message: 'Newsletter send finished.',
+      campaignStatus: 'completed',
       sent: 2,
       failed: 0,
       skipped: 0,
+      pendingRetries: 0,
+      nextProcessAt: null,
       activeSubscribers: 2,
       activeSubscribersByLocale: {
         bg: 2,
@@ -353,6 +363,485 @@ describe('newsletter send integration', () => {
     });
   });
 
+  it('keeps transient failures retryable with backoff and completes after a successful retry', async () => {
+    const now = new Date('2026-07-21T10:00:00.000Z');
+    const subscriber = await createSubscriber({
+      email: 'retryable@example.com',
+      consecutiveUndeliveredCount: 2,
+    });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T10:00:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+    });
+    sendEmail
+      .mockRejectedValueOnce(new Error('Temporary SMTP outage'))
+      .mockResolvedValue({ messageId: 'retry-ok' });
+
+    const firstResult = await processNewsletterCampaignDeliveries(campaign._id, { now });
+    const failedDelivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+    const pendingCampaign = await NewsletterCampaign.findById(campaign._id).lean();
+    const unchangedSubscriber = await NewsletterSubscriber.findById(subscriber._id).lean();
+
+    expect(firstResult).toMatchObject({
+      status: 'sending',
+      sent: 0,
+      failed: 1,
+      skipped: 0,
+      pendingRetries: 1,
+    });
+    expect(failedDelivery).toMatchObject({
+      status: 'failed',
+      attemptCount: 1,
+      isPermanentFailure: false,
+      lastErrorReason: 'Temporary SMTP outage',
+    });
+    expect(failedDelivery.nextAttemptAt).toEqual(new Date('2026-07-21T10:05:00.000Z'));
+    expect(pendingCampaign).toMatchObject({
+      status: 'sending',
+      sentCount: 0,
+      failedCount: 1,
+      skippedCount: 0,
+    });
+    expect(unchangedSubscriber.consecutiveUndeliveredCount).toBe(2);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+
+    const earlyRetry = await processNewsletterCampaignDeliveries(campaign._id, {
+      now: new Date('2026-07-21T10:04:59.000Z'),
+    });
+
+    expect(earlyRetry).toMatchObject({
+      status: 'sending',
+      sent: 0,
+      failed: 1,
+      pendingRetries: 1,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+
+    const retryResult = await processNewsletterCampaignDeliveries(campaign._id, {
+      now: new Date('2026-07-21T10:05:00.000Z'),
+    });
+    const sentDelivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+    const completedCampaign = await NewsletterCampaign.findById(campaign._id).lean();
+    const resetSubscriber = await NewsletterSubscriber.findById(subscriber._id).lean();
+
+    expect(retryResult).toMatchObject({
+      status: 'completed',
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      pendingRetries: 0,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(2);
+    expect(sentDelivery).toMatchObject({
+      status: 'sent',
+      attemptCount: 2,
+      lastErrorReason: '',
+    });
+    expect(sentDelivery.nextAttemptAt).toBeNull();
+    expect(completedCampaign).toMatchObject({
+      status: 'completed',
+      sentCount: 1,
+      failedCount: 0,
+      skippedCount: 0,
+    });
+    expect(resetSubscriber.consecutiveUndeliveredCount).toBe(0);
+  });
+
+  it('recovers stale sending delivery claims without double-counting attempts', async () => {
+    const now = new Date('2026-07-21T10:30:00.000Z');
+    const subscriber = await createSubscriber({ email: 'stale-claim@example.com' });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T10:30:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+      status: 'sending',
+      claimedAt: new Date('2026-07-21T09:29:59.000Z'),
+      claimToken: 'abandoned-claim',
+    });
+
+    const result = await processNewsletterCampaignDeliveries(campaign._id, { now });
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      pendingRetries: 0,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(delivery).toMatchObject({
+      status: 'sent',
+      attemptCount: 1,
+      claimToken: '',
+    });
+  });
+
+  it('rejects overlapping processing for the same campaign', async () => {
+    const now = new Date('2026-07-21T10:40:00.000Z');
+    const subscriber = await createSubscriber({ email: 'overlap@example.com' });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T10:40:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+    });
+    let releaseSend;
+    sendEmail.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseSend = () => resolve({ messageId: 'overlap-finished' });
+        })
+    );
+
+    const firstProcess = processNewsletterCampaignDeliveries(campaign._id, { now });
+    firstProcess.catch(() => {});
+
+    await waitUntil(() => Boolean(releaseSend));
+
+    await expect(processNewsletterCampaignDeliveries(campaign._id, { now })).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Newsletter campaign is already being processed.',
+    });
+
+    releaseSend();
+    await firstProcess;
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds open campaigns during startup resume scheduling', async () => {
+    const now = new Date('2026-07-21T10:45:00.000Z');
+    const subscriber = await createSubscriber({ email: 'resume-scheduled@example.com' });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T10:45:00.000Z'),
+    });
+    await createCampaignSnapshot({
+      status: 'completed',
+      finishedAt: now,
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T10:45:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+      status: 'failed',
+      attemptCount: 1,
+      nextAttemptAt: new Date('2026-07-21T10:50:00.000Z'),
+      lastErrorReason: 'Will retry after restart.',
+    });
+
+    const result = await scheduleOpenNewsletterCampaignProcessing({
+      now,
+      scheduleTimers: false,
+    });
+
+    expect(result).toEqual({
+      openCampaigns: 1,
+      scheduledCampaigns: 1,
+    });
+  });
+
+  it('increments the undelivered counter only after automatic retries and the manual window are exhausted', async () => {
+    const now = new Date('2026-07-21T11:00:00.000Z');
+    const subscriber = await createSubscriber({
+      email: 'final-failure@example.com',
+      consecutiveUndeliveredCount: 4,
+    });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T11:00:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+      status: 'failed',
+      attemptCount: 2,
+      nextAttemptAt: now,
+      lastErrorReason: 'Previous retry failed.',
+    });
+    sendEmail.mockRejectedValue(new Error('Still unavailable'));
+
+    const exhaustedResult = await processNewsletterCampaignDeliveries(campaign._id, { now });
+    const exhaustedDelivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+    const stillUnchangedSubscriber = await NewsletterSubscriber.findById(subscriber._id).lean();
+    const openCampaign = await NewsletterCampaign.findById(campaign._id).lean();
+
+    expect(exhaustedResult).toMatchObject({
+      status: 'sending',
+      sent: 0,
+      failed: 1,
+      pendingRetries: 1,
+    });
+    expect(exhaustedDelivery).toMatchObject({
+      status: 'failed',
+      attemptCount: 3,
+      isPermanentFailure: false,
+      lastErrorReason: 'Still unavailable',
+    });
+    expect(exhaustedDelivery.nextAttemptAt).toBeNull();
+    expect(openCampaign.status).toBe('sending');
+    expect(stillUnchangedSubscriber.consecutiveUndeliveredCount).toBe(4);
+
+    sendEmail.mockClear();
+    const closedResult = await processNewsletterCampaignDeliveries(campaign._id, {
+      now: new Date('2026-07-28T11:00:01.000Z'),
+    });
+    const finalizedCampaign = await NewsletterCampaign.findById(campaign._id).lean();
+    const countedSubscriber = await NewsletterSubscriber.findById(subscriber._id).lean();
+    const countedDelivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+
+    expect(closedResult).toMatchObject({
+      status: 'completed',
+      sent: 0,
+      failed: 1,
+      pendingRetries: 0,
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(finalizedCampaign).toMatchObject({
+      status: 'completed',
+      sentCount: 0,
+      failedCount: 1,
+      skippedCount: 0,
+    });
+    expect(countedSubscriber.consecutiveUndeliveredCount).toBe(5);
+    expect(countedDelivery.subscriberCounterUpdatedAt).toBeInstanceOf(Date);
+
+    await processNewsletterCampaignDeliveries(campaign._id, {
+      now: new Date('2026-07-28T11:00:02.000Z'),
+    });
+    const countedOnceSubscriber = await NewsletterSubscriber.findById(subscriber._id).lean();
+
+    expect(countedOnceSubscriber.consecutiveUndeliveredCount).toBe(5);
+  });
+
+  it('treats permanent failures as manual-only without automatic retry', async () => {
+    const now = new Date('2026-07-21T11:30:00.000Z');
+    const subscriber = await createSubscriber({ email: 'permanent@example.com' });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T11:30:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+    });
+    const permanentError = new Error('Mailbox does not exist');
+    permanentError.responseCode = 550;
+    sendEmail.mockRejectedValue(permanentError);
+
+    const result = await processNewsletterCampaignDeliveries(campaign._id, { now });
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+
+    expect(result).toMatchObject({
+      status: 'sending',
+      sent: 0,
+      failed: 1,
+      pendingRetries: 1,
+    });
+    expect(delivery).toMatchObject({
+      status: 'failed',
+      attemptCount: 1,
+      manualAttemptCount: 0,
+      isPermanentFailure: true,
+      lastErrorReason: 'Mailbox does not exist',
+    });
+    expect(delivery.nextAttemptAt).toBeNull();
+
+    await processNewsletterCampaignDeliveries(campaign._id, {
+      now: new Date('2026-07-21T11:31:00.000Z'),
+    });
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows one full-admin manual retry for exhausted failed deliveries', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const now = new Date('2026-07-21T12:00:00.000Z');
+    const subscriber = await createSubscriber({
+      email: 'manual-retry@example.com',
+      consecutiveUndeliveredCount: 3,
+    });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T12:00:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+      status: 'failed',
+      attemptCount: 3,
+      manualAttemptCount: 0,
+      lastErrorReason: 'Automatic attempts exhausted.',
+    });
+
+    const res = await request(app)
+      .post(`/newsletter/send/campaigns/${campaign._id}/retry-failed`)
+      .set('Cookie', authCookie(owner))
+      .send({})
+      .expect(200);
+
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+    const finalizedCampaign = await NewsletterCampaign.findById(campaign._id).lean();
+    const resetSubscriber = await NewsletterSubscriber.findById(subscriber._id).lean();
+
+    expect(res.body).toMatchObject({
+      status: 'completed',
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      pendingRetries: 0,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(delivery).toMatchObject({
+      status: 'sent',
+      attemptCount: 4,
+      manualAttemptCount: 1,
+      claimToken: '',
+    });
+    expect(finalizedCampaign).toMatchObject({
+      status: 'completed',
+      sentCount: 1,
+      failedCount: 0,
+      skippedCount: 0,
+    });
+    expect(resetSubscriber.consecutiveUndeliveredCount).toBe(0);
+
+    await request(app)
+      .post(`/newsletter/send/campaigns/${campaign._id}/retry-failed`)
+      .set('Cookie', authCookie(owner))
+      .send({})
+      .expect(200);
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps subscriber emails out of failed manual retry responses', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const now = new Date('2026-07-21T12:15:00.000Z');
+    const subscriber = await createSubscriber({ email: 'manual-failure@example.com' });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T12:15:00.000Z'),
+    });
+    await NewsletterDelivery.create({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+      status: 'failed',
+      attemptCount: 3,
+      manualAttemptCount: 0,
+      lastErrorReason: 'Automatic attempts exhausted.',
+    });
+    sendEmail.mockRejectedValue(new Error('Manual retry still failed'));
+
+    const res = await request(app)
+      .post(`/newsletter/send/campaigns/${campaign._id}/retry-failed`)
+      .set('Cookie', authCookie(owner))
+      .send({})
+      .expect(200);
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+
+    expect(res.body).toMatchObject({
+      status: 'completed',
+      sent: 0,
+      failed: 1,
+      skipped: 0,
+      pendingRetries: 0,
+    });
+    expect(res.body.failures).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('manual-failure@example.com');
+    expect(delivery).toMatchObject({
+      status: 'failed',
+      attemptCount: 4,
+      manualAttemptCount: 1,
+      lastErrorReason: 'Manual retry still failed',
+    });
+  });
+
+  it('keeps legacy failed deliveries without manualAttemptCount eligible for manual retry', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const now = new Date('2026-07-21T12:30:00.000Z');
+    const subscriber = await createSubscriber({ email: 'legacy-manual@example.com' });
+    const campaign = await createCampaignSnapshot({
+      startedAt: now,
+      manualRetryClosesAt: new Date('2026-07-28T12:30:00.000Z'),
+    });
+    await NewsletterDelivery.collection.insertOne({
+      campaignId: campaign._id,
+      subscriberId: subscriber._id,
+      email: subscriber.email,
+      locale: 'bg',
+      status: 'failed',
+      attemptCount: 3,
+      claimToken: '',
+      lastErrorReason: 'Created before manual retry fields existed.',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const res = await request(app)
+      .post(`/newsletter/send/campaigns/${campaign._id}/retry-failed`)
+      .set('Cookie', authCookie(owner))
+      .send({})
+      .expect(200);
+    const delivery = await NewsletterDelivery.findOne({ campaignId: campaign._id }).lean();
+
+    expect(res.body).toMatchObject({
+      status: 'completed',
+      sent: 1,
+      failed: 0,
+      pendingRetries: 0,
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(delivery).toMatchObject({
+      status: 'sent',
+      attemptCount: 4,
+      manualAttemptCount: 1,
+    });
+  });
+
+  it('rejects manual retry for invalid campaign ids before querying deliveries', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+
+    await request(app)
+      .post('/newsletter/send/campaigns/not-a-mongo-id/retry-failed')
+      .set('Cookie', authCookie(owner))
+      .send({})
+      .expect(400);
+
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it('sends only selected language groups with localized recipient links', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
@@ -367,9 +856,12 @@ describe('newsletter send integration', () => {
 
     expect(res.body).toEqual({
       message: 'Newsletter send finished.',
+      campaignStatus: 'completed',
       sent: 1,
       failed: 0,
       skipped: 0,
+      pendingRetries: 0,
+      nextProcessAt: null,
       activeSubscribers: 1,
       activeSubscribersByLocale: {
         bg: 0,
@@ -642,10 +1134,13 @@ describe('newsletter send integration', () => {
       .expect(200);
 
     expect(res.body).toEqual({
-      message: 'Newsletter send finished with failures.',
+      message: 'Newsletter send has pending retries.',
+      campaignStatus: 'sending',
       sent: 1,
       failed: 1,
       skipped: 0,
+      pendingRetries: 1,
+      nextProcessAt: expect.any(String),
       activeSubscribers: 2,
       activeSubscribersByLocale: {
         bg: 2,
@@ -662,13 +1157,15 @@ describe('newsletter send integration', () => {
     const updatedGoodSubscriber = await NewsletterSubscriber.findById(goodSubscriber._id).lean();
     const failedDelivery = await NewsletterDelivery.findOne({ email: 'bad@example.com' }).lean();
 
-    expect(updatedBadSubscriber.consecutiveUndeliveredCount).toBe(1);
+    expect(updatedBadSubscriber.consecutiveUndeliveredCount).toBe(0);
     expect(updatedGoodSubscriber.consecutiveUndeliveredCount).toBe(0);
     expect(failedDelivery).toMatchObject({
       status: 'failed',
       attemptCount: 1,
+      isPermanentFailure: false,
       lastErrorReason: 'Mailbox unavailable',
     });
+    expect(failedDelivery.nextAttemptAt).toBeInstanceOf(Date);
     expect(JSON.stringify(res.body)).not.toContain('bad@example.com');
   });
 
@@ -699,10 +1196,13 @@ describe('newsletter send integration', () => {
       const campaign = await NewsletterCampaign.findOne().lean();
 
       expect(res.body).toEqual({
-        message: 'Newsletter send finished with failures.',
+        message: 'Newsletter send has pending retries.',
+        campaignStatus: 'sending',
         sent: 1,
         failed: 1,
         skipped: 0,
+        pendingRetries: 1,
+        nextProcessAt: expect.any(String),
         activeSubscribers: 2,
         activeSubscribersByLocale: {
           bg: 2,
@@ -721,12 +1221,13 @@ describe('newsletter send integration', () => {
         attemptCount: 1,
         lastErrorReason: 'Preference token signing failed',
       });
+      expect(failedDelivery.nextAttemptAt).toBeInstanceOf(Date);
       expect(sentDelivery).toMatchObject({
         status: 'sent',
         attemptCount: 1,
       });
       expect(campaign).toMatchObject({
-        status: 'completed',
+        status: 'sending',
         sentCount: 1,
         failedCount: 1,
         skippedCount: 0,

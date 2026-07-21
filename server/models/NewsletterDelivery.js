@@ -30,7 +30,6 @@ const newsletterDeliverySchema = new mongoose.Schema(
       enum: ['pending', 'sending', 'sent', 'failed', 'skipped'],
       default: 'pending',
       required: true,
-      index: true,
     },
     attemptCount: {
       type: Number,
@@ -50,6 +49,14 @@ const newsletterDeliverySchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    nextAttemptAt: {
+      type: Date,
+      default: null,
+    },
+    isPermanentFailure: {
+      type: Boolean,
+      default: false,
+    },
     sentAt: {
       type: Date,
       default: null,
@@ -67,6 +74,10 @@ const newsletterDeliverySchema = new mongoose.Schema(
       default: '',
       maxlength: 500,
     },
+    subscriberCounterUpdatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     collection: 'newsletter_deliveries',
@@ -76,6 +87,8 @@ const newsletterDeliverySchema = new mongoose.Schema(
 
 newsletterDeliverySchema.index({ campaignId: 1, subscriberId: 1 }, { unique: true, background: true });
 newsletterDeliverySchema.index({ campaignId: 1, status: 1, createdAt: 1 }, { background: true });
+newsletterDeliverySchema.index({ campaignId: 1, status: 1, nextAttemptAt: 1 }, { background: true });
+newsletterDeliverySchema.index({ campaignId: 1, status: 1, claimedAt: 1 }, { background: true });
 
 export default mongoose.models.NewsletterDelivery ||
   mongoose.model('NewsletterDelivery', newsletterDeliverySchema);
