@@ -16,12 +16,18 @@ import {
 import { buildNewsletterEmailTemplate } from './newsletterEmailTemplate.js';
 import { extractContentText, validateContentJson } from './blogArticlesService.js';
 import { getProductById } from './productsServices.js';
+import { projectPublicBlogArticle } from './localization/publicProjection.js';
 
 const SUBJECT_MAX_LENGTH = 160;
+const CTA_LABEL_MAX_LENGTH = 80;
 const DEFAULT_NEWSLETTER_LOCALE = 'bg';
 const NEWSLETTER_DEFAULT_IMAGE_PATH = '/logo_64pxH.svg';
 const CUSTOM_CTA_PATH = '/products';
 const DEFAULT_NEWSLETTER_PUBLIC_SITE_URL = 'https://happycolors.eu';
+const NEWSLETTER_CTA_LABEL_BY_LOCALE = {
+  bg: 'Виж повече',
+  en: 'View more',
+};
 const MAX_AUTOMATIC_DELIVERY_ATTEMPTS = 3;
 const MAX_MANUAL_DELIVERY_ATTEMPTS = 1;
 const DELIVERY_RETRY_BACKOFF_MS = [5 * 60 * 1000, 30 * 60 * 1000];
@@ -33,9 +39,18 @@ const ALLOWED_SEND_FIELDS = new Set([
   'contentHtml',
   'contentJson',
   'contentText',
+  'contentByLocale',
+  'ctaLabel',
   'sourceType',
   'sourceId',
   'locales',
+]);
+const ALLOWED_SEND_CONTENT_FIELDS = new Set([
+  'subject',
+  'contentHtml',
+  'contentJson',
+  'contentText',
+  'ctaLabel',
 ]);
 const SUPPORTED_SOURCE_TYPES = new Set(['custom', 'product', 'blog']);
 const PUBLIC_LOCALE_SET = new Set(PUBLIC_LOCALES);
@@ -111,6 +126,16 @@ function normalizeSubject(subject) {
   return value;
 }
 
+function normalizeCtaLabel(ctaLabel) {
+  const value = String(ctaLabel || '').trim();
+
+  if (value.length > CTA_LABEL_MAX_LENGTH) {
+    throw new NewsletterSendError(`Newsletter CTA label cannot be longer than ${CTA_LABEL_MAX_LENGTH} characters.`);
+  }
+
+  return value;
+}
+
 function sanitizeNewsletterHtml(contentHtml) {
   const rawHtml = String(contentHtml || '').trim();
 
@@ -161,6 +186,34 @@ function sanitizeNewsletterHtml(contentHtml) {
   return sanitized;
 }
 
+function normalizeNewsletterContentVariant(rawContent, locale) {
+  assertPlainObject(rawContent);
+
+  const unknownFields = Object.keys(rawContent).filter((key) => !ALLOWED_SEND_CONTENT_FIELDS.has(key));
+
+  if (unknownFields.length > 0) {
+    throw new NewsletterSendError('Invalid newsletter payload fields.');
+  }
+
+  const subject = normalizeSubject(rawContent.subject);
+  const contentHtml = sanitizeNewsletterHtml(rawContent.contentHtml);
+  const contentJson = validateContentJson(rawContent.contentJson);
+  const contentText = String(rawContent.contentText || extractContentText(contentHtml)).trim();
+
+  if (!contentText) {
+    throw new NewsletterSendError(`Newsletter ${locale.toUpperCase()} text content is required.`);
+  }
+
+  return {
+    subject,
+    title: subject,
+    contentHtml,
+    contentJson,
+    contentText,
+    ctaLabel: normalizeCtaLabel(rawContent.ctaLabel),
+  };
+}
+
 function validateSendPayload(payload) {
   assertPlainObject(payload);
 
@@ -178,13 +231,14 @@ function validateSendPayload(payload) {
     throw new NewsletterSendError('Newsletter source is not supported yet.');
   }
 
-  const subject = normalizeSubject(payload.subject);
-  const contentHtml = sanitizeNewsletterHtml(payload.contentHtml);
-  const contentJson = validateContentJson(payload.contentJson);
-  const contentText = String(payload.contentText || extractContentText(contentHtml)).trim();
+  const contentByLocale = normalizeNewsletterContentByLocale(payload, selectedLocales);
+  const defaultContentLocale = selectedLocales.includes(DEFAULT_NEWSLETTER_LOCALE)
+    ? DEFAULT_NEWSLETTER_LOCALE
+    : selectedLocales[0];
+  const defaultContent = contentByLocale[defaultContentLocale];
 
-  if (!contentText) {
-    throw new NewsletterSendError('Newsletter text content is required.');
+  if (!defaultContent) {
+    throw new NewsletterSendError('Newsletter content is required for every selected language.');
   }
 
   if (sourceType !== 'custom' && !validator.isMongoId(sourceId)) {
@@ -192,20 +246,56 @@ function validateSendPayload(payload) {
   }
 
   return {
-    subject,
-    title: subject,
-    contentHtml,
-    contentJson,
-    contentText,
+    subject: defaultContent.subject,
+    title: defaultContent.title,
+    contentHtml: defaultContent.contentHtml,
+    contentJson: defaultContent.contentJson,
+    contentText: defaultContent.contentText,
+    ctaLabel: defaultContent.ctaLabel,
+    contentByLocale,
     sourceType,
     sourceId,
     selectedLocales,
   };
 }
 
+function normalizeNewsletterContentByLocale(payload, selectedLocales) {
+  const rawContentByLocale = payload.contentByLocale;
+
+  if (rawContentByLocale !== undefined) {
+    assertPlainObject(rawContentByLocale);
+
+    return selectedLocales.reduce((content, locale) => {
+      if (!rawContentByLocale[locale]) {
+        throw new NewsletterSendError('Newsletter content is required for every selected language.');
+      }
+
+      content[locale] = normalizeNewsletterContentVariant(rawContentByLocale[locale], locale);
+      return content;
+    }, {});
+  }
+
+  if (selectedLocales.length > 1 || selectedLocales[0] !== DEFAULT_NEWSLETTER_LOCALE) {
+    throw new NewsletterSendError('Newsletter content is required for every selected language.');
+  }
+
+  return {
+    [DEFAULT_NEWSLETTER_LOCALE]: normalizeNewsletterContentVariant(
+      {
+        subject: payload.subject,
+        contentHtml: payload.contentHtml,
+        contentJson: payload.contentJson,
+        contentText: payload.contentText,
+        ctaLabel: payload.ctaLabel,
+      },
+      DEFAULT_NEWSLETTER_LOCALE
+    ),
+  };
+}
+
 function normalizeSelectedLocales(locales) {
   if (locales === undefined) {
-    return [...PUBLIC_LOCALES];
+    return [DEFAULT_NEWSLETTER_LOCALE];
   }
 
   if (!Array.isArray(locales) || locales.length === 0) {
@@ -231,6 +321,21 @@ function firstProductImage(product) {
   }
 
   return product?.imageUrl || '';
+}
+
+function buildProductNewsletterContent(product, locale) {
+  const contentText = String(product?.description || '').trim();
+
+  return {
+    subject: product?.title || '',
+    contentHtml: `<p>${escapeHtml(contentText)}</p>`,
+    contentText,
+    ctaLabel: NEWSLETTER_CTA_LABEL_BY_LOCALE[locale] || NEWSLETTER_CTA_LABEL_BY_LOCALE.bg,
+  };
+}
+
+function isCurrentEnglishProductProjection(product) {
+  return product?.contentLocale === 'en' && product?.translationPending === false;
 }
 
 function blogImage(article) {
@@ -264,6 +369,17 @@ function firstParagraphHtml(article) {
   return {
     contentHtml: paragraphHtml,
     contentText: paragraphText,
+  };
+}
+
+function buildBlogNewsletterContent(article, locale) {
+  const content = firstParagraphHtml(article);
+
+  return {
+    subject: article?.title || '',
+    contentHtml: content.contentHtml,
+    contentText: content.contentText,
+    ctaLabel: NEWSLETTER_CTA_LABEL_BY_LOCALE[locale] || NEWSLETTER_CTA_LABEL_BY_LOCALE.bg,
   };
 }
 
@@ -564,6 +680,16 @@ export function scheduleNewsletterCampaignProcessing(campaignId, runAt = new Dat
 export async function scheduleOpenNewsletterCampaignProcessing(options = {}) {
   const now = options.now instanceof Date ? options.now : new Date();
   const shouldScheduleTimers = options.scheduleTimers !== false;
+  let cleanupSummary = { deletedCount: 0 };
+
+  try {
+    cleanupSummary = await purgeCompletedNewsletterDeliveryDetails();
+  } catch (error) {
+    console.error('Newsletter completed delivery reconciliation failed:', {
+      message: error?.message || 'Unknown newsletter delivery reconciliation error',
+    });
+  }
+
   const campaigns = await NewsletterCampaign.find({ status: 'sending' })
     .select('_id startedAt manualRetryClosesAt')
     .lean();
@@ -571,11 +697,7 @@ export async function scheduleOpenNewsletterCampaignProcessing(options = {}) {
 
   for (const campaign of campaigns) {
     const manualRetryClosesAt = campaign.manualRetryClosesAt || getManualRetryClosesAt(campaign.startedAt);
-    const nextProcessAt = await getNextNewsletterCampaignProcessAt(campaign._id, manualRetryClosesAt, now);
-
-    if (!nextProcessAt) {
-      continue;
-    }
+    const nextProcessAt = await getNextNewsletterCampaignProcessAt(campaign._id, manualRetryClosesAt, now) || now;
 
     scheduledCampaigns += 1;
 
@@ -585,24 +707,59 @@ export async function scheduleOpenNewsletterCampaignProcessing(options = {}) {
   }
 
   return {
+    purgedCompletedDeliveries: cleanupSummary.deletedCount,
     openCampaigns: campaigns.length,
     scheduledCampaigns,
   };
 }
 
+export async function purgeCompletedNewsletterDeliveryDetails() {
+  const campaignIds = await NewsletterDelivery.distinct('campaignId');
+
+  if (campaignIds.length === 0) {
+    return { deletedCount: 0 };
+  }
+
+  const completedCampaigns = await NewsletterCampaign.find({
+    _id: { $in: campaignIds },
+    status: 'completed',
+  })
+    .select('_id')
+    .lean();
+  const completedCampaignIds = completedCampaigns.map((campaign) => campaign._id);
+
+  if (completedCampaignIds.length === 0) {
+    return { deletedCount: 0 };
+  }
+
+  const result = await NewsletterDelivery.deleteMany({
+    campaignId: { $in: completedCampaignIds },
+  });
+
+  return {
+    deletedCount: Number(result.deletedCount || 0),
+  };
+}
+
 async function createCampaignSnapshot(newsletter, subscribers, recipientCountsByLocale) {
   const now = new Date();
+  const defaultContentLocale = newsletter.selectedLocales.includes(DEFAULT_NEWSLETTER_LOCALE)
+    ? DEFAULT_NEWSLETTER_LOCALE
+    : newsletter.selectedLocales[0];
+  const defaultContent = newsletter.contentByLocale[defaultContentLocale];
   const campaign = await NewsletterCampaign.create({
     status: 'sending',
     sourceType: newsletter.sourceType,
     sourceId: newsletter.sourceId || '',
     selectedLocales: newsletter.selectedLocales,
-    subject: newsletter.subject,
-    title: newsletter.title,
-    contentHtml: newsletter.contentHtml,
-    contentText: newsletter.contentText,
-    contentJson: newsletter.contentJson || null,
+    subject: defaultContent.subject,
+    title: defaultContent.title,
+    contentHtml: defaultContent.contentHtml,
+    contentText: defaultContent.contentText,
+    contentJson: defaultContent.contentJson || null,
+    contentByLocale: newsletter.contentByLocale,
     ctaPath: newsletter.ctaPath,
+    ctaLabel: defaultContent.ctaLabel,
     imageUrl: newsletter.imageUrl,
     recipientCountsByLocale,
     totalRecipients: subscribers.length,
@@ -625,6 +782,24 @@ async function createCampaignSnapshot(newsletter, subscribers, recipientCountsBy
   return campaign;
 }
 
+function getCampaignContentForLocale(campaign, locale) {
+  const normalizedLocale = normalizeStoredPublicLocale(locale);
+  const localizedContent = campaign?.contentByLocale?.[normalizedLocale];
+
+  if (localizedContent) {
+    return localizedContent;
+  }
+
+  return {
+    subject: campaign?.subject,
+    title: campaign?.title,
+    contentHtml: campaign?.contentHtml,
+    contentText: campaign?.contentText,
+    contentJson: campaign?.contentJson || null,
+    ctaLabel: campaign?.ctaLabel || '',
+  };
+}
+
 async function recoverStaleNewsletterDeliveryClaims(campaignId, now) {
   const staleBefore = new Date(now.getTime() - DELIVERY_CLAIM_STALE_AFTER_MS);
 
@@ -632,7 +807,10 @@ async function recoverStaleNewsletterDeliveryClaims(campaignId, now) {
     {
       campaignId,
       status: 'sending',
-      claimedAt: { $lte: staleBefore },
+      $or: [
+        { claimedAt: { $lte: staleBefore } },
+        { claimedAt: null },
+      ],
     },
     {
       $set: {
@@ -784,6 +962,17 @@ async function updateFinalFailedSubscriberCounters(campaignId, now) {
   }
 }
 
+async function purgeNewsletterCampaignDeliveries(campaignId) {
+  try {
+    await NewsletterDelivery.deleteMany({ campaignId });
+  } catch (error) {
+    console.error('Newsletter campaign delivery cleanup failed:', {
+      campaignId: String(campaignId),
+      message: error?.message || 'Unknown newsletter delivery cleanup error',
+    });
+  }
+}
+
 async function finalizeNewsletterCampaign(campaign, now) {
   const campaignId = campaign._id;
   const manualRetryClosesAt = campaign.manualRetryClosesAt || getManualRetryClosesAt(campaign.startedAt);
@@ -849,6 +1038,8 @@ async function finalizeNewsletterCampaign(campaign, now) {
     }
   );
 
+  await purgeNewsletterCampaignDeliveries(campaignId);
+
   return {
     status: 'completed',
     sentCount,
@@ -860,18 +1051,14 @@ async function finalizeNewsletterCampaign(campaign, now) {
   };
 }
 
-async function summarizeCompletedNewsletterCampaign(campaignId) {
-  const [sentCount, failedCount, skippedCount] = await Promise.all([
-    NewsletterDelivery.countDocuments({ campaignId, status: 'sent' }),
-    NewsletterDelivery.countDocuments({ campaignId, status: 'failed' }),
-    NewsletterDelivery.countDocuments({ campaignId, status: 'skipped' }),
-  ]);
+async function summarizeCompletedNewsletterCampaign(campaign) {
+  await purgeNewsletterCampaignDeliveries(campaign._id);
 
   return {
     status: 'completed',
-    sent: sentCount,
-    failed: failedCount,
-    skipped: skippedCount,
+    sent: Number(campaign.sentCount || 0),
+    failed: Number(campaign.failedCount || 0),
+    skipped: Number(campaign.skippedCount || 0),
     pendingRetries: 0,
     nextProcessAt: null,
     failures: [],
@@ -909,7 +1096,7 @@ async function processNewsletterCampaignDeliveriesUnlocked(campaignId, options =
   }
 
   if (campaign.status === 'completed') {
-    return summarizeCompletedNewsletterCampaign(campaign._id);
+    return summarizeCompletedNewsletterCampaign(campaign);
   }
 
   await recoverStaleNewsletterDeliveryClaims(campaign._id, now);
@@ -943,8 +1130,10 @@ async function processNewsletterCampaignDeliveriesUnlocked(campaignId, options =
     try {
       const locale = normalizeStoredPublicLocale(delivery.locale);
       const { unsubscribeUrl, listUnsubscribeUrl, preferencesUrl } = buildSubscriberUrls(subscriber, locale);
+      const campaignContent = getCampaignContentForLocale(campaign, locale);
       const template = buildNewsletterEmailTemplate({
         ...campaign,
+        ...campaignContent,
         locale,
         ctaUrl: buildLocalizedPublicSiteUrl(locale, campaign.ctaPath),
         unsubscribeUrl,
@@ -1012,26 +1201,30 @@ export async function getNewsletterSendStatus() {
 export async function sendNewsletterTest(payload) {
   const newsletter = await deriveNewsletterPayload(payload);
   const recipients = parseTestRecipients();
-  const template = buildNewsletterEmailTemplate({
-    ...newsletter,
-    isTest: true,
+  const testMessages = newsletter.selectedLocales.flatMap((locale) => {
+    const newsletterContent = newsletter.contentByLocale[locale];
+    const template = buildNewsletterEmailTemplate({
+      ...newsletter,
+      ...newsletterContent,
+      locale,
+      ctaUrl: buildLocalizedPublicSiteUrl(locale, newsletter.ctaPath),
+      isTest: true,
+    });
+
+    return recipients.map((to) => ({
+      to,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+      headers: template.headers,
+    }));
   });
 
-  await Promise.all(
-    recipients.map((to) =>
-      sendEmail({
-        to,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-        headers: template.headers,
-      })
-    )
-  );
+  await Promise.all(testMessages.map((message) => sendEmail(message)));
 
   return {
     message: 'Test email sent.',
-    recipients: recipients.length,
+    recipients: testMessages.length,
   };
 }
 
@@ -1096,9 +1289,13 @@ export async function buildProductNewsletterPrefill(productId) {
   }
 
   let product;
+  let englishProduct;
 
   try {
-    product = await getProductById(productId);
+    [product, englishProduct] = await Promise.all([
+      getProductById(productId, null, { locale: 'bg' }),
+      getProductById(productId, null, { locale: 'en' }),
+    ]);
   } catch {
     throw new NewsletterSendError('Product was not found.', 404);
   }
@@ -1107,18 +1304,25 @@ export async function buildProductNewsletterPrefill(productId) {
     throw new NewsletterSendError('Product was not found.', 404);
   }
 
-  const contentText = String(product.description || '').trim();
-  const contentHtml = `<p>${escapeHtml(contentText)}</p>`;
+  const bgContent = buildProductNewsletterContent(product, 'bg');
+  const contentByLocale = {
+    bg: bgContent,
+  };
+
+  if (isCurrentEnglishProductProjection(englishProduct)) {
+    contentByLocale.en = buildProductNewsletterContent(englishProduct, 'en');
+  }
 
   return {
     sourceType: 'product',
     sourceId: String(product._id || productId),
-    subject: product.title,
-    contentHtml,
-    contentText,
+    subject: bgContent.subject,
+    contentHtml: bgContent.contentHtml,
+    contentText: bgContent.contentText,
+    contentByLocale,
     imageUrl: buildPublicSiteUrl(firstProductImage(product) || getDefaultNewsletterImageUrl()),
     ctaUrl: `/products/${productId}`,
-    ctaLabel: 'Виж повече',
+    ctaLabel: bgContent.ctaLabel,
   };
 }
 
@@ -1133,16 +1337,25 @@ export async function buildBlogNewsletterPrefill(articleId) {
     throw new NewsletterSendError('Blog article was not found.', 404);
   }
 
-  const content = firstParagraphHtml(article);
+  const bgContent = buildBlogNewsletterContent(article, 'bg');
+  const englishArticle = projectPublicBlogArticle(article, 'en');
+  const contentByLocale = {
+    bg: bgContent,
+  };
+
+  if (englishArticle) {
+    contentByLocale.en = buildBlogNewsletterContent(englishArticle, 'en');
+  }
 
   return {
     sourceType: 'blog',
     sourceId: String(article._id || articleId),
-    subject: article.title,
-    contentHtml: content.contentHtml,
-    contentText: content.contentText,
+    subject: bgContent.subject,
+    contentHtml: bgContent.contentHtml,
+    contentText: bgContent.contentText,
+    contentByLocale,
     imageUrl: buildPublicSiteUrl(blogImage(article) || getDefaultNewsletterImageUrl()),
     ctaUrl: `/blog/${articleId}`,
-    ctaLabel: 'Виж повече',
+    ctaLabel: bgContent.ctaLabel,
   };
 }

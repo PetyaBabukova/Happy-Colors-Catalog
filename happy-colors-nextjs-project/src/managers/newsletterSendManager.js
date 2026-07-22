@@ -4,7 +4,17 @@ import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandle
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
 };
-const SEND_FIELDS = ['subject', 'contentHtml', 'contentJson', 'contentText', 'sourceType', 'sourceId', 'locales'];
+const SEND_FIELDS = [
+  'subject',
+  'contentHtml',
+  'contentJson',
+  'contentText',
+  'contentByLocale',
+  'ctaLabel',
+  'sourceType',
+  'sourceId',
+  'locales',
+];
 
 function pickSendFields(values = {}) {
   return SEND_FIELDS.reduce((payload, field) => {

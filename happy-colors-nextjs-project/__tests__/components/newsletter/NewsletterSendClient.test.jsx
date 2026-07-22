@@ -34,12 +34,29 @@ vi.mock('@/managers/newsletterSendManager', () => ({
   sendNewsletterToSubscribers: vi.fn(),
 }));
 
-function fillForm() {
-  fireEvent.change(screen.getByLabelText('Тема'), {
-    target: { value: 'Новини от Happy Colors' },
+function fillActiveVariant({ subject, body, ctaLabel }) {
+  fireEvent.change(screen.getByLabelText(/Тема/), {
+    target: { value: subject },
+  });
+  fireEvent.change(screen.getByLabelText(/Бутон/), {
+    target: { value: ctaLabel },
   });
   fireEvent.change(screen.getByLabelText('Съдържание'), {
-    target: { value: 'Ръчно изработени подаръци' },
+    target: { value: body },
+  });
+}
+
+function fillBothVariants() {
+  fillActiveVariant({
+    subject: 'Новини от Happy Colors',
+    body: 'Ръчно изработени подаръци',
+    ctaLabel: 'Виж повече',
+  });
+  fireEvent.click(screen.getByRole('tab', { name: 'EN' }));
+  fillActiveVariant({
+    subject: 'Happy Colors news',
+    body: 'Handmade gifts',
+    ctaLabel: 'View more',
   });
 }
 
@@ -62,6 +79,20 @@ describe('NewsletterSendClient', () => {
       imageUrl: 'https://cdn.example.com/product.webp',
       ctaUrl: '/products/product-1',
       ctaLabel: 'Виж повече',
+      contentByLocale: {
+        bg: {
+          subject: 'Product newsletter',
+          contentHtml: '<p>Product content</p>',
+          contentText: 'Product content',
+          ctaLabel: 'Виж повече',
+        },
+        en: {
+          subject: 'Product newsletter EN',
+          contentHtml: '<p>Product content EN</p>',
+          contentText: 'Product content EN',
+          ctaLabel: 'View more',
+        },
+      },
     });
     getBlogNewsletterPrefill.mockResolvedValue({
       sourceType: 'blog',
@@ -71,9 +102,17 @@ describe('NewsletterSendClient', () => {
       contentText: 'Blog content',
       imageUrl: 'https://cdn.example.com/blog.webp',
       ctaUrl: '/blog/article-1',
-      ctaLabel: 'View more',
+      ctaLabel: 'Виж повече',
+      contentByLocale: {
+        bg: {
+          subject: 'Blog newsletter',
+          contentHtml: '<p>Blog content</p>',
+          contentText: 'Blog content',
+          ctaLabel: 'Виж повече',
+        },
+      },
     });
-    sendNewsletterTest.mockResolvedValue({ message: 'Test email sent.', recipients: 2 });
+    sendNewsletterTest.mockResolvedValue({ message: 'Test email sent.', recipients: 4 });
     sendNewsletterToSubscribers.mockResolvedValue({
       message: 'Newsletter send finished.',
       sent: 3,
@@ -82,27 +121,39 @@ describe('NewsletterSendClient', () => {
     });
   });
 
-  it('validates required fields before sending', () => {
+  it('validates required fields for the first selected language before sending', () => {
     render(<NewsletterSendClient />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати тест' }));
 
-    expect(screen.getByRole('status')).toHaveTextContent('Моля, въведете тема на имейла.');
+    expect(screen.getByRole('status')).toHaveTextContent('Моля, въведете тема на имейла за Български.');
     expect(sendNewsletterTest).not.toHaveBeenCalled();
   });
 
-  it('sends optional test emails with custom payload data', async () => {
+  it('builds a test-send payload with separate BG and EN content', async () => {
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати тест' }));
 
     await waitFor(() => expect(sendNewsletterTest).toHaveBeenCalled());
     expect(sendNewsletterTest).toHaveBeenCalledWith({
-      subject: 'Новини от Happy Colors',
-      contentHtml: '<p>Ръчно изработени подаръци</p>',
-      contentJson: { type: 'doc', content: [{ type: 'paragraph' }] },
-      contentText: 'Ръчно изработени подаръци',
+      contentByLocale: {
+        bg: {
+          subject: 'Новини от Happy Colors',
+          contentHtml: '<p>Ръчно изработени подаръци</p>',
+          contentJson: { type: 'doc', content: [{ type: 'paragraph' }] },
+          contentText: 'Ръчно изработени подаръци',
+          ctaLabel: 'Виж повече',
+        },
+        en: {
+          subject: 'Happy Colors news',
+          contentHtml: '<p>Handmade gifts</p>',
+          contentJson: { type: 'doc', content: [{ type: 'paragraph' }] },
+          contentText: 'Handmade gifts',
+          ctaLabel: 'View more',
+        },
+      },
       sourceType: 'custom',
       locales: ['bg', 'en'],
     });
@@ -111,7 +162,7 @@ describe('NewsletterSendClient', () => {
 
   it('opens a confirmation modal with active subscriber count before broadcast', async () => {
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
 
@@ -124,7 +175,7 @@ describe('NewsletterSendClient', () => {
 
   it('cancels and confirms broadcast from the modal', async () => {
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
     await screen.findByRole('dialog');
@@ -141,6 +192,10 @@ describe('NewsletterSendClient', () => {
     expect(sendNewsletterToSubscribers).toHaveBeenCalledWith(
       expect.objectContaining({
         locales: ['bg', 'en'],
+        contentByLocale: expect.objectContaining({
+          bg: expect.objectContaining({ subject: 'Новини от Happy Colors' }),
+          en: expect.objectContaining({ subject: 'Happy Colors news' }),
+        }),
       })
     );
     expect(screen.getByRole('status')).toHaveTextContent('Newsletter send finished.');
@@ -155,7 +210,7 @@ describe('NewsletterSendClient', () => {
       },
     });
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
 
@@ -166,7 +221,7 @@ describe('NewsletterSendClient', () => {
 
   it('validates at least one selected language before sending', () => {
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByLabelText('Български'));
     fireEvent.click(screen.getByLabelText('English'));
@@ -178,7 +233,7 @@ describe('NewsletterSendClient', () => {
 
   it('sends only the selected language group after confirmation', async () => {
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByLabelText('Български'));
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
@@ -194,6 +249,9 @@ describe('NewsletterSendClient', () => {
       expect(sendNewsletterToSubscribers).toHaveBeenCalledWith(
         expect.objectContaining({
           locales: ['en'],
+          contentByLocale: {
+            en: expect.objectContaining({ subject: 'Happy Colors news' }),
+          },
         })
       )
     );
@@ -207,7 +265,7 @@ describe('NewsletterSendClient', () => {
       activeSubscribers: 3,
     });
     render(<NewsletterSendClient />);
-    fillForm();
+    fillBothVariants();
 
     fireEvent.click(screen.getByRole('button', { name: 'Изпрати до абонати' }));
     await screen.findByRole('dialog');
@@ -219,17 +277,19 @@ describe('NewsletterSendClient', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent('@');
   });
 
-  it('loads product prefill from query params and keeps source id in send payload', async () => {
+  it('loads product prefill from query params into localized content and keeps source id in send payload', async () => {
     setMockNavigation({
       searchParams: new URLSearchParams('source=product&id=product-1'),
     });
     render(<NewsletterSendClient />);
 
     await waitFor(() => expect(getProductNewsletterPrefill).toHaveBeenCalledWith('product-1'));
-    expect(screen.getByLabelText('Тема')).toHaveValue('Product newsletter');
-    expect(screen.getByLabelText('Съдържание')).toHaveValue('');
+    expect(screen.getByLabelText(/Тема/)).toHaveValue('Product newsletter');
     expect(screen.getByRole('complementary', { name: 'Резюме' })).toHaveTextContent('/products/product-1');
 
+    fireEvent.click(screen.getByRole('tab', { name: 'EN' }));
+    expect(screen.getByLabelText(/Тема/)).toHaveValue('Product newsletter EN');
+    fireEvent.click(screen.getByLabelText('English'));
     fireEvent.change(screen.getByLabelText('Съдържание'), {
       target: { value: 'Edited product content' },
     });
@@ -238,9 +298,12 @@ describe('NewsletterSendClient', () => {
     await waitFor(() => expect(sendNewsletterTest).toHaveBeenCalled());
     expect(sendNewsletterTest).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: 'Product newsletter',
         sourceType: 'product',
         sourceId: 'product-1',
+        locales: ['bg'],
+        contentByLocale: {
+          bg: expect.objectContaining({ subject: 'Product newsletter' }),
+        },
       })
     );
   });
@@ -252,20 +315,24 @@ describe('NewsletterSendClient', () => {
     render(<NewsletterSendClient />);
 
     await waitFor(() => expect(getBlogNewsletterPrefill).toHaveBeenCalledWith('article-1'));
-    expect(screen.getAllByRole('textbox')[0]).toHaveValue('Blog newsletter');
+    expect(screen.getByLabelText(/Тема/)).toHaveValue('Blog newsletter');
     expect(screen.getByText('/blog/article-1')).toBeInTheDocument();
 
-    fireEvent.change(screen.getAllByRole('textbox')[1], {
-      target: { value: 'Edited blog content' },
+    fireEvent.click(screen.getByLabelText('English'));
+    fireEvent.click(screen.getByRole('tab', { name: 'EN' }));
+    fillActiveVariant({
+      subject: 'Blog newsletter EN',
+      body: 'Edited blog content',
+      ctaLabel: 'View more',
     });
-    fireEvent.click(screen.getAllByRole('button')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Изпрати тест' }));
 
     await waitFor(() => expect(sendNewsletterTest).toHaveBeenCalled());
     expect(sendNewsletterTest).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: 'Blog newsletter',
         sourceType: 'blog',
         sourceId: 'article-1',
+        locales: ['bg'],
       })
     );
   });

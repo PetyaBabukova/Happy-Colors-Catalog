@@ -1,6 +1,39 @@
 import mongoose from 'mongoose';
 import { PUBLIC_LOCALES } from './localizationSchemas.js';
 
+const newsletterCampaignLocaleContentSchema = new mongoose.Schema(
+  {
+    subject: {
+      type: String,
+      required: true,
+      maxlength: 160,
+    },
+    title: {
+      type: String,
+      required: true,
+      maxlength: 160,
+    },
+    contentHtml: {
+      type: String,
+      required: true,
+    },
+    contentText: {
+      type: String,
+      required: true,
+    },
+    contentJson: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    ctaLabel: {
+      type: String,
+      default: '',
+      maxlength: 80,
+    },
+  },
+  { _id: false }
+);
+
 const newsletterCampaignSchema = new mongoose.Schema(
   {
     status: {
@@ -51,9 +84,24 @@ const newsletterCampaignSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
+    contentByLocale: {
+      bg: {
+        type: newsletterCampaignLocaleContentSchema,
+        default: null,
+      },
+      en: {
+        type: newsletterCampaignLocaleContentSchema,
+        default: null,
+      },
+    },
     ctaPath: {
       type: String,
       required: true,
+    },
+    ctaLabel: {
+      type: String,
+      default: '',
+      maxlength: 80,
     },
     imageUrl: {
       type: String,

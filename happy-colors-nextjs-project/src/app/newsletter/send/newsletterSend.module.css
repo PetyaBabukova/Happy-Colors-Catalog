@@ -72,6 +72,31 @@
   accent-color: #2f6f4e;
 }
 
+.localeTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.localeTab {
+  min-width: 52px;
+  min-height: 34px;
+  border: 1px solid #cfc7bd;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #2a2520;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.localeTabActive {
+  border-color: #2f6f4e;
+  background: #2f6f4e;
+  color: #fff;
+}
+
 .input {
   width: 100%;
   min-height: 44px;
@@ -109,6 +134,10 @@
 .summary dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.summaryLine {
+  display: block;
 }
 
 .actions,

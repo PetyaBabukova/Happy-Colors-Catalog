@@ -49,6 +49,7 @@ vi.mock('../../../models/NewsletterDelivery.js', () => ({
     findOneAndUpdate: vi.fn(),
     updateMany: vi.fn(),
     updateOne: vi.fn(),
+    deleteMany: vi.fn(),
     countDocuments: vi.fn(),
   },
 }));
@@ -88,6 +89,39 @@ function payload(overrides = {}) {
     contentJson: validContentJson,
     contentText: 'Hello subscribers.',
     sourceType: 'custom',
+    ...overrides,
+  };
+}
+
+function localeContent(overrides = {}) {
+  return {
+    subject: 'Newsletter update',
+    contentHtml: '<p>Hello subscribers.</p>',
+    contentJson: validContentJson,
+    contentText: 'Hello subscribers.',
+    ctaLabel: 'View more',
+    ...overrides,
+  };
+}
+
+function localizedPayload(overrides = {}) {
+  return {
+    sourceType: 'custom',
+    locales: ['bg', 'en'],
+    contentByLocale: {
+      bg: localeContent({
+        subject: 'Новини от Happy Colors',
+        contentHtml: '<p>Здравейте, абонати.</p>',
+        contentText: 'Здравейте, абонати.',
+        ctaLabel: 'Виж повече',
+      }),
+      en: localeContent({
+        subject: 'Happy Colors news',
+        contentHtml: '<p>Hello subscribers.</p>',
+        contentText: 'Hello subscribers.',
+        ctaLabel: 'View more',
+      }),
+    },
     ...overrides,
   };
 }
@@ -134,6 +168,10 @@ function matchesValue(value, expected) {
 
     if (Object.prototype.hasOwnProperty.call(expected, '$ne') && value === expected.$ne) {
       return false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expected, '$in')) {
+      return expected.$in.some((candidate) => String(candidate) === String(value));
     }
 
     return true;
@@ -205,6 +243,12 @@ describe('newsletterSendService', () => {
       return mockDeliveryDocs;
     });
     NewsletterDelivery.updateMany.mockResolvedValue({ modifiedCount: 0 });
+    NewsletterDelivery.deleteMany.mockImplementation(async (query = {}) => {
+      const beforeCount = mockDeliveryDocs.length;
+      mockDeliveryDocs = mockDeliveryDocs.filter((delivery) => !matchesDeliveryQuery(delivery, query));
+
+      return { deletedCount: beforeCount - mockDeliveryDocs.length };
+    });
     NewsletterDelivery.find.mockImplementation((query = {}) => {
       const deliveries = mockDeliveryDocs.filter((delivery) => matchesDeliveryQuery(delivery, query));
       deliveries.sort = vi.fn().mockResolvedValue(deliveries);
@@ -348,7 +392,8 @@ describe('newsletterSendService', () => {
     mockSubscribers([{ email: 'subscriber@example.com', preferredLocale: 'en', unsubscribeTokenVersion: 1 }]);
 
     const result = await sendNewsletterToSubscribers(
-      payload({
+      localizedPayload({
+        locales: ['en'],
         sourceType: 'product',
         sourceId: validProductId,
       })
@@ -383,7 +428,7 @@ describe('newsletterSendService', () => {
       { email: 'en@example.com', preferredLocale: 'en', unsubscribeTokenVersion: 1 },
     ]);
 
-    const result = await sendNewsletterToSubscribers(payload({ locales: ['en'] }));
+    const result = await sendNewsletterToSubscribers(localizedPayload({ locales: ['en'] }));
 
     expect(result).toMatchObject({
       sent: 1,
@@ -397,6 +442,40 @@ describe('newsletterSendService', () => {
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'en@example.com' }));
     expect(sendEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: 'bg@example.com' }));
+  });
+
+  it('uses the delivery locale to choose the newsletter campaign content variant', async () => {
+    mockSubscribers([
+      { email: 'bg@example.com', preferredLocale: 'bg', unsubscribeTokenVersion: 1 },
+      { email: 'en@example.com', preferredLocale: 'en', unsubscribeTokenVersion: 1 },
+    ]);
+
+    const result = await sendNewsletterToSubscribers(localizedPayload());
+
+    expect(result).toMatchObject({
+      sent: 2,
+      failed: 0,
+      activeSubscribersByLocale: {
+        bg: 1,
+        en: 1,
+      },
+    });
+    expect(buildNewsletterEmailTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locale: 'bg',
+        subject: 'Новини от Happy Colors',
+        ctaLabel: 'Виж повече',
+        ctaUrl: 'https://happycolors.eu/bg/products',
+      })
+    );
+    expect(buildNewsletterEmailTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locale: 'en',
+        subject: 'Happy Colors news',
+        ctaLabel: 'View more',
+        ctaUrl: 'https://happycolors.eu/en/products',
+      })
+    );
   });
 
   it('validates prefill ids before querying source records', async () => {
@@ -413,6 +492,68 @@ describe('newsletterSendService', () => {
     expect(BlogArticle.findById).not.toHaveBeenCalled();
   });
 
+  it('builds product prefill with current English content when available', async () => {
+    getProductById.mockImplementation(async (productId, viewer, { locale = 'bg' } = {}) => {
+      if (locale === 'en') {
+        return {
+          _id: productId,
+          title: 'Lavender Candle',
+          description: 'A relaxing handmade candle.',
+          imageUrls: ['https://cdn.example.com/lavender.webp'],
+          contentLocale: 'en',
+          translationPending: false,
+        };
+      }
+
+      return {
+        _id: productId,
+        title: 'Лавандулова свещ',
+        description: 'Ръчно изработена свещ.',
+        imageUrls: ['https://cdn.example.com/lavender.webp'],
+      };
+    });
+
+    const result = await buildProductNewsletterPrefill(validProductId);
+
+    expect(getProductById).toHaveBeenCalledWith(validProductId, null, { locale: 'bg' });
+    expect(getProductById).toHaveBeenCalledWith(validProductId, null, { locale: 'en' });
+    expect(result).toMatchObject({
+      subject: 'Лавандулова свещ',
+      contentByLocale: {
+        bg: {
+          subject: 'Лавандулова свещ',
+          contentHtml: '<p>Ръчно изработена свещ.</p>',
+          contentText: 'Ръчно изработена свещ.',
+          ctaLabel: 'Виж повече',
+        },
+        en: {
+          subject: 'Lavender Candle',
+          contentHtml: '<p>A relaxing handmade candle.</p>',
+          contentText: 'A relaxing handmade candle.',
+          ctaLabel: 'View more',
+        },
+      },
+    });
+  });
+
+  it('omits English product prefill when public projection is pending', async () => {
+    getProductById.mockImplementation(async (productId, viewer, { locale = 'bg' } = {}) => ({
+      _id: productId,
+      title: locale === 'en' ? 'Лавандулова свещ' : 'Лавандулова свещ',
+      description: 'Ръчно изработена свещ.',
+      contentLocale: locale === 'en' ? 'bg' : undefined,
+      translationPending: locale === 'en' ? true : undefined,
+    }));
+
+    const result = await buildProductNewsletterPrefill(validProductId);
+
+    expect(result.contentByLocale).toEqual({
+      bg: expect.objectContaining({
+        subject: 'Лавандулова свещ',
+      }),
+    });
+  });
+
   it('builds blog prefill from the first sanitized paragraph and default newsletter image', async () => {
     BlogArticle.findById.mockReturnValue({
       lean: vi.fn().mockResolvedValue({
@@ -420,6 +561,17 @@ describe('newsletterSendService', () => {
         title: 'Color story',
         contentHtml: '<p>First paragraph.</p><p>Second paragraph.</p><script>alert(1)</script>',
         contentText: 'First paragraph. Second paragraph.',
+        sourceRevision: 2,
+        translations: {
+          en: {
+            title: 'English color story',
+            contentHtml: '<p>English first paragraph.</p><p>English second paragraph.</p>',
+            contentText: 'English first paragraph. English second paragraph.',
+            heroImageAlt: 'English alt',
+            sourceRevision: 2,
+            method: 'manual',
+          },
+        },
       }),
     });
 
@@ -433,6 +585,20 @@ describe('newsletterSendService', () => {
       contentText: 'First paragraph.',
       imageUrl: 'https://happycolors.eu/logo_64pxH.svg',
       ctaUrl: `/blog/${validBlogId}`,
+      contentByLocale: {
+        bg: {
+          subject: 'Color story',
+          contentHtml: '<p>First paragraph.</p>',
+          contentText: 'First paragraph.',
+          ctaLabel: 'Виж повече',
+        },
+        en: {
+          subject: 'English color story',
+          contentHtml: '<p>English first paragraph.</p>',
+          contentText: 'English first paragraph.',
+          ctaLabel: 'View more',
+        },
+      },
     });
   });
 
@@ -451,6 +617,37 @@ describe('newsletterSendService', () => {
     expect(result).toMatchObject({
       contentHtml: '<p>First real paragraph.</p>',
       contentText: 'First real paragraph.',
+    });
+  });
+
+  it('omits English blog prefill when the article has no current English translation', async () => {
+    BlogArticle.findById.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: validBlogId,
+        title: 'Color story',
+        contentHtml: '<p>First paragraph.</p><p>Second paragraph.</p>',
+        contentText: 'First paragraph. Second paragraph.',
+        sourceRevision: 3,
+        translations: {
+          en: {
+            title: 'Stale English color story',
+            contentHtml: '<p>Stale English first paragraph.</p>',
+            contentText: 'Stale English first paragraph.',
+            heroImageAlt: 'Stale English alt',
+            sourceRevision: 2,
+            method: 'manual',
+          },
+        },
+      }),
+    });
+
+    const result = await buildBlogNewsletterPrefill(validBlogId);
+
+    expect(result.contentByLocale).toEqual({
+      bg: expect.objectContaining({
+        subject: 'Color story',
+        contentHtml: '<p>First paragraph.</p>',
+      }),
     });
   });
 });
