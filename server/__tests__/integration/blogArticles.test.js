@@ -167,6 +167,9 @@ describe('blog articles integration', () => {
       .get(`/blog-articles/${translated._id}`)
       .query({ locale: 'en' })
       .expect(200);
+    const bgDetailRes = await request(app)
+      .get(`/blog-articles/${translated._id}`)
+      .expect(200);
 
     expect(listRes.body).toEqual([
       expect.objectContaining({
@@ -176,6 +179,7 @@ describe('blog articles integration', () => {
         heroImageAlt: 'English alt',
         seoTitle: 'English SEO',
         seoDescription: 'English description',
+        availableLocales: ['bg', 'en'],
         contentLocale: 'en',
         translationPending: false,
       }),
@@ -189,11 +193,19 @@ describe('blog articles integration', () => {
       contentHtml: '<p>English body.</p>',
       contentText: 'English body.',
       heroImageAlt: 'English alt',
+      availableLocales: ['bg', 'en'],
       contentLocale: 'en',
       translationPending: false,
     });
     expect(detailRes.body).not.toHaveProperty('translations');
     expect(detailRes.body).not.toHaveProperty('sourceRevision');
+    expect(bgDetailRes.body).toMatchObject({
+      _id: String(translated._id),
+      title: 'Source article',
+      availableLocales: ['bg', 'en'],
+    });
+    expect(bgDetailRes.body).not.toHaveProperty('contentLocale');
+    expect(bgDetailRes.body).not.toHaveProperty('translationPending');
 
     await request(app)
       .get(`/blog-articles/${missingTranslation._id}`)

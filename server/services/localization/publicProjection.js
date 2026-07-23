@@ -1,4 +1,5 @@
 const PUBLIC_LOCALES = new Set(['bg', 'en']);
+const SOURCE_LOCALE = 'bg';
 const TARGET_LOCALE = 'en';
 
 export function createPublicLocaleError(message = 'Invalid locale.') {
@@ -124,6 +125,12 @@ function markTranslated(entity) {
   };
 }
 
+function getEntityAvailableLocales(entity, hasValidTargetTranslation) {
+  return hasValidTargetTranslation(entity)
+    ? [SOURCE_LOCALE, TARGET_LOCALE]
+    : [SOURCE_LOCALE];
+}
+
 export function hasValidProductTranslation(product) {
   const translation = readTranslation(product);
 
@@ -194,10 +201,12 @@ export function projectPublicCategory(category, locale = 'bg') {
 
 export function projectPublicProduct(product, locale = 'bg') {
   const publicProduct = stripLocalizationInternals(product);
+  const availableLocales = getEntityAvailableLocales(product, hasValidProductTranslation);
 
   if (!publicProduct || locale !== TARGET_LOCALE) {
     return {
       ...publicProduct,
+      availableLocales,
       category: projectPublicCategory(product?.category, locale),
     };
   }
@@ -206,6 +215,7 @@ export function projectPublicProduct(product, locale = 'bg') {
   const translation = readTranslation(product);
   const baseProduct = {
     ...publicProduct,
+    availableLocales,
     category,
   };
 
@@ -243,9 +253,15 @@ export function projectPublicHomeBanner(banner, locale = 'bg') {
 
 export function projectPublicBlogArticle(article, locale = 'bg', { includeContent = true } = {}) {
   const publicArticle = stripLocalizationInternals(article);
+  const availableLocales = getEntityAvailableLocales(article, hasValidBlogArticleTranslation);
 
   if (!publicArticle || locale !== TARGET_LOCALE) {
-    return publicArticle;
+    return publicArticle
+      ? {
+          ...publicArticle,
+          availableLocales,
+        }
+      : publicArticle;
   }
 
   if (!hasValidBlogArticleTranslation(article)) {
@@ -256,6 +272,7 @@ export function projectPublicBlogArticle(article, locale = 'bg', { includeConten
 
   const translatedArticle = {
     ...publicArticle,
+    availableLocales,
     title: translation.title,
     excerpt: translation.excerpt || '',
     heroImageAlt: translation.heroImageAlt,

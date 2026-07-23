@@ -6,6 +6,7 @@ import { getBlogArticles } from '@/managers/blogArticlesManager';
 import {
   buildBlogArticleJsonLd,
   buildBlogMetadata,
+  shouldRenderBlogArticleJsonLd,
   stringifyJsonLd,
 } from '@/utils/blogSeo';
 
@@ -40,14 +41,18 @@ export default async function BlogArticlePage({ params: paramsPromise }) {
     notFound();
   }
 
-  const articleJsonLd = buildBlogArticleJsonLd(article, articleId, locale);
+  const articleJsonLd = shouldRenderBlogArticleJsonLd(article, locale)
+    ? buildBlogArticleJsonLd(article, articleId, locale)
+    : null;
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(articleJsonLd) }}
-      />
+      {articleJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(articleJsonLd) }}
+        />
+      ) : null}
       <BlogArticleDetails article={article} articles={articles} />
     </>
   );

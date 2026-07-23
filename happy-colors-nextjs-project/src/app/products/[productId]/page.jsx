@@ -8,6 +8,7 @@ import { getReleasedServiceContext } from '@/config/cartoonsFeature';
 import {
   buildProductJsonLd,
   buildProductMetadata,
+  shouldRenderProductJsonLd,
   stringifyJsonLd,
 } from '@/utils/productSeo';
 
@@ -43,14 +44,18 @@ export default async function ProductDetailsPage({ params: paramsPromise, search
     notFound();
   }
 
-  const productJsonLd = buildProductJsonLd(product);
+  const productJsonLd = shouldRenderProductJsonLd(product, locale)
+    ? buildProductJsonLd(product)
+    : null;
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(productJsonLd) }}
-      />
+      {productJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(productJsonLd) }}
+        />
+      ) : null}
       <ProductDetails product={product} serviceContext={serviceContext} />
     </>
   );

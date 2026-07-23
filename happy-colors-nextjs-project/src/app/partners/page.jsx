@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { getLocalizedCanonicalPath } from '@/config/siteSeo';
+import { buildLocalizedAlternates } from '@/config/siteSeo';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getPartnersPageContent } from '@/content/publicPages/partners';
 
@@ -13,9 +13,7 @@ export async function generateMetadata(props = {}) {
 
   return {
     ...content.metadata,
-    alternates: {
-      canonical: getLocalizedCanonicalPath('/partners', locale),
-    },
+    alternates: buildLocalizedAlternates('/partners', locale),
   };
 }
 

@@ -1,7 +1,7 @@
 // happy-colors-nextjs-project/src/app/contacts/page.jsx
 
 import { Suspense } from 'react';
-import { getLocalizedCanonicalPath } from '@/config/siteSeo';
+import { buildLocalizedAlternates } from '@/config/siteSeo';
 import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getDictionary } from '@/i18n/getDictionary';
 import ContactForm from '../../components/contacts/ContactForm';
@@ -20,9 +20,7 @@ export async function generateMetadata(props = {}) {
   return {
     title: contacts.title,
     description: contacts.pageDescription,
-    alternates: {
-      canonical: getLocalizedCanonicalPath('/contacts', locale),
-    },
+    alternates: buildLocalizedAlternates('/contacts', locale),
   };
 }
 

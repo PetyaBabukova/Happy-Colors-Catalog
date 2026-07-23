@@ -153,6 +153,9 @@ describe('products integration', () => {
       .get(`/products/${product._id}`)
       .query({ locale: 'en' })
       .expect(200);
+    const bgDetailRes = await request(app)
+      .get(`/products/${product._id}`)
+      .expect(200);
     const featuredRes = await request(app)
       .get('/products/homepage-featured')
       .query({ locale: 'en' })
@@ -163,6 +166,7 @@ describe('products integration', () => {
         _id: String(product._id),
         title: 'English Lion',
         description: 'English product description',
+        availableLocales: ['bg', 'en'],
         contentLocale: 'en',
         translationPending: false,
         category: expect.objectContaining({
@@ -183,6 +187,14 @@ describe('products integration', () => {
       expect(payload.category).not.toHaveProperty('slugAliases');
       expect(payload.category).not.toHaveProperty('slug');
     }
+    expect(bgDetailRes.body).toMatchObject({
+      _id: String(product._id),
+      title: 'Source Lion',
+      description: 'Source product description',
+      availableLocales: ['bg', 'en'],
+    });
+    expect(bgDetailRes.body).not.toHaveProperty('contentLocale');
+    expect(bgDetailRes.body).not.toHaveProperty('translationPending');
   });
 
   it('does not expose pending draft or review metadata in public product reads', async () => {
@@ -281,6 +293,7 @@ describe('products integration', () => {
     expect(enRes.body[0]).toMatchObject({
       title: 'Bulgarian Only Product',
       description: 'Bulgarian only description',
+      availableLocales: ['bg'],
       contentLocale: 'bg',
       translationPending: true,
       category: expect.objectContaining({
@@ -296,6 +309,7 @@ describe('products integration', () => {
     expect(enRes.body[1]).toMatchObject({
       title: 'Fresh Product Title',
       description: 'Fresh product description',
+      availableLocales: ['bg'],
       contentLocale: 'bg',
       translationPending: true,
       category: expect.objectContaining({
@@ -307,6 +321,7 @@ describe('products integration', () => {
     expect(bgRes.body).toMatchObject({
       title: 'Bulgarian Only Product',
       description: 'Bulgarian only description',
+      availableLocales: ['bg'],
     });
     expect(bgRes.body).not.toHaveProperty('contentLocale');
     expect(bgRes.body).not.toHaveProperty('translationPending');
@@ -500,6 +515,7 @@ describe('products integration', () => {
         _id: String(product._id),
         title: 'Cartoon English Product',
         description: 'Cartoon English description',
+        availableLocales: ['bg', 'en'],
         contentLocale: 'en',
         translationPending: false,
         category: expect.objectContaining({

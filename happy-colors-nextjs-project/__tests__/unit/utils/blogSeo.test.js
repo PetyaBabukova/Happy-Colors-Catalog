@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildBlogArticleJsonLd,
   buildBlogMetadata,
   buildBlogSeoDescription,
   buildBlogSeoTitle,
+  shouldRenderBlogArticleJsonLd,
   stringifyJsonLd,
 } from '@/utils/blogSeo';
 
@@ -22,6 +23,10 @@ const article = {
 };
 
 describe('blogSeo', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('prefers explicit SEO title and description with fallbacks', () => {
     expect(buildBlogSeoTitle(article)).toBe('SEO заглавие');
     expect(buildBlogSeoDescription(article)).toBe('SEO описание.');
@@ -35,6 +40,10 @@ describe('blogSeo', () => {
     expect(metadata.title).toBe('SEO заглавие');
     expect(metadata.description).toBe('SEO описание.');
     expect(metadata.alternates.canonical).toBe('/blog/article-1');
+    expect(metadata.alternates.languages).toEqual({
+      bg: '/blog/article-1',
+      'x-default': '/blog/article-1',
+    });
     expect(metadata.openGraph.type).toBe('article');
     expect(metadata.openGraph.images).toEqual([
       {
@@ -90,5 +99,75 @@ describe('blogSeo', () => {
     ]);
     expect(metadata.twitter.images).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
     expect(jsonLd.image).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
+  });
+  it('adds English article hreflang only for a real English article page', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const metadata = buildBlogMetadata(
+      {
+        ...article,
+        availableLocales: ['bg', 'en'],
+        contentLocale: 'en',
+        translationPending: false,
+      },
+      article._id,
+      'en'
+    );
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/en/blog/article-1',
+      languages: {
+        bg: '/bg/blog/article-1',
+        en: '/en/blog/article-1',
+        'x-default': '/bg/blog/article-1',
+      },
+    });
+  });
+
+  it('adds reciprocal English hreflang for Bulgarian articles with a valid English alternate', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const metadata = buildBlogMetadata(
+      {
+        ...article,
+        availableLocales: ['bg', 'en'],
+      },
+      article._id,
+      'bg'
+    );
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/blog/article-1',
+      languages: {
+        bg: '/bg/blog/article-1',
+        en: '/en/blog/article-1',
+        'x-default': '/bg/blog/article-1',
+      },
+    });
+  });
+
+  it('marks a defensive English blog fallback as noindex with a Bulgarian canonical', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const fallbackArticle = {
+      ...article,
+      availableLocales: ['bg'],
+      contentLocale: 'bg',
+      translationPending: true,
+    };
+
+    const metadata = buildBlogMetadata(fallbackArticle, article._id, 'en');
+
+    expect(shouldRenderBlogArticleJsonLd(fallbackArticle, 'en')).toBe(false);
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/blog/article-1',
+      languages: {
+        bg: '/bg/blog/article-1',
+        'x-default': '/bg/blog/article-1',
+      },
+    });
   });
 });

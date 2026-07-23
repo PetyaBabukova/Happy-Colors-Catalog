@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { getLocalizedCanonicalPath } from '@/config/siteSeo';
+import { buildLocalizedAlternates } from '@/config/siteSeo';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import styles from './faq.module.css';
 
@@ -377,9 +377,7 @@ export async function generateMetadata(props = {}) {
 
   return {
     ...content.metadata,
-    alternates: {
-      canonical: getLocalizedCanonicalPath('/faq', locale),
-    },
+    alternates: buildLocalizedAlternates('/faq', locale),
   };
 }
 

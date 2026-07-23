@@ -133,6 +133,10 @@ describe('productSeo', () => {
 
     expect(metadata.title).toBe('Colorful Candle | Candles');
     expect(metadata.alternates.canonical).toBe('/products/product-1');
+    expect(metadata.alternates.languages).toEqual({
+      bg: '/products/product-1',
+      'x-default': '/products/product-1',
+    });
     expect(metadata.openGraph.type).toBe('video.other');
     expect(metadata.openGraph.videos).toEqual([
       {
@@ -156,6 +160,96 @@ describe('productSeo', () => {
     ]);
     expect(metadata.openGraph).not.toHaveProperty('videos');
     expect(metadata.twitter.images).toEqual(['http://test.local/og/happy-colors-og.png']);
+  });
+
+  it('marks English fallback product metadata as noindex with a Bulgarian canonical', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const {
+      buildProductMetadata,
+      isProductTranslationFallback,
+      shouldRenderProductJsonLd,
+    } = await import('../../../src/utils/productSeo.js');
+    const fallbackProduct = {
+      ...product,
+      contentLocale: 'bg',
+      translationPending: true,
+    };
+
+    const metadata = buildProductMetadata(fallbackProduct, product._id, 'en');
+
+    expect(isProductTranslationFallback(fallbackProduct, 'en')).toBe(true);
+    expect(shouldRenderProductJsonLd(fallbackProduct, 'en')).toBe(false);
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+    expect(metadata.alternates.canonical).toBe('/bg/products/product-1');
+    expect(metadata.alternates.languages).toEqual({
+      bg: '/bg/products/product-1',
+      'x-default': '/bg/products/product-1',
+    });
+    expect(metadata.openGraph.url).toBe('/bg/products/product-1');
+  });
+
+  it('keeps translated English product metadata indexable with an English canonical', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const { buildProductMetadata, shouldRenderProductJsonLd } = await import('../../../src/utils/productSeo.js');
+    const translatedProduct = {
+      ...product,
+      contentLocale: 'en',
+      translationPending: false,
+    };
+
+    const metadata = buildProductMetadata(translatedProduct, product._id, 'en');
+
+    expect(shouldRenderProductJsonLd(translatedProduct, 'en')).toBe(true);
+    expect(metadata).not.toHaveProperty('robots');
+    expect(metadata.alternates.canonical).toBe('/en/products/product-1');
+    expect(metadata.alternates.languages).toEqual({
+      bg: '/bg/products/product-1',
+      en: '/en/products/product-1',
+      'x-default': '/bg/products/product-1',
+    });
+  });
+
+  it('adds reciprocal English hreflang for Bulgarian product metadata with a valid English alternate', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const { buildProductMetadata } = await import('../../../src/utils/productSeo.js');
+    const translatedProduct = {
+      ...product,
+      availableLocales: ['bg', 'en'],
+    };
+
+    const metadata = buildProductMetadata(translatedProduct, product._id, 'bg');
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/products/product-1',
+      languages: {
+        bg: '/bg/products/product-1',
+        en: '/en/products/product-1',
+        'x-default': '/bg/products/product-1',
+      },
+    });
+  });
+
+  it('omits English hreflang for Bulgarian product metadata without a valid English alternate', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const { buildProductMetadata } = await import('../../../src/utils/productSeo.js');
+    const untranslatedProduct = {
+      ...product,
+      availableLocales: ['bg'],
+    };
+
+    const metadata = buildProductMetadata(untranslatedProduct, product._id, 'bg');
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/products/product-1',
+      languages: {
+        bg: '/bg/products/product-1',
+        'x-default': '/bg/products/product-1',
+      },
+    });
   });
 
   it('escapes unsafe JSON-LD characters', async () => {

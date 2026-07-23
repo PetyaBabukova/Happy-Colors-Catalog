@@ -7,7 +7,7 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { getLocalizedCanonicalPath } from '@/config/siteSeo';
+import { buildLocalizedAlternates } from '@/config/siteSeo';
 import { getAboutPageContent } from '@/content/publicPages/about';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import styles from './about.module.css';
@@ -69,9 +69,7 @@ export async function generateMetadata(props = {}) {
 
   return {
     ...content.metadata,
-    alternates: {
-      canonical: getLocalizedCanonicalPath('/aboutus', params?.locale),
-    },
+    alternates: buildLocalizedAlternates('/aboutus', params?.locale),
   };
 }
 

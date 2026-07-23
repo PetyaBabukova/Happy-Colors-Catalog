@@ -29,7 +29,73 @@ describe('siteSeo', () => {
       title: 'Shop',
       description: 'Products',
       robots: { index: true, follow: true },
-      alternates: { canonical: '/products' },
+      alternates: {
+        canonical: '/products',
+        languages: {
+          bg: '/products',
+          'x-default': '/products',
+        },
+      },
+    });
+  });
+
+  it('builds localized language alternates only for enabled public locales', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    expect(siteSeo.buildLocalizedAlternates('/products', 'en')).toEqual({
+      canonical: '/en/products',
+      languages: {
+        bg: '/bg/products',
+        en: '/en/products',
+        'x-default': '/bg/products',
+      },
+    });
+  });
+
+  it('omits English hreflang while the English public locale is disabled', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'false');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    expect(siteSeo.buildLocalizedAlternates('/products', 'bg')).toEqual({
+      canonical: '/bg/products',
+      languages: {
+        bg: '/bg/products',
+        'x-default': '/bg/products',
+      },
+    });
+  });
+
+  it('filters explicit English alternates while the English public locale is disabled', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'false');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    expect(siteSeo.buildLocalizedLanguageAlternates('/products/product-1', {
+      enabledLocales: ['bg', 'en'],
+    })).toEqual({
+      bg: '/bg/products/product-1',
+      'x-default': '/bg/products/product-1',
+    });
+  });
+
+  it('filters unsupported alternates and can omit x-default', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    expect(siteSeo.buildLocalizedLanguageAlternates('/blog', {
+      enabledLocales: ['bg', 'fr', 'en'],
+      includeXDefault: false,
+    })).toEqual({
+      bg: '/bg/blog',
+      en: '/en/blog',
     });
   });
 

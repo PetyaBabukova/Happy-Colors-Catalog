@@ -1,8 +1,9 @@
 import {
+  buildLocalizedAlternates,
   currentSiteUrl,
-  getLocalizedCanonicalPath,
   SITE_OG_IMAGE_PATH,
 } from '@/config/siteSeo';
+import { DEFAULT_LOCALE } from '@/i18n/config';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 
 function absoluteUrl(url) {
@@ -57,6 +58,26 @@ export function buildProductSeoTitle(product) {
   return [product.title, product.category?.name].filter(Boolean).join(' | ');
 }
 
+export function isProductTranslationFallback(product, locale) {
+  return locale === 'en' && product?.contentLocale === DEFAULT_LOCALE && product?.translationPending === true;
+}
+
+export function shouldRenderProductJsonLd(product, locale) {
+  return !isProductTranslationFallback(product, locale);
+}
+
+function getProductAlternateLocales(product, locale, isFallback) {
+  if (isFallback) {
+    return [DEFAULT_LOCALE];
+  }
+
+  if (Array.isArray(product?.availableLocales) && product.availableLocales.length > 0) {
+    return product.availableLocales;
+  }
+
+  return locale === 'en' ? [DEFAULT_LOCALE, 'en'] : [DEFAULT_LOCALE];
+}
+
 export function buildProductJsonLd(product) {
   const imageUrls = normalizeImageUrls(product).map(absoluteUrl);
   const videos = normalizeProductVideosForSeo(product.videos);
@@ -108,7 +129,14 @@ export function stringifyJsonLd(value) {
 export function buildProductMetadata(product, productId, locale) {
   const title = buildProductSeoTitle(product);
   const description = buildProductSeoDescription(product);
-  const canonicalPath = getLocalizedCanonicalPath(`/products/${productId}`, locale);
+  const isFallback = isProductTranslationFallback(product, locale);
+  const productPath = `/products/${productId}`;
+  const alternates = buildLocalizedAlternates(
+    productPath,
+    isFallback ? DEFAULT_LOCALE : locale,
+    { enabledLocales: getProductAlternateLocales(product, locale, isFallback) }
+  );
+  const canonicalPath = alternates.canonical;
   const imageUrls = normalizeImageUrls(product).map(absoluteUrl);
   const videos = normalizeProductVideosForSeo(product.videos);
   const posterUrls = videos.map((video) => absoluteUrl(video.posterUrl));
@@ -120,9 +148,15 @@ export function buildProductMetadata(product, productId, locale) {
   return {
     title,
     description,
-    alternates: {
-      canonical: canonicalPath,
-    },
+    ...(isFallback
+      ? {
+          robots: {
+            index: false,
+            follow: true,
+          },
+        }
+      : {}),
+    alternates,
     openGraph: {
       title,
       description,

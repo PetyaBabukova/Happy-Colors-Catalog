@@ -1,6 +1,6 @@
 import BlogArticleDetails from '@/components/blog/BlogArticleDetails';
 import { getBlogPageContent } from '@/content/publicPages/blog';
-import { getLocalizedCanonicalPath } from '@/config/siteSeo';
+import { buildLocalizedAlternates } from '@/config/siteSeo';
 import { getBlogArticle } from '@/lib/getBlogArticle';
 import { getBlogArticles } from '@/managers/blogArticlesManager';
 import styles from '@/components/blog/blogPublic.module.css';
@@ -14,9 +14,7 @@ export async function generateMetadata(props = {}) {
 
   return {
     ...content.metadata,
-    alternates: {
-      canonical: getLocalizedCanonicalPath('/blog', locale),
-    },
+    alternates: buildLocalizedAlternates('/blog', locale),
   };
 }
 

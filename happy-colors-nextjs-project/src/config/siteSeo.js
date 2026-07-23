@@ -2,6 +2,7 @@
 
 import {
   DEFAULT_LOCALE,
+  getEnabledPublicLocales,
   isLocaleRoutingEnabled,
   isSupportedLocale,
   normalizeLocale,
@@ -65,12 +66,16 @@ export const metadataBaseUrl = new URL(
 
 export { PROD_SITE_URL };
 
+function normalizeCanonicalPath(path) {
+  const normalizedPath = String(path || '/');
+
+  return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+}
+
 export function getLocalizedCanonicalPath(path, locale = DEFAULT_LOCALE) {
   const requestedLocale = normalizeLocale(locale || DEFAULT_LOCALE);
   const normalizedLocale = isSupportedLocale(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
-  const normalizedPath = String(path || '/').startsWith('/')
-    ? String(path || '/')
-    : `/${String(path || '/')}`;
+  const normalizedPath = normalizeCanonicalPath(path);
 
   if (isLocaleRoutingEnabled()) {
     return localizePath(normalizedPath, normalizedLocale);
@@ -79,6 +84,36 @@ export function getLocalizedCanonicalPath(path, locale = DEFAULT_LOCALE) {
   return normalizedLocale === DEFAULT_LOCALE
     ? normalizedPath
     : localizePath(normalizedPath, normalizedLocale);
+}
+
+export function buildLocalizedLanguageAlternates(path, {
+  enabledLocales = getEnabledPublicLocales(),
+  includeXDefault = true,
+} = {}) {
+  const normalizedPath = normalizeCanonicalPath(path);
+  const publicEnabledLocales = new Set(getEnabledPublicLocales());
+  const languages = {};
+
+  for (const locale of enabledLocales) {
+    const normalizedLocale = normalizeLocale(locale);
+
+    if (isSupportedLocale(normalizedLocale) && publicEnabledLocales.has(normalizedLocale)) {
+      languages[normalizedLocale] = getLocalizedCanonicalPath(normalizedPath, normalizedLocale);
+    }
+  }
+
+  if (includeXDefault) {
+    languages['x-default'] = getLocalizedCanonicalPath(normalizedPath, DEFAULT_LOCALE);
+  }
+
+  return languages;
+}
+
+export function buildLocalizedAlternates(path, locale = DEFAULT_LOCALE, options = {}) {
+  return {
+    canonical: getLocalizedCanonicalPath(path, locale),
+    languages: buildLocalizedLanguageAlternates(path, options),
+  };
 }
 
 export function buildPageMetadata({
@@ -99,9 +134,7 @@ export function buildPageMetadata({
     },
     ...(canIndexThisPage && path
       ? {
-          alternates: {
-            canonical: getLocalizedCanonicalPath(path, locale),
-          },
+          alternates: buildLocalizedAlternates(path, locale),
         }
       : {}),
   };

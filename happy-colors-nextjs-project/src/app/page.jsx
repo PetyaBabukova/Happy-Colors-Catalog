@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import ProductCard from './products/ProductCard';
 import HomeHeroCarousel from '@/components/home-banners/HomeHeroCarousel';
-import { getLocalizedCanonicalPath } from '@/config/siteSeo';
+import { buildLocalizedAlternates } from '@/config/siteSeo';
 import { getHomePageContent } from '@/content/publicPages/home';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getHomeBanners } from '@/managers/homeBannersManager';
@@ -16,9 +16,7 @@ export async function generateMetadata(props = {}) {
 
   return {
     ...content.metadata,
-    alternates: {
-      canonical: getLocalizedCanonicalPath('/', locale),
-    },
+    alternates: buildLocalizedAlternates('/', locale),
   };
 }
 
