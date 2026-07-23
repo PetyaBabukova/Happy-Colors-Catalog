@@ -29,6 +29,8 @@
     "cleanup:cartoon-uploads": "node scripts/cleanupCartoonOrderUploads.js",
     "cleanup:cartoon-uploads:daily": "node scripts/cleanupCartoonOrderUploads.js --mode=daily",
     "cleanup:cartoon-uploads:weekly-recordless": "node scripts/cleanupCartoonOrderUploads.js --mode=weekly-recordless",
+    "estimate:translations": "node scripts/estimateOpenAiTranslationCosts.js",
+    "report:english-launch-readiness": "node scripts/reportEnglishLaunchReadiness.js",
     "test:ci": "npm run test:server:ci && npm run test:frontend:ci"
   },
   "dependencies": {

@@ -136,6 +136,138 @@ describe('sitemap', () => {
     expect(entries.map((entry) => entry.url)).toContain('https://happycolors.eu/cartoons');
   });
 
+  it('emits localized sitemap entries and includes English dynamic URLs only for translated content', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
+              _id: 'translated-product',
+              updatedAt: '2026-05-01T12:00:00.000Z',
+              availableLocales: ['bg', 'en'],
+            },
+            {
+              _id: 'fallback-product',
+              updatedAt: '2026-05-02T12:00:00.000Z',
+              availableLocales: ['bg'],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
+              _id: 'translated-blog',
+              publishedAt: '2026-05-03T12:00:00.000Z',
+              availableLocales: ['bg', 'en'],
+            },
+            {
+              _id: 'bg-only-blog',
+              publishedAt: '2026-05-04T12:00:00.000Z',
+              availableLocales: ['bg'],
+            },
+          ],
+        })
+    );
+
+    const { default: sitemap } = await import('../../../src/app/sitemap.js');
+    const entries = await sitemap();
+    const urls = entries.map((entry) => entry.url);
+
+    expect(urls).toContain('https://happycolors.eu/bg');
+    expect(urls).toContain('https://happycolors.eu/en');
+    expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
+    expect(urls).toContain('https://happycolors.eu/en/products/translated-product');
+    expect(urls).toContain('https://happycolors.eu/bg/products/fallback-product');
+    expect(urls).not.toContain('https://happycolors.eu/en/products/fallback-product');
+    expect(urls).toContain('https://happycolors.eu/bg/blog/translated-blog');
+    expect(urls).toContain('https://happycolors.eu/en/blog/translated-blog');
+    expect(urls).toContain('https://happycolors.eu/bg/blog/bg-only-blog');
+    expect(urls).not.toContain('https://happycolors.eu/en/blog/bg-only-blog');
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/en/products/translated-product')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/products/translated-product',
+          en: 'https://happycolors.eu/en/products/translated-product',
+          'x-default': 'https://happycolors.eu/bg/products/translated-product',
+        },
+      },
+    });
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/bg/products/fallback-product')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/products/fallback-product',
+          'x-default': 'https://happycolors.eu/bg/products/fallback-product',
+        },
+      },
+    });
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/en')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg',
+          en: 'https://happycolors.eu/en',
+          'x-default': 'https://happycolors.eu/bg',
+        },
+      },
+    });
+  });
+
+  it('emits only Bulgarian localized sitemap entries when English is disabled', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'false');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
+              _id: 'translated-product',
+              updatedAt: '2026-05-01T12:00:00.000Z',
+              availableLocales: ['bg', 'en'],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
+              _id: 'translated-blog',
+              publishedAt: '2026-05-03T12:00:00.000Z',
+              availableLocales: ['bg', 'en'],
+            },
+          ],
+        })
+    );
+
+    const { default: sitemap } = await import('../../../src/app/sitemap.js');
+    const entries = await sitemap();
+    const urls = entries.map((entry) => entry.url);
+
+    expect(urls).toContain('https://happycolors.eu/bg');
+    expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
+    expect(urls).toContain('https://happycolors.eu/bg/blog/translated-blog');
+    expect(urls.some((url) => url.includes('https://happycolors.eu/en'))).toBe(false);
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/bg/products/translated-product')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/products/translated-product',
+          'x-default': 'https://happycolors.eu/bg/products/translated-product',
+        },
+      },
+    });
+  });
+
   it('falls back to static entries when dynamic sitemap fetches fail', async () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
