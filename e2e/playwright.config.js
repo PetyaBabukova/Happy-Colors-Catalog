@@ -11,6 +11,15 @@ dotenv.config({ path: path.resolve(repoRoot, '.env.test') });
 
 const port = Number(process.env.PORT || 3100);
 const baseURL = process.env.E2E_BASE_URL || `http://127.0.0.1:${port}`;
+const catalogMode = process.env.CATALOG_MODE || 'false';
+const publicCatalogMode = process.env.NEXT_PUBLIC_CATALOG_MODE || catalogMode;
+const localeRoutesEnabled = process.env.NEXT_PUBLIC_LOCALE_ROUTES_ENABLED || 'true';
+const englishLocaleEnabled = process.env.NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED || 'true';
+
+process.env.CATALOG_MODE = catalogMode;
+process.env.NEXT_PUBLIC_CATALOG_MODE = publicCatalogMode;
+process.env.NEXT_PUBLIC_LOCALE_ROUTES_ENABLED = localeRoutesEnabled;
+process.env.NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED = englishLocaleEnabled;
 
 export default defineConfig({
   testDir: './tests',
@@ -45,9 +54,10 @@ export default defineConfig({
       ...process.env,
       NODE_ENV: 'test',
       PORT: String(port),
-      CATALOG_MODE: process.env.CATALOG_MODE || 'false',
-      NEXT_PUBLIC_CATALOG_MODE:
-        process.env.NEXT_PUBLIC_CATALOG_MODE || process.env.CATALOG_MODE || 'false',
+      CATALOG_MODE: catalogMode,
+      NEXT_PUBLIC_CATALOG_MODE: publicCatalogMode,
+      NEXT_PUBLIC_LOCALE_ROUTES_ENABLED: localeRoutesEnabled,
+      NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED: englishLocaleEnabled,
       NEXT_PUBLIC_SITE_URL: baseURL,
       RENDER_EXTERNAL_URL: baseURL,
       CLIENT_URL: baseURL,

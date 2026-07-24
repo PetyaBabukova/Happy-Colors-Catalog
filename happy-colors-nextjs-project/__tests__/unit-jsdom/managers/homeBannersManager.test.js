@@ -90,6 +90,36 @@ describe('homeBannersManager', () => {
     );
   });
 
+  it('threads Bulgarian and English banner locales into distinct URLs', async () => {
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: [banner] }))
+      .mockResolvedValueOnce(jsonResponse({ body: [banner] }));
+
+    await expect(getHomeBanners({ locale: 'bg' })).resolves.toEqual([banner]);
+    await expect(getHomeBanners({ locale: 'en' })).resolves.toEqual([banner]);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/home-banners?locale=bg',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['home-banners'],
+        },
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/home-banners?locale=en',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['home-banners'],
+        },
+      })
+    );
+  });
+
   it('returns an empty list when banner loading fails', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 

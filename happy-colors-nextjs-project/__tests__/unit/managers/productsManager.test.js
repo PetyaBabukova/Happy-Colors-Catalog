@@ -104,6 +104,37 @@ describe('productsManager', () => {
     );
   });
 
+  it('threads Bulgarian and English homepage product locales into distinct URLs', async () => {
+    const products = [{ _id: 'product-1', title: 'Featured' }];
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: products }))
+      .mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getHomepageFeaturedProducts({ locale: 'bg' })).resolves.toEqual(products);
+    await expect(getHomepageFeaturedProducts({ locale: 'en' })).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/products/homepage-featured?locale=bg',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'homepage-featured-products'],
+        },
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3000/api/products/homepage-featured?locale=en',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'homepage-featured-products'],
+        },
+      })
+    );
+  });
+
   it('loads homepage featured and cartoon gallery products without locale params', async () => {
     const products = [{ _id: 'product-1', title: 'Featured' }];
     fetch

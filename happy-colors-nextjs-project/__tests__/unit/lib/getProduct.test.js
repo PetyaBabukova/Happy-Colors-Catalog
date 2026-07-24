@@ -60,6 +60,30 @@ describe('getProduct', () => {
     });
   });
 
+  it('threads Bulgarian and English product detail locales into distinct URLs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ _id: 'product-1' }),
+      }))
+    );
+
+    const { getProduct } = await import('../../../src/lib/getProduct.js');
+
+    await expect(getProduct('product-1', { locale: 'bg' })).resolves.toEqual({ _id: 'product-1' });
+    await expect(getProduct('product-1', { locale: 'en' })).resolves.toEqual({ _id: 'product-1' });
+
+    expect(fetch).toHaveBeenNthCalledWith(1, 'https://api.happycolors.eu/api/products/product-1?locale=bg', {
+      cache: 'no-store',
+      headers: { Cookie: 'auth_token=test-token' },
+    });
+    expect(fetch).toHaveBeenNthCalledWith(2, 'https://api.happycolors.eu/api/products/product-1?locale=en', {
+      cache: 'no-store',
+      headers: { Cookie: 'auth_token=test-token' },
+    });
+  });
+
   it('returns null for non-ok responses', async () => {
     vi.stubGlobal(
       'fetch',
