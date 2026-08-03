@@ -1,9 +1,13 @@
 import { defineConfig } from 'vitest/config';
+import { loadTestEnv } from '../scripts/loadTestEnv.js';
+
+loadTestEnv();
 
 const enforceCoverage = process.env.CI_COVERAGE === 'true';
 
 export default defineConfig({
   test: {
+    unstubEnvs: true,
     restoreMocks: true,
     coverage: {
       provider: 'v8',

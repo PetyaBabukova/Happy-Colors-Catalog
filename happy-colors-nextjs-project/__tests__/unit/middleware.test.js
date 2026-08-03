@@ -60,31 +60,32 @@ describe('middleware public locale redirects', () => {
     });
   });
 
-  it('prefixes public legacy routes with the default locale when locale routing is enabled', () => {
+  it('permanently redirects public legacy routes to Bulgarian regardless of locale preferences', () => {
     expect(
       resolvePublicLocaleRedirect({
         pathname: '/faq',
         search: '?q=delivery&unsafe=ignored',
         localeRoutingEnabled: true,
         englishEnabled: true,
+        savedLocale: 'en',
+        countryCode: 'US',
       })
     ).toEqual({
       pathname: '/bg/faq',
       search: '?q=delivery',
-      status: 307,
-      headers: {
-        'Cache-Control': 'private, max-age=0, no-store',
-      },
+      status: 308,
+      headers: {},
     });
   });
 
-  it('redirects the root path to Bulgarian when locale routing is enabled', () => {
+  it('selects the root locale from saved choice, country, then Bulgarian fallback', () => {
     expect(
       resolvePublicLocaleRedirect({
         pathname: '/',
         search: '',
         localeRoutingEnabled: true,
         englishEnabled: true,
+        countryCode: 'BG',
       })
     ).toEqual({
       pathname: '/bg',
@@ -92,7 +93,72 @@ describe('middleware public locale redirects', () => {
       status: 307,
       headers: {
         'Cache-Control': 'private, max-age=0, no-store',
+        Vary: 'Cookie, CF-IPCountry, X-Vercel-IP-Country, CloudFront-Viewer-Country',
       },
+    });
+
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/',
+        search: '',
+        localeRoutingEnabled: true,
+        englishEnabled: true,
+        countryCode: 'US',
+      })
+    ).toEqual({
+      pathname: '/en',
+      search: '',
+      status: 307,
+      headers: {
+        'Cache-Control': 'private, max-age=0, no-store',
+        Vary: 'Cookie, CF-IPCountry, X-Vercel-IP-Country, CloudFront-Viewer-Country',
+      },
+    });
+
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/',
+        localeRoutingEnabled: true,
+        englishEnabled: true,
+        savedLocale: 'bg',
+        countryCode: 'US',
+      })
+    ).toEqual({
+      pathname: '/bg',
+      search: '',
+      status: 307,
+      headers: {
+        'Cache-Control': 'private, max-age=0, no-store',
+        Vary: 'Cookie, CF-IPCountry, X-Vercel-IP-Country, CloudFront-Viewer-Country',
+      },
+    });
+
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/',
+        localeRoutingEnabled: true,
+        englishEnabled: true,
+        savedLocale: 'fr',
+        countryCode: '',
+      })
+    ).toMatchObject({
+      pathname: '/bg',
+      status: 307,
+    });
+  });
+
+  it('never negotiates English while the English locale is disabled', () => {
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/',
+        localeRoutingEnabled: true,
+        englishEnabled: false,
+        savedLocale: 'en',
+        countryCode: 'US',
+      })
+    ).toMatchObject({
+      pathname: '/bg',
+      status: 307,
     });
   });
 
@@ -182,6 +248,61 @@ describe('middleware public locale redirects', () => {
 });
 
 describe('middleware public locale integration', () => {
+  it('reads root negotiation inputs without applying them to explicit localized URLs', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const rootRequest = new NextRequest('http://localhost:3000/', {
+      headers: {
+        'accept-language': 'en-US,en;q=0.9',
+        cookie: 'happycolors_locale=bg',
+        'cf-ipcountry': 'US',
+      },
+    });
+    const rootResponse = middleware(rootRequest);
+
+    expect(rootResponse.headers.get('location')).toBe('http://localhost:3000/bg');
+    expect(rootResponse.headers.get('Cache-Control')).toBe('private, max-age=0, no-store');
+    expect(rootResponse.headers.get('Vary')).toBe(
+      'Cookie, CF-IPCountry, X-Vercel-IP-Country, CloudFront-Viewer-Country'
+    );
+
+    const invalidCookieResponse = middleware(
+      new NextRequest('http://localhost:3000/', {
+        headers: {
+          'accept-language': 'en-US,en;q=0.9',
+          cookie: 'happycolors_locale=fr',
+          'cf-ipcountry': 'US',
+        },
+      })
+    );
+
+    expect(invalidCookieResponse.headers.get('location')).toBe('http://localhost:3000/en');
+
+    const unknownCountryResponse = middleware(
+      new NextRequest('http://localhost:3000/', {
+        headers: {
+          'accept-language': 'en-US,en;q=0.9',
+        },
+      })
+    );
+
+    expect(unknownCountryResponse.headers.get('location')).toBe('http://localhost:3000/bg');
+
+    const explicitResponse = middleware(
+      new NextRequest('http://localhost:3000/bg/products', {
+        headers: {
+          'accept-language': 'en-US,en;q=0.9',
+          cookie: 'happycolors_locale=en',
+          'cf-ipcountry': 'US',
+        },
+      })
+    );
+
+    expect(explicitResponse.headers.get('location')).toBeNull();
+    expect(explicitResponse.headers.get(`x-middleware-request-${LOCALE_REQUEST_HEADER}`)).toBe('bg');
+  });
+
   it('sets no-store token-page headers and injects the enabled path locale into request headers', () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');

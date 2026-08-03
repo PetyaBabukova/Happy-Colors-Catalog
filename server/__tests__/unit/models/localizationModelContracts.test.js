@@ -232,6 +232,25 @@ describe('localization model contracts', () => {
     expectInvalidPath(invalidBanner, 'translationDrafts');
   });
 
+  it('supports empty translation copy for image-only cartoon banners', () => {
+    const banner = buildHomeBanner({
+      placement: 'cartoons',
+      title: '',
+      description: '',
+      ctaLabel: '',
+      ctaHref: '',
+      translations: {
+        en: bannerTranslation({
+          title: '',
+          description: '',
+          ctaLabel: '',
+        }),
+      },
+    });
+
+    expectValid(banner);
+  });
+
   it('captures preferred subscriber locale and pending language preference state', () => {
     const subscriber = new NewsletterSubscriber({
       email: 'subscriber@example.com',

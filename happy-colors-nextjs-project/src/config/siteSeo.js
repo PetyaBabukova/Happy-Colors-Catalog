@@ -5,6 +5,7 @@ import {
   getEnabledPublicLocales,
   isLocaleRoutingEnabled,
   isSupportedLocale,
+  LOCALE_DETAILS,
   normalizeLocale,
 } from '@/i18n/config';
 import { localizePath } from '@/i18n/routing';
@@ -116,14 +117,53 @@ export function buildLocalizedAlternates(path, locale = DEFAULT_LOCALE, options 
   };
 }
 
+function getMetadataLocale(locale = DEFAULT_LOCALE) {
+  const normalizedLocale = normalizeLocale(locale);
+
+  return isSupportedLocale(normalizedLocale) ? normalizedLocale : DEFAULT_LOCALE;
+}
+
+function getMetadataTitleText(title) {
+  if (typeof title === 'string') {
+    return title;
+  }
+
+  return title?.absolute || title?.default || 'Happy Colors';
+}
+
+export function getOpenGraphLocale(locale = DEFAULT_LOCALE) {
+  return LOCALE_DETAILS[getMetadataLocale(locale)].intlLocale.replace('-', '_');
+}
+
+export function getOpenGraphAlternateLocales(locale = DEFAULT_LOCALE, {
+  enabledLocales = getEnabledPublicLocales(),
+} = {}) {
+  const currentLocale = getMetadataLocale(locale);
+  const publicEnabledLocales = new Set(getEnabledPublicLocales());
+
+  return enabledLocales
+    .map(getMetadataLocale)
+    .filter((candidate, index, locales) => (
+      candidate !== currentLocale &&
+      publicEnabledLocales.has(candidate) &&
+      locales.indexOf(candidate) === index
+    ))
+    .map(getOpenGraphLocale);
+}
+
 export function buildPageMetadata({
   title,
   description,
   path,
   locale = DEFAULT_LOCALE,
   indexable = true,
+  image = SITE_OG_IMAGE_PATH,
+  imageAlt,
 }) {
   const canIndexThisPage = shouldIndexSite && indexable;
+  const titleText = getMetadataTitleText(title);
+  const alternateLocale = getOpenGraphAlternateLocales(locale);
+  const canonicalPath = path ? getLocalizedCanonicalPath(path, locale) : '';
 
   return {
     title,
@@ -135,6 +175,27 @@ export function buildPageMetadata({
     ...(canIndexThisPage && path
       ? {
           alternates: buildLocalizedAlternates(path, locale),
+          openGraph: {
+            title: titleText,
+            description,
+            type: 'website',
+            url: canonicalPath,
+            siteName: 'Happy Colors',
+            locale: getOpenGraphLocale(locale),
+            ...(alternateLocale.length ? { alternateLocale } : {}),
+            images: [
+              {
+                url: image,
+                alt: imageAlt || titleText,
+              },
+            ],
+          },
+          twitter: {
+            card: 'summary_large_image',
+            title: titleText,
+            description,
+            images: [image],
+          },
         }
       : {}),
   };

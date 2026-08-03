@@ -10,6 +10,9 @@ vi.mock('@/app/products/Shop', () => ({
 
 describe('ProductsPage metadata', () => {
   it('generates English catalog metadata for localized product listing routes', async () => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu/');
+
     const { generateMetadata } = await import('@/app/products/page');
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
 

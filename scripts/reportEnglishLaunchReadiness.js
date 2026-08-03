@@ -115,7 +115,10 @@ function validateActiveTranslation({ entity, config, locale }) {
   }
 
   try {
-    config.normalizeTranslation(pickTranslationFields(active, config.translationFields));
+    config.normalizeTranslation(
+      pickTranslationFields(active, config.translationFields),
+      { entity }
+    );
   } catch (error) {
     return {
       status: 'invalid',
@@ -157,6 +160,7 @@ function buildProjection(config) {
     'canonicalSlug',
     'canonicalSlugReviewed',
     'placement',
+    ...(config.entityType === BANNER_ENTITY_TYPE ? config.sourceFields || [] : []),
   ];
 
   return Object.fromEntries(fields.map((field) => [field, 1]));

@@ -3,6 +3,7 @@ import {
   defaultCatalogPath,
   englishCatalogPath,
   englishLocaleEnabled,
+  getSeededProductCard,
   localeRoutesEnabled,
 } from './helpers/shop.js';
 
@@ -25,7 +26,9 @@ test('English products listing shows seeded product as explicit fallback @smoke 
 
   await expect(page.locator('body')).not.toContainText('Application error');
   await expect(page.getByText('E2E Smoke Product')).toBeVisible();
-  await expect(page.getByText('Translation pending')).toBeVisible();
+  await expect(
+    getSeededProductCard(page).getByText('Translation pending', { exact: true })
+  ).toBeVisible();
 });
 
 test('Bulgarian product details load from listing @smoke @products @localized', async ({ page }) => {
@@ -51,7 +54,9 @@ test('English product details show seeded product as explicit fallback @smoke @p
 
   await expect(page).toHaveURL(/\/en\/products\/[a-f0-9]{24}$/);
   await expect(page.getByRole('heading', { name: /E2E Smoke Product/ })).toBeVisible();
-  await expect(page.getByText('Translation pending')).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText('Translation pending', { exact: true })
+  ).toBeVisible();
 });
 
 test.describe('owner product controls', () => {

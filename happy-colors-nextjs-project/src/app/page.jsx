@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import ProductCard from './products/ProductCard';
 import HomeHeroCarousel from '@/components/home-banners/HomeHeroCarousel';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { getHomePageContent } from '@/content/publicPages/home';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getHomeBanners } from '@/managers/homeBannersManager';
@@ -14,10 +14,11 @@ export async function generateMetadata(props = {}) {
   const locale = params?.locale;
   const content = getHomePageContent(locale);
 
-  return {
+  return buildPageMetadata({
     ...content.metadata,
-    alternates: buildLocalizedAlternates('/', locale),
-  };
+    path: '/',
+    locale,
+  });
 }
 
 export default async function Home(props = {}) {

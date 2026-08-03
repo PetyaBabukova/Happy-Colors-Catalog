@@ -9,14 +9,23 @@ export const metadata = {
   },
 };
 
-export default function TranslationsPage() {
+export default async function TranslationsPage({ searchParams }) {
+  const resolvedSearchParams = await searchParams;
+  const targetEntityType =
+    typeof resolvedSearchParams?.entityType === 'string' ? resolvedSearchParams.entityType : '';
+  const targetEntityId =
+    typeof resolvedSearchParams?.entityId === 'string' ? resolvedSearchParams.entityId : '';
+
   return (
     <RequireAuth
       message="Трябва да сте логнати, за да управлявате EN преводите."
       requiredRole="full_admin"
       roleMessage="Тази страница е достъпна само за full admin потребители."
     >
-      <TranslationsClientPage />
+      <TranslationsClientPage
+        targetEntityType={targetEntityType}
+        targetEntityId={targetEntityId}
+      />
     </RequireAuth>
   );
 }

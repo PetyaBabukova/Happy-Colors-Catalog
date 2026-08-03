@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getPartnersPageContent } from '@/content/publicPages/partners';
 
@@ -11,10 +11,11 @@ export async function generateMetadata(props = {}) {
   const locale = params?.locale;
   const content = getPartnersPageContent(locale);
 
-  return {
+  return buildPageMetadata({
     ...content.metadata,
-    alternates: buildLocalizedAlternates('/partners', locale),
-  };
+    path: '/partners',
+    locale,
+  });
 }
 
 export default async function Partners(props = {}) {

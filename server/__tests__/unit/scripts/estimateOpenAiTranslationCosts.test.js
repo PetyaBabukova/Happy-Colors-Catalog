@@ -173,9 +173,9 @@ describe('estimateOpenAiTranslationCosts script', () => {
     });
 
     expect(result.totals.pendingOnly.estimatedUsd).toEqual({
-      'gpt-5': 0.00067,
-      'gpt-5-mini': 0.000134,
-      'gpt-5-nano': 0.000027,
+      'gpt-5.6-sol': 0.00233,
+      'gpt-5.6-terra': 0.001165,
+      'gpt-5.6-luna': 0.000466,
     });
   });
 
@@ -191,6 +191,7 @@ describe('estimateOpenAiTranslationCosts script', () => {
   });
 
   it('does not load env files and fails before connecting when MONGO_URI is absent', async () => {
+    vi.stubEnv('MONGO_URI', '');
     const stderr = vi.fn();
     const { runEstimateOpenAiTranslationCostsCli } = await loadScript();
 

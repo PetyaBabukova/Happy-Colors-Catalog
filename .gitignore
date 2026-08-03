@@ -32,6 +32,7 @@ docs/
 test-results/
 playwright-report/
 e2e/.auth/
+.playwright-cache/
 
 # nyc test coverage
 .nyc_output
@@ -151,5 +152,7 @@ dist
 .env.local
 !.env.example
 *.json
+!happy-colors-nextjs-project/src/i18n/dictionaries/*.json
 !/package.json
 !/package-lock.json
+.env.*

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import LocalizedLayout from '@/app/(localized)/[locale]/layout';
+import LocalizedLayout, { generateMetadata } from '@/app/(localized)/[locale]/layout';
 
 describe('LocalizedLayout', () => {
   it('404s localized routes while locale routing is disabled', async () => {
@@ -48,6 +48,31 @@ describe('LocalizedLayout', () => {
     render(element);
 
     expect(screen.getByText('English content')).toBeInTheDocument();
+  });
+
+  it('provides English default metadata and a language-neutral title suffix', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ locale: 'en' }),
+    });
+
+    expect(metadata.title).toEqual({
+      default: 'Handmade Crochet Toys, Accessories, And Home Decor | Happy Colors',
+      template: '%s | Happy Colors',
+    });
+    expect(metadata.description).not.toMatch(/[А-Яа-я]/);
+  });
+
+  it('keeps the Bulgarian title suffix for Bulgarian localized routes', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ locale: 'bg' }),
+    });
+
+    expect(metadata.title.template).toBe('%s | Happy Colors | Хепи Колорс');
   });
 
   it('404s unsupported locale segments', async () => {

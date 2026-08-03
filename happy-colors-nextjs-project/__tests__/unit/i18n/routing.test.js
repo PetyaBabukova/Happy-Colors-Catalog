@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPathLocale,
+  getRequestCountryCode,
   isExternalHref,
   filterPublicSearchParams,
   localizeInternalHref,
   localizePath,
   localizePublicHref,
-  negotiateLocale,
-  parseAcceptLanguage,
   replacePathLocale,
+  selectLocaleForCountry,
   stripPathLocale,
   switchPublicLocaleHref,
 } from '../../../src/i18n/routing';
@@ -71,26 +71,16 @@ describe('i18n routing helpers', () => {
     expect(() => localizePath('/products', 'fr')).toThrow(/Unsupported locale/);
   });
 
-  it('parses Accept-Language q-values in preference order', () => {
-    expect(parseAcceptLanguage('en-US,en;q=0.8,bg;q=0.9')).toEqual([
-      { range: 'en-us', quality: 1, index: 0 },
-      { range: 'bg', quality: 0.9, index: 2 },
-      { range: 'en', quality: 0.8, index: 1 },
-    ]);
-  });
+  it('selects locale from standard CDN country headers with Bulgarian as the safe fallback', () => {
+    expect(getRequestCountryCode(new Headers({ 'cf-ipcountry': 'bg' }))).toBe('BG');
+    expect(getRequestCountryCode(new Headers({ 'x-vercel-ip-country': 'us' }))).toBe('US');
+    expect(getRequestCountryCode(new Headers())).toBe('');
 
-  it('negotiates only enabled public locales', () => {
-    expect(
-      negotiateLocale('en-US,en;q=0.8,bg;q=0.9', { enabledLocales: ['bg', 'en'] })
-    ).toBe('en');
-    expect(
-      negotiateLocale('bg-BG,bg;q=0.8,en;q=0.7', { enabledLocales: ['bg', 'en'] })
-    ).toBe('bg');
-    expect(negotiateLocale('en-US,en;q=0.8', { enabledLocales: ['bg'] })).toBe('bg');
-    expect(negotiateLocale('de-DE,de;q=0.8', { enabledLocales: ['bg', 'en'] })).toBe('bg');
-    expect(negotiateLocale('*', { enabledLocales: ['bg', 'en'] })).toBe('bg');
-    expect(negotiateLocale('*', { enabledLocales: ['en'] })).toBe('en');
-    expect(negotiateLocale('', { enabledLocales: ['bg', 'en'] })).toBe('bg');
-    expect(negotiateLocale(';;;;', { enabledLocales: ['bg', 'en'] })).toBe('bg');
+    expect(selectLocaleForCountry('BG', { enabledLocales: ['bg', 'en'] })).toBe('bg');
+    expect(selectLocaleForCountry('DE', { enabledLocales: ['bg', 'en'] })).toBe('en');
+    expect(selectLocaleForCountry('US', { enabledLocales: ['bg'] })).toBe('bg');
+    expect(selectLocaleForCountry('XX', { enabledLocales: ['bg', 'en'] })).toBe('bg');
+    expect(selectLocaleForCountry('T1', { enabledLocales: ['bg', 'en'] })).toBe('bg');
+    expect(selectLocaleForCountry('', { enabledLocales: ['bg', 'en'] })).toBe('bg');
   });
 });

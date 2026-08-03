@@ -7,7 +7,7 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { getAboutPageContent } from '@/content/publicPages/about';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import styles from './about.module.css';
@@ -65,12 +65,15 @@ function ExternalLinkCard({ item }) {
 
 export async function generateMetadata(props = {}) {
   const params = await props.params;
-  const content = getAboutPageContent(params?.locale);
+  const locale = params?.locale;
+  const content = getAboutPageContent(locale);
 
-  return {
+  return buildPageMetadata({
     ...content.metadata,
-    alternates: buildLocalizedAlternates('/aboutus', params?.locale),
-  };
+    path: '/aboutus',
+    locale,
+    imageAlt: content.hero.imageAlt,
+  });
 }
 
 export default async function AboutUs(props = {}) {

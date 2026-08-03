@@ -149,11 +149,13 @@ export function hasValidCategoryTranslation(category) {
 
 export function hasValidHomeBannerTranslation(banner) {
   const translation = readTranslation(banner);
+  const translatedFields = ['title', 'description', 'ctaLabel'];
 
   return (
     hasFreshSourceRevision(banner, translation) &&
-    hasText(translation?.title) &&
-    hasText(translation?.ctaLabel)
+    translatedFields.every((fieldName) => (
+      !hasText(banner?.[fieldName]) || hasText(translation?.[fieldName])
+    ))
   );
 }
 

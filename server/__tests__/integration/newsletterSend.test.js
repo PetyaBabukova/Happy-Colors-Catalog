@@ -99,6 +99,15 @@ async function createCampaignSnapshot(overrides = {}) {
   });
 }
 
+function createOpenManualRetryWindow() {
+  const startedAt = new Date();
+
+  return {
+    startedAt,
+    manualRetryClosesAt: new Date(startedAt.getTime() + 7 * 24 * 60 * 60 * 1000),
+  };
+}
+
 async function getSubscribeToken(app, ip = '203.0.113.200') {
   const res = await request(app)
     .get('/newsletter/subscribe-token')
@@ -961,15 +970,12 @@ describe('newsletter send integration', () => {
   it('allows one full-admin manual retry for exhausted failed deliveries', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
-    const now = new Date('2026-07-21T12:00:00.000Z');
+    const retryWindow = createOpenManualRetryWindow();
     const subscriber = await createSubscriber({
       email: 'manual-retry@example.com',
       consecutiveUndeliveredCount: 3,
     });
-    const campaign = await createCampaignSnapshot({
-      startedAt: now,
-      manualRetryClosesAt: new Date('2026-07-28T12:00:00.000Z'),
-    });
+    const campaign = await createCampaignSnapshot(retryWindow);
     await NewsletterDelivery.create({
       campaignId: campaign._id,
       subscriberId: subscriber._id,
@@ -1020,12 +1026,9 @@ describe('newsletter send integration', () => {
   it('keeps subscriber emails out of failed manual retry responses', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
-    const now = new Date('2026-07-21T12:15:00.000Z');
+    const retryWindow = createOpenManualRetryWindow();
     const subscriber = await createSubscriber({ email: 'manual-failure@example.com' });
-    const campaign = await createCampaignSnapshot({
-      startedAt: now,
-      manualRetryClosesAt: new Date('2026-07-28T12:15:00.000Z'),
-    });
+    const campaign = await createCampaignSnapshot(retryWindow);
     await NewsletterDelivery.create({
       campaignId: campaign._id,
       subscriberId: subscriber._id,
@@ -1060,12 +1063,10 @@ describe('newsletter send integration', () => {
   it('keeps legacy failed deliveries without manualAttemptCount eligible for manual retry', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
-    const now = new Date('2026-07-21T12:30:00.000Z');
+    const retryWindow = createOpenManualRetryWindow();
+    const now = retryWindow.startedAt;
     const subscriber = await createSubscriber({ email: 'legacy-manual@example.com' });
-    const campaign = await createCampaignSnapshot({
-      startedAt: now,
-      manualRetryClosesAt: new Date('2026-07-28T12:30:00.000Z'),
-    });
+    const campaign = await createCampaignSnapshot(retryWindow);
     await NewsletterDelivery.collection.insertOne({
       campaignId: campaign._id,
       subscriberId: subscriber._id,
@@ -1327,8 +1328,11 @@ describe('newsletter send integration', () => {
   });
 
   it('requires a trusted origin for newsletter mutations in production', async () => {
-    const previousNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CLIENT_URL', 'https://happycolors.eu');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('RENDER_EXTERNAL_URL', '');
+    vi.stubEnv('ALLOWED_ORIGINS', '');
     const app = createExpressApp();
     const owner = await createFullAdmin();
 
@@ -1353,7 +1357,7 @@ describe('newsletter send integration', () => {
         .send(newsletterPayload())
         .expect(200);
     } finally {
-      process.env.NODE_ENV = previousNodeEnv;
+      vi.unstubAllEnvs();
     }
   });
 

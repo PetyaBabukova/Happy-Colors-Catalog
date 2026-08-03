@@ -55,6 +55,43 @@ describe('TranslationsClientPage', () => {
     );
   });
 
+  it('loads only the product selected from its edit page', async () => {
+    getTranslationQueue.mockResolvedValueOnce({
+      unresolvedCount: 0,
+      items: [
+        {
+          entityType: 'product',
+          entityId: 'product-1',
+          label: 'Translated product',
+          locale: 'en',
+          status: 'current',
+          activation: 'active',
+          sourceRevision: 2,
+          translationRevision: 1,
+          draftRevision: 0,
+        },
+      ],
+    });
+
+    render(
+      <TranslationsClientPage
+        targetEntityType="product"
+        targetEntityId="product-1"
+      />
+    );
+
+    expect(await screen.findByRole('article')).toBeInTheDocument();
+    expect(screen.getByText('Актуален EN превод')).toBeInTheDocument();
+    expect(
+      screen.getByText('Управление на английския превод за избрания запис.')
+    ).toBeInTheDocument();
+    expect(getTranslationQueue).toHaveBeenCalledWith({
+      locale: 'en',
+      entityType: 'product',
+      entityId: 'product-1',
+    });
+  });
+
   it('saves manual product translations with revision guards', async () => {
     getTranslationQueue.mockResolvedValueOnce({
       unresolvedCount: 1,

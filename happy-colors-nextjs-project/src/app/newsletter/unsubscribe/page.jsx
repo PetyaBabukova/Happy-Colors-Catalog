@@ -1,16 +1,14 @@
 import NewsletterUnsubscribeClient from './NewsletterUnsubscribeClient';
+import { getNewsletterLifecycleMetadata } from '@/content/publicPages/newsletter';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export const metadata = {
-  title: 'Отписване от новини | Happy Colors',
-  robots: {
-    index: false,
-    follow: false,
-  },
-  referrer: 'no-referrer',
-};
+export async function generateMetadata(props = {}) {
+  const params = await props.params;
+
+  return getNewsletterLifecycleMetadata(params?.locale || 'bg', 'unsubscribe');
+}
 
 export default async function NewsletterUnsubscribePage({ searchParams }) {
   const params = await searchParams;

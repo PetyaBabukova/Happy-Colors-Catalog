@@ -49,7 +49,11 @@ function requireJson(req, res, next) {
 
 router.get('/queue', requireAuth, requireFullAdmin, async (req, res) => {
   try {
-    const queue = await getTranslationQueue({ locale: req.query.locale || 'en' });
+    const queue = await getTranslationQueue({
+      locale: req.query.locale || 'en',
+      entityType: req.query.entityType || '',
+      entityId: req.query.entityId || '',
+    });
 
     res.set('Cache-Control', 'no-store');
     res.json(queue);

@@ -3,6 +3,8 @@ import {
   buildLocalizedAlternates,
   currentSiteUrl,
   getLocalizedCanonicalPath,
+  getOpenGraphAlternateLocales,
+  getOpenGraphLocale,
 } from '@/config/siteSeo';
 import { DEFAULT_LOCALE } from '@/i18n/config';
 import { stringifyJsonLd } from '@/utils/productSeo';
@@ -19,12 +21,17 @@ function absoluteUrl(url) {
   }
 }
 
-export function buildBlogSeoTitle(article) {
-  return article?.seoTitle || article?.title || 'Блог';
+export function buildBlogSeoTitle(article, locale = DEFAULT_LOCALE) {
+  return article?.seoTitle || article?.title || (locale === 'en' ? 'Blog' : 'Блог');
 }
 
-export function buildBlogSeoDescription(article) {
-  return article?.seoDescription || article?.excerpt || article?.contentText || 'Идеи, истории и вдъхновение от Happy Colors (Хепи Колорс).';
+export function buildBlogSeoDescription(article, locale = DEFAULT_LOCALE) {
+  return article?.seoDescription ||
+    article?.excerpt ||
+    article?.contentText ||
+    (locale === 'en'
+      ? 'Ideas, stories, and inspiration from Happy Colors.'
+      : 'Идеи, истории и вдъхновение от Happy Colors (Хепи Колорс).');
 }
 
 export function isBlogArticleTranslationFallback(article, locale) {
@@ -48,9 +55,10 @@ function getBlogArticleAlternateLocales(article, locale, isFallback) {
 }
 
 export function buildBlogMetadata(article, articleId, locale) {
-  const title = buildBlogSeoTitle(article);
-  const description = buildBlogSeoDescription(article);
   const isFallback = isBlogArticleTranslationFallback(article, locale);
+  const metadataLocale = isFallback ? DEFAULT_LOCALE : locale;
+  const title = buildBlogSeoTitle(article, metadataLocale);
+  const description = buildBlogSeoDescription(article, metadataLocale);
   const articlePath = `/blog/${articleId}`;
   const alternates = buildLocalizedAlternates(
     articlePath,
@@ -58,6 +66,9 @@ export function buildBlogMetadata(article, articleId, locale) {
     { enabledLocales: getBlogArticleAlternateLocales(article, locale, isFallback) }
   );
   const canonicalPath = alternates.canonical;
+  const alternateLocale = getOpenGraphAlternateLocales(metadataLocale, {
+    enabledLocales: getBlogArticleAlternateLocales(article, locale, isFallback),
+  });
   const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
 
   return {
@@ -77,7 +88,9 @@ export function buildBlogMetadata(article, articleId, locale) {
       description,
       type: 'article',
       url: canonicalPath,
-      siteName: 'Happy Colors | Хепи Колорс',
+      siteName: 'Happy Colors',
+      locale: getOpenGraphLocale(metadataLocale),
+      ...(alternateLocale.length ? { alternateLocale } : {}),
       ...(article?.publishedAt ? { publishedTime: article.publishedAt } : {}),
       ...(article?.updatedAt ? { modifiedTime: article.updatedAt } : {}),
       ...(imageUrl
@@ -108,7 +121,7 @@ export function buildBlogArticleJsonLd(article, articleId, locale) {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: article?.title || '',
-    description: buildBlogSeoDescription(article),
+    description: buildBlogSeoDescription(article, locale),
     url: absoluteUrl(canonicalPath),
     ...(imageUrl ? { image: [imageUrl] } : {}),
     ...(article?.publishedAt ? { datePublished: article.publishedAt } : {}),

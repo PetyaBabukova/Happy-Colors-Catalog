@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Header from '@/components/header/header';
 import { useProducts } from '@/context/ProductContext';
+import { LOCALE_COOKIE_NAME } from '@/i18n/config';
 import { getDictionary } from '@/i18n/getDictionary';
 import { fetchAdminUsers } from '@/managers/usersAdminManager';
 import { fireEvent, render, screen } from '../test-utils.jsx';
@@ -53,6 +54,7 @@ describe('Header', () => {
   });
 
   afterEach(() => {
+    document.cookie = `${LOCALE_COOKIE_NAME}=; Path=/; Max-Age=0`;
     vi.unstubAllEnvs();
   });
 
@@ -74,6 +76,7 @@ describe('Header', () => {
     expect(container.querySelector('header ul[class*="userNav"]')).toBeInTheDocument();
     expect(getUserNavLinks(container)).toEqual([
       '/products/create',
+      '/translations',
       '/homepage-featured',
       '/categories/create',
       '/categories',
@@ -211,6 +214,11 @@ describe('Header', () => {
       'href',
       '/en/products?category=Toys'
     );
+
+    const englishLocaleLink = screen.getByRole('link', { name: /^EN/ });
+    englishLocaleLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    fireEvent.click(englishLocaleLink);
+    expect(document.cookie).toContain(`${LOCALE_COOKIE_NAME}=en`);
   });
 
   it('does not render the locale switcher until two public locales are enabled', () => {
@@ -277,5 +285,28 @@ describe('Header', () => {
       '/en/products'
     );
     expect(screen.queryByRole('link', { name: getDictionary('bg').navigation.home })).not.toBeInTheDocument();
+  });
+
+  it('marks a Bulgarian category fallback in the English navigation', () => {
+    useProducts.mockReturnValue({
+      visibleCategories: [
+        {
+          _id: 'cat-bg',
+          name: 'Приказни герои',
+          filterSlug: 'prikazni-geroi',
+          contentLocale: 'bg',
+          translationPending: true,
+        },
+      ],
+    });
+
+    render(<Header />, { locale: 'en' });
+
+    const categoryLink = screen.getByRole('link', {
+      name: 'Приказни герои Translation pending',
+    });
+
+    expect(categoryLink).toHaveAttribute('href', '/products?category=prikazni-geroi');
+    expect(categoryLink.querySelector('[lang="bg"]')).toHaveTextContent('Приказни герои');
   });
 });

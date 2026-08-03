@@ -73,6 +73,30 @@ describe('openAiTranslationProvider', () => {
     expect(body.input[1].content).toContain('"sourceLocale":"bg"');
   });
 
+  it('uses the cost-sensitive GPT-5.6 model by default', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          output_text: JSON.stringify({ title: 'Little Lion' }),
+        }),
+      })
+    );
+
+    await translateWithOpenAI({
+      entityType: 'product',
+      sourceFields: { title: 'Р›СЉРІС‡Рµ' },
+      fields: ['title'],
+    });
+
+    const [, requestOptions] = fetch.mock.calls[0];
+    const body = JSON.parse(requestOptions.body);
+
+    expect(body.model).toBe('gpt-5.6-luna');
+  });
+
   it('rejects malformed provider JSON', async () => {
     process.env.OPENAI_API_KEY = 'test-key';
     vi.stubGlobal(

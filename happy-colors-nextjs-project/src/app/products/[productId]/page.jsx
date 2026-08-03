@@ -45,7 +45,7 @@ export default async function ProductDetailsPage({ params: paramsPromise, search
   }
 
   const productJsonLd = shouldRenderProductJsonLd(product, locale)
-    ? buildProductJsonLd(product)
+    ? buildProductJsonLd(product, locale)
     : null;
 
   return (

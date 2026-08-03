@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createNewsletterConfirmationPageUrl,
   createNewsletterConfirmationToken,
@@ -30,7 +30,12 @@ function decodePayload(token) {
 }
 
 describe('newsletterService token helpers', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', 'https://happycolors.eu');
+  });
+
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.NEWSLETTER_UNSUBSCRIBE_SECRET;
     delete process.env.NEWSLETTER_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS;
   });

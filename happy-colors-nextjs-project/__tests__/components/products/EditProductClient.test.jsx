@@ -19,21 +19,24 @@ vi.mock('@/managers/translationsManager', () => ({
 }));
 
 vi.mock('@/components/products/ProductForm', () => ({
-  default: ({ onSubmit }) => (
-    <button
-      type="button"
-      onClick={() => onSubmit({ title: 'Updated title' }, vi.fn(), vi.fn(), vi.fn())}
-    >
-      Submit edit
-    </button>
+  default: ({ onSubmit, translationHref }) => (
+    <>
+      {translationHref ? <a href={translationHref}>Manage EN translation</a> : null}
+      <button
+        type="button"
+        onClick={() => onSubmit({ title: 'Updated title' }, vi.fn(), vi.fn(), vi.fn())}
+      >
+        Submit edit
+      </button>
+    </>
   ),
 }));
 
-function renderEditProductClient(routerOverrides = {}) {
+function renderEditProductClient(routerOverrides = {}, user = { _id: 'admin-1', role: 'full_admin' }) {
   return render(
     <EditProductClient params={{ productId: 'product-1' }} />,
     {
-      user: { _id: 'admin-1', role: 'full_admin' },
+      user,
       routerOverrides,
     }
   );
@@ -63,6 +66,22 @@ describe('EditProductClient', () => {
       return { _id: 'product-1' };
     });
     generateTranslation.mockResolvedValue({ ok: true });
+  });
+
+  it('links full admins directly to this product translation', async () => {
+    renderEditProductClient();
+
+    expect(await screen.findByRole('link', { name: 'Manage EN translation' })).toHaveAttribute(
+      'href',
+      '/translations?entityType=product&entityId=product-1'
+    );
+  });
+
+  it('does not show translation management to non-admin product owners', async () => {
+    renderEditProductClient({}, { _id: 'owner-1', role: 'artist' });
+
+    await screen.findByRole('button', { name: 'Submit edit' });
+    expect(screen.queryByRole('link', { name: 'Manage EN translation' })).not.toBeInTheDocument();
   });
 
   it('shows the English translation decision after a full-admin direct edit', async () => {

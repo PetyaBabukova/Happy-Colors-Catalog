@@ -31,6 +31,26 @@ function getEntitySourceRevision(entity) {
   return normalizeSourceRevision(entity?.sourceRevision);
 }
 
+function hasTranslatableSourceContent(sourceFields, fields) {
+  return fields.some((fieldName) => String(sourceFields?.[fieldName] ?? '').trim().length > 0);
+}
+
+function createEmptyTranslationResult(fields) {
+  return {
+    provider: '',
+    providerModel: '',
+    fields: Object.fromEntries(fields.map((fieldName) => [fieldName, ''])),
+  };
+}
+
+function normalizeStoredTranslation(config, entity, translation) {
+  const fields = pickTranslationFields(translation, config.translationFields);
+
+  return config.validateStoredTranslation
+    ? config.normalizeTranslation(fields, { entity })
+    : fields;
+}
+
 function getMapEntry(map, locale) {
   if (!map) {
     return null;
@@ -259,8 +279,24 @@ function assertExpectedEntryRevision(entry, fieldName, expectedValue) {
   }
 }
 
-export async function getTranslationQueue({ locale = 'en' } = {}) {
+export async function getTranslationQueue({ locale = 'en', entityType = '', entityId = '' } = {}) {
   assertSupportedTranslationLocale(locale);
+
+  if (entityType || entityId) {
+    if (!entityType || !entityId) {
+      throw createTranslationError('Both translation entity type and id are required.', 400);
+    }
+
+    const config = getEntityTranslationConfig(entityType);
+    const entity = await findEntityOr404(config, entityId);
+    const item = serializeQueueItem(entity, config, locale);
+
+    return {
+      locale,
+      unresolvedCount: item.status === 'current' ? 0 : 1,
+      items: [item],
+    };
+  }
 
   const configs = ['product', 'category', 'blogArticle', 'homeBanner'].map(getEntityTranslationConfig);
   const queueGroups = await Promise.all(
@@ -298,7 +334,7 @@ export async function saveManualTranslation({
 
   assertCurrentSourceRevision(entity, payload.expectedSourceRevision);
 
-  const normalizedTranslation = config.normalizeTranslation(payload.fields || {});
+  const normalizedTranslation = config.normalizeTranslation(payload.fields || {}, { entity });
   assertProtectedContentPreserved({
     sourceFields: pickTranslationFields(entity, config.sourceFields),
     translatedFields: normalizedTranslation,
@@ -381,8 +417,9 @@ export async function acceptCurrentTranslation({
     };
   }
 
+  const normalizedTranslation = normalizeStoredTranslation(config, entity, active);
   const nextTranslation = {
-    ...pickTranslationFields(active, config.translationFields),
+    ...normalizedTranslation,
     ...buildTranslationMetadata({
       entity,
       existingTranslation: active,
@@ -432,8 +469,9 @@ export async function approveTranslationDraft({
     throw createTranslationError('The English draft is outdated. Regenerate or edit it first.', 409);
   }
 
+  const normalizedDraft = normalizeStoredTranslation(config, entity, draft);
   const nextTranslation = {
-    ...pickTranslationFields(draft, config.translationFields),
+    ...normalizedDraft,
     ...buildTranslationMetadata({
       entity,
       existingTranslation: active,
@@ -510,11 +548,16 @@ export async function generateTranslation({
     assertExpectedEntryRevision(active, 'expectedTranslationRevision', payload.expectedTranslationRevision);
   }
 
-  const providerResult = await translateEntityFields({
-    entityType: config.entityType,
-    sourceFields: pickTranslationFields(entity, config.sourceFields),
-    fields: config.providerFields || config.translationFields,
-  });
+  const sourceFields = pickTranslationFields(entity, config.sourceFields);
+  const providerFields = config.providerFields || config.translationFields;
+  // The fresh-entity revision check below rejects source-copy changes after this snapshot.
+  const providerResult = hasTranslatableSourceContent(sourceFields, providerFields)
+    ? await translateEntityFields({
+        entityType: config.entityType,
+        sourceFields,
+        fields: providerFields,
+      })
+    : createEmptyTranslationResult(providerFields);
   const freshEntity = await findEntityOr404(config, entityId);
   const freshActive = getMapEntry(freshEntity.translations, locale);
   const freshDraft = getMapEntry(freshEntity.translationDrafts, locale);
@@ -527,11 +570,14 @@ export async function generateTranslation({
     assertExpectedEntryRevision(freshActive, 'expectedTranslationRevision', payload.expectedTranslationRevision);
   }
 
-  const normalizedTranslation = config.normalizeTranslation(providerResult.fields || {});
+  const normalizedTranslation = config.normalizeTranslation(
+    providerResult.fields || {},
+    { entity: freshEntity }
+  );
   assertProtectedContentPreserved({
     sourceFields: pickTranslationFields(freshEntity, config.sourceFields),
     translatedFields: normalizedTranslation,
-    fields: config.providerFields || config.translationFields,
+    fields: providerFields,
   });
 
   if (config.activation === 'draft') {

@@ -15,8 +15,17 @@ async function readOrThrow(res, fallbackMessage) {
   return data;
 }
 
-export async function getTranslationQueue({ locale = 'en' } = {}) {
+export async function getTranslationQueue({ locale = 'en', entityType = '', entityId = '' } = {}) {
   const query = new URLSearchParams({ locale });
+
+  if (entityType) {
+    query.set('entityType', entityType);
+  }
+
+  if (entityId) {
+    query.set('entityId', entityId);
+  }
+
   const res = await fetch(`${baseURL}/translations/queue?${query.toString()}`, {
     credentials: 'include',
     cache: 'no-store',

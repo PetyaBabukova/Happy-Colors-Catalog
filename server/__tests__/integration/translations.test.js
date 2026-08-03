@@ -102,6 +102,66 @@ describe('translations integration', () => {
     expect(res.body.items[0]).not.toHaveProperty('description');
   });
 
+  it('returns a targeted current translation for direct admin management', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const product = await createProduct({
+      owner: admin,
+      sourceRevision: 2,
+      translations: {
+        en: {
+          title: 'Current English product',
+          description: 'Current English description',
+          sourceRevision: 2,
+          translationRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+
+    const res = await request(app)
+      .get('/translations/queue')
+      .query({
+        locale: 'en',
+        entityType: 'product',
+        entityId: String(product._id),
+      })
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      locale: 'en',
+      unresolvedCount: 0,
+      items: [
+        {
+          entityType: 'product',
+          entityId: String(product._id),
+          status: 'current',
+          translationRevision: 1,
+          translation: {
+            title: 'Current English product',
+            description: 'Current English description',
+          },
+        },
+      ],
+    });
+  });
+
+  it('rejects partial targeted queue filters', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+
+    const res = await request(app)
+      .get('/translations/queue')
+      .query({ locale: 'en', entityType: 'product' })
+      .set('Cookie', authCookie(admin))
+      .expect(400);
+
+    expect(res.body).toEqual({
+      message: 'Both translation entity type and id are required.',
+    });
+  });
+
   it('saves product and category manual translations as active current content', async () => {
     const app = createExpressApp();
     const admin = await createFullAdmin();
@@ -422,6 +482,186 @@ describe('translations integration', () => {
         expectedDraftRevision: 1,
       })
       .expect(409);
+  });
+
+  it('saves and approves an empty translation record for an image-only cartoon banner', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner: admin,
+      placement: 'cartoons',
+      title: '',
+      description: '',
+      ctaLabel: '',
+      ctaHref: '',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoon-translation.webp',
+      sourceRevision: 1,
+    });
+
+    const draftRes = await request(app)
+      .put(`/translations/homeBanner/${banner._id}/en`)
+      .set('Cookie', authCookie(admin))
+      .send({
+        expectedSourceRevision: 1,
+        expectedDraftRevision: 0,
+        fields: { title: '', description: '', ctaLabel: '' },
+      })
+      .expect(200);
+
+    expect(draftRes.body).toMatchObject({
+      status: 'pending_review',
+      draft: {
+        title: '',
+        description: '',
+        ctaLabel: '',
+        draftRevision: 1,
+      },
+    });
+
+    await request(app)
+      .post(`/translations/homeBanner/${banner._id}/en/draft/approve`)
+      .set('Cookie', authCookie(admin))
+      .send({
+        expectedSourceRevision: 1,
+        expectedDraftRevision: 1,
+      })
+      .expect(200);
+
+    const publicRes = await request(app)
+      .get('/home-banners')
+      .query({ placement: 'cartoons', locale: 'en' })
+      .expect(200);
+
+    expect(publicRes.body).toEqual([
+      expect.objectContaining({
+        _id: String(banner._id),
+        title: '',
+        ctaLabel: '',
+        contentLocale: 'en',
+      }),
+    ]);
+  });
+
+  it('keeps translated home banner source fields required', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner: admin,
+      sourceRevision: 1,
+    });
+
+    await request(app)
+      .put(`/translations/homeBanner/${banner._id}/en`)
+      .set('Cookie', authCookie(admin))
+      .send({
+        expectedSourceRevision: 1,
+        expectedDraftRevision: 0,
+        fields: { title: '', description: '', ctaLabel: '' },
+      })
+      .expect(400);
+  });
+
+  it('generates an empty cartoon banner draft without calling the translation provider', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner: admin,
+      placement: 'cartoons',
+      title: '',
+      description: '',
+      ctaLabel: '',
+      ctaHref: '',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoon-generated.webp',
+      sourceRevision: 1,
+    });
+    vi.stubGlobal('fetch', vi.fn());
+
+    try {
+      const res = await request(app)
+        .post(`/translations/homeBanner/${banner._id}/en/generate`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedDraftRevision: 0,
+        })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        status: 'pending_review',
+        draft: {
+          title: '',
+          description: '',
+          ctaLabel: '',
+          method: 'machine',
+          provider: '',
+          providerModel: '',
+        },
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('translates the populated copy of a partial cartoon banner source', async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner: admin,
+      placement: 'cartoons',
+      title: 'Портретен шарж',
+      description: '',
+      ctaLabel: '',
+      ctaHref: '',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoon-partial.webp',
+      sourceRevision: 1,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          model: 'gpt-5-test',
+          output_text: JSON.stringify({
+            title: 'Portrait caricature',
+            description: '',
+            ctaLabel: '',
+          }),
+        }),
+      })
+    );
+
+    try {
+      const res = await request(app)
+        .post(`/translations/homeBanner/${banner._id}/en/generate`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedDraftRevision: 0,
+        })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        status: 'pending_review',
+        draft: {
+          title: 'Portrait caricature',
+          description: '',
+          ctaLabel: '',
+          provider: 'openai',
+          providerModel: 'gpt-5-test',
+        },
+      });
+      expect(fetch).toHaveBeenCalledOnce();
+    } finally {
+      if (typeof originalApiKey === 'undefined') {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = originalApiKey;
+      }
+      vi.unstubAllGlobals();
+    }
   });
 
   it('generates and activates product translations through the provider adapter', async () => {

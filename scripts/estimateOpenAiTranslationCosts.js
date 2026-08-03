@@ -16,17 +16,17 @@ const OUTPUT_EXPANSION_RATIO = 1.15;
 const OUTPUT_JSON_OVERHEAD_CHARS = 80;
 
 export const OPENAI_TRANSLATION_MODEL_PRICES_USD = Object.freeze({
-  'gpt-5': {
-    inputPerMillionTokens: 1.25,
-    outputPerMillionTokens: 10,
+  'gpt-5.6-sol': {
+    inputPerMillionTokens: 5,
+    outputPerMillionTokens: 30,
   },
-  'gpt-5-mini': {
-    inputPerMillionTokens: 0.25,
-    outputPerMillionTokens: 2,
+  'gpt-5.6-terra': {
+    inputPerMillionTokens: 2.5,
+    outputPerMillionTokens: 15,
   },
-  'gpt-5-nano': {
-    inputPerMillionTokens: 0.05,
-    outputPerMillionTokens: 0.4,
+  'gpt-5.6-luna': {
+    inputPerMillionTokens: 1,
+    outputPerMillionTokens: 6,
   },
 });
 

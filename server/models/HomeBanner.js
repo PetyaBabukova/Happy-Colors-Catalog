@@ -53,7 +53,6 @@ const homeBannerSchema = new mongoose.Schema(
     translations: createTranslationMapSchema({
       title: {
         type: String,
-        required: true,
         trim: true,
         maxlength: 120,
       },
@@ -65,7 +64,6 @@ const homeBannerSchema = new mongoose.Schema(
       },
       ctaLabel: {
         type: String,
-        required: true,
         trim: true,
         maxlength: 60,
       },
@@ -73,7 +71,6 @@ const homeBannerSchema = new mongoose.Schema(
     translationDrafts: createTranslationDraftMapSchema({
       title: {
         type: String,
-        required: true,
         trim: true,
         maxlength: 120,
       },
@@ -85,7 +82,6 @@ const homeBannerSchema = new mongoose.Schema(
       },
       ctaLabel: {
         type: String,
-        required: true,
         trim: true,
         maxlength: 60,
       },

@@ -2,6 +2,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { loadTestEnv } from '../scripts/loadTestEnv.js';
+
+loadTestEnv();
+
+// Unit/component tests assert the local fallback URL. Deployment URL and E2E
+// port values remain owned by the tests that exercise those configurations.
+process.env.PORT = '3000';
+process.env.NEXT_PUBLIC_SITE_URL = '';
+process.env.RENDER_EXTERNAL_URL = '';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

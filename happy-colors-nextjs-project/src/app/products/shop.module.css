@@ -31,6 +31,21 @@
   flex-direction: column;
 }
 
+.shoppingCategory h3 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.categoryTranslationBadge {
+  color: #6d4d0d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .productList {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -3,15 +3,20 @@ import {
   defaultCatalogPath,
   englishCatalogPath,
   englishLocaleEnabled,
+  getSeededProductCard,
   localeRoutesEnabled,
   pathEndPattern,
 } from './helpers/shop.js';
 
-test('root and legacy catalog paths redirect to Bulgarian defaults @smoke @localized @redirects', async ({
+test('saved Bulgarian choice and legacy catalog paths redirect to Bulgarian @smoke @localized @redirects', async ({
   page,
 }) => {
   test.skip(!localeRoutesEnabled, 'Localized redirects require locale routing to be enabled.');
 
+  await page.goto('/bg');
+  await page.evaluate(() => {
+    document.cookie = 'happycolors_locale=bg; Path=/; SameSite=Lax';
+  });
   await page.goto('/');
 
   await expect(page).toHaveURL(pathEndPattern('/bg'));
@@ -80,5 +85,7 @@ test('localized catalog routes load the seeded product @smoke @products @localiz
 
   await expect(page.locator('body')).not.toContainText('Application error');
   await expect(page.getByText('E2E Smoke Product')).toBeVisible();
-  await expect(page.getByText('Translation pending')).toBeVisible();
+  await expect(
+    getSeededProductCard(page).getByText('Translation pending', { exact: true })
+  ).toBeVisible();
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BlogArticleActions from '@/components/blog/BlogArticleActions';
 import { deleteBlogArticle } from '@/managers/blogArticlesManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
+import { setMockNavigation } from '../setup.js';
 
 vi.mock('@/managers/blogArticlesManager', () => ({
   deleteBlogArticle: vi.fn(),
@@ -49,6 +50,27 @@ describe('BlogArticleActions', () => {
     await waitFor(() => expect(deleteBlogArticle).toHaveBeenCalledWith(articleId));
     expect(mockRouterPush).toHaveBeenCalledWith('/blog');
     expect(refresh).toHaveBeenCalled();
+
+    confirmSpy.mockRestore();
+  });
+
+  it('returns to the blog in the active English locale after deletion', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: `/en/blog/${articleId}` });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const mockRouterPush = vi.fn();
+
+    render(<BlogArticleActions articleId={articleId} />, {
+      user: { email: 'owner@example.com' },
+      locale: 'en',
+      mockRouterPush,
+    });
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => expect(deleteBlogArticle).toHaveBeenCalledWith(articleId));
+    expect(mockRouterPush).toHaveBeenCalledWith('/en/blog');
 
     confirmSpy.mockRestore();
   });

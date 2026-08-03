@@ -46,6 +46,10 @@ function normalizePlainTextPayload(payload = {}, fields = []) {
   return normalized;
 }
 
+function hasSourceText(value) {
+  return String(value ?? '').trim().length > 0;
+}
+
 function normalizeBlogArticleTranslation(payload = {}) {
   const contentHtml = sanitizeArticleHtml(payload.contentHtml);
   const contentText = extractContentText(contentHtml);
@@ -149,11 +153,16 @@ export const ENTITY_TRANSLATION_CONFIG = Object.freeze({
     sourceFields: ['title', 'description', 'ctaLabel'],
     translationFields: ['title', 'description', 'ctaLabel'],
     providerFields: ['title', 'description', 'ctaLabel'],
-    normalizeTranslation(payload) {
+    validateStoredTranslation: true,
+    normalizeTranslation(payload, { entity } = {}) {
       return normalizePlainTextPayload(payload, [
-        { name: 'title', required: true, maxLength: 120 },
-        { name: 'description', required: false, maxLength: 600 },
-        { name: 'ctaLabel', required: true, maxLength: 60 },
+        { name: 'title', required: hasSourceText(entity?.title), maxLength: 120 },
+        {
+          name: 'description',
+          required: hasSourceText(entity?.description),
+          maxLength: 600,
+        },
+        { name: 'ctaLabel', required: hasSourceText(entity?.ctaLabel), maxLength: 60 },
       ]);
     },
     buildPublicFilter() {

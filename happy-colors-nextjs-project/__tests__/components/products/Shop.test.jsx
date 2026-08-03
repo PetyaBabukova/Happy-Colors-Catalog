@@ -95,4 +95,26 @@ describe('Shop', () => {
 
     expect(headings.at(-1)).toMatch(/Other/);
   });
+
+  it('marks a Bulgarian category fallback on the English catalog', () => {
+    render(
+      <Shop
+        products={[
+          product('fallback', 'Translated product', 'Приказни герои', 'available', {
+            contentLocale: 'bg',
+            translationPending: true,
+          }),
+        ]}
+      />,
+      { locale: 'en' }
+    );
+
+    const heading = screen.getByRole('heading', {
+      level: 3,
+      name: 'Приказни герои Translation pending',
+    });
+
+    expect(within(heading).getByText('Приказни герои')).toHaveAttribute('lang', 'bg');
+    expect(within(heading).getByText('Translation pending')).toBeInTheDocument();
+  });
 });

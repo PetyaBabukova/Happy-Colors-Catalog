@@ -66,6 +66,7 @@ function createConfigs({
     homeBanner: {
       entityType: 'homeBanner',
       activation: 'draft',
+      sourceFields: ['title', 'description', 'ctaLabel'],
       translationFields: ['title', 'description', 'ctaLabel'],
       normalizeTranslation: createRequiredNormalizer(['title', 'description', 'ctaLabel']),
       model: createModel(homeBanners),
@@ -356,6 +357,73 @@ describe('reportEnglishLaunchReadiness script', () => {
     expect(result.bannerPlacements.placements.home.missing).toBe(1);
   });
 
+  it('accepts current empty translation copy for an image-only cartoon placement', async () => {
+    const configs = createConfigs({
+      homeBanners: [
+        {
+          _id: 'cartoon-banner-current',
+          sourceRevision: 1,
+          placement: 'cartoons',
+          title: '',
+          description: '',
+          ctaLabel: '',
+          translations: currentTranslation(1, {
+            title: '',
+            description: '',
+            ctaLabel: '',
+          }),
+        },
+      ],
+    });
+    configs.homeBanner.normalizeTranslation = vi.fn((fields) => fields);
+    const { reportEnglishLaunchReadiness } = await loadScript();
+    const result = await reportEnglishLaunchReadiness({
+      configs,
+      requiredBannerPlacements: ['cartoons'],
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.bannerPlacements.placements.cartoons.ready).toBe(true);
+    expect(result.bannerPlacements.placements.cartoons.currentActiveEnglishBannerCount).toBe(1);
+    expect(configs.homeBanner.normalizeTranslation).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '', description: '', ctaLabel: '' }),
+      { entity: expect.objectContaining({ placement: 'cartoons' }) }
+    );
+    expect(configs.homeBanner.model.find).toHaveBeenCalledWith(
+      { isActive: true },
+      expect.objectContaining({
+        title: 1,
+        description: 1,
+        ctaLabel: 1,
+      })
+    );
+  });
+
+  it('blocks current empty English copy when the Bulgarian banner has text', async () => {
+    const configs = createConfigs({
+      homeBanners: [
+        {
+          _id: 'text-banner-empty-translation',
+          sourceRevision: 1,
+          placement: 'home',
+          title: 'Bulgarian title',
+          description: 'Bulgarian description',
+          ctaLabel: 'Bulgarian CTA',
+          translations: currentTranslation(1, {
+            title: '',
+            description: '',
+            ctaLabel: '',
+          }),
+        },
+      ],
+    });
+    const { reportEnglishLaunchReadiness } = await loadScript();
+    const result = await reportEnglishLaunchReadiness({ configs });
+
+    expect(result.ready).toBe(false);
+    expect(result.bannerPlacements.placements.home.invalid).toBe(1);
+  });
+
   it('blocks a banner placement when the only current English content is still a draft', async () => {
     const { reportEnglishLaunchReadiness } = await loadScript();
     const result = await reportEnglishLaunchReadiness({
@@ -393,6 +461,7 @@ describe('reportEnglishLaunchReadiness script', () => {
   });
 
   it('does not load env files and fails before connecting when MONGO_URI is absent', async () => {
+    vi.stubEnv('MONGO_URI', '');
     const stderr = vi.fn();
     const { runReportEnglishLaunchReadinessCli } = await loadScript();
 

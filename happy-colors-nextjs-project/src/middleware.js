@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   DEFAULT_LOCALE,
+  LOCALE_COOKIE_NAME,
   LOCALE_REQUEST_HEADER,
   getEnabledPublicLocales,
   isEnabledPublicLocale,
@@ -9,8 +10,10 @@ import {
 } from '@/i18n/config';
 import {
   filterPublicSearchParams,
+  getRequestCountryCode,
   getPathLocale,
   localizePath,
+  selectLocaleForCountry,
   stripPathLocale,
 } from '@/i18n/routing';
 
@@ -97,11 +100,26 @@ export function isPublicLegacyPath(pathname = '') {
   return false;
 }
 
-function buildLocaleRedirect({ pathname, search = '', status, noStore = false }) {
+function buildLocaleRedirect({
+  pathname,
+  search = '',
+  status,
+  noStore = false,
+  varyLocalePreference = false,
+}) {
   const headers = {};
 
   if (noStore) {
     headers['Cache-Control'] = 'private, max-age=0, no-store';
+  }
+
+  if (varyLocalePreference) {
+    headers.Vary = [
+      'Cookie',
+      'CF-IPCountry',
+      'X-Vercel-IP-Country',
+      'CloudFront-Viewer-Country',
+    ].join(', ');
   }
 
   if (new URLSearchParams(String(search || '').replace(/^\?/, '')).has(TOKEN_QUERY_PARAM)) {
@@ -122,6 +140,8 @@ export function resolvePublicLocaleRedirect({
   search = '',
   localeRoutingEnabled = isLocaleRoutingEnabled(),
   englishEnabled = isEnglishPublicLocaleEnabled(),
+  savedLocale = '',
+  countryCode = '',
 } = {}) {
   if (!localeRoutingEnabled) {
     const normalizedPath = normalizePathname(pathname);
@@ -180,20 +200,27 @@ export function resolvePublicLocaleRedirect({
   }
 
   if (normalizedPath === '/') {
+    const preferredLocale = enabledLocales.includes(String(savedLocale || '').trim().toLowerCase())
+      ? String(savedLocale).trim().toLowerCase()
+      : selectLocaleForCountry(countryCode, { enabledLocales });
+
     return buildLocaleRedirect({
-      pathname: `/${DEFAULT_LOCALE}`,
+      pathname: `/${preferredLocale}`,
       search: filterPublicSearchParams(search, {}, { includeToken: true }),
       status: 307,
       noStore: true,
+      varyLocalePreference: true,
     });
   }
 
   if (isPublicLegacyPath(normalizedPath)) {
+    const isTokenPage = isNewsletterTokenPagePath(normalizedPath);
+
     return buildLocaleRedirect({
       pathname: localizePath(normalizedPath, DEFAULT_LOCALE),
       search: filterPublicSearchParams(search, {}, { includeToken: true }),
-      status: 307,
-      noStore: true,
+      status: isTokenPage ? 307 : 308,
+      noStore: isTokenPage,
     });
   }
 
@@ -254,6 +281,8 @@ export function middleware(request) {
   const localeRedirect = resolvePublicLocaleRedirect({
     pathname,
     search,
+    savedLocale: request.cookies.get(LOCALE_COOKIE_NAME)?.value,
+    countryCode: getRequestCountryCode(request.headers),
   });
 
   if (localeRedirect) {

@@ -3,6 +3,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 let envLoaded = false;
+const TEST_ENV_LOADED_MARKER = 'HAPPY_COLORS_TEST_ENV_LOADED';
 
 function resolveEnvCandidates() {
   const projectRoot = process.cwd();
@@ -17,6 +18,11 @@ function resolveEnvCandidates() {
 
 export function ensureServerEnvLoaded() {
   if (envLoaded) {
+    return;
+  }
+
+  if (process.env[TEST_ENV_LOADED_MARKER] === 'true') {
+    envLoaded = true;
     return;
   }
 

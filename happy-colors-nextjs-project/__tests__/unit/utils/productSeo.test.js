@@ -61,6 +61,31 @@ describe('productSeo', () => {
     expect(buildProductSeoDescription(uncategorizedProduct)).toContain('Gift Box');
   });
 
+  it('builds English SEO descriptions without Bulgarian fallback copy', async () => {
+    const { buildProductSeoDescription } = await import('../../../src/utils/productSeo.js');
+    const description = buildProductSeoDescription(product, 'en');
+
+    expect(description).toContain('Colorful Candle - candles from Happy Colors');
+    expect(description).toContain('A handmade piece crafted with attention to detail');
+    expect(description).not.toMatch(/[А-Яа-я]/);
+  });
+
+  it('omits a pending Bulgarian category from English product SEO', async () => {
+    const { buildProductSeoDescription, buildProductSeoTitle } = await import('../../../src/utils/productSeo.js');
+    const productWithCategoryFallback = {
+      ...product,
+      category: {
+        name: 'Свещи',
+        contentLocale: 'bg',
+        translationPending: true,
+      },
+    };
+
+    expect(buildProductSeoTitle(productWithCategoryFallback, 'en')).toBe('Colorful Candle');
+    expect(buildProductSeoDescription(productWithCategoryFallback, 'en')).not.toContain('Свещи');
+    expect(buildProductSeoDescription(productWithCategoryFallback, 'en')).not.toMatch(/[А-Яа-я]/);
+  });
+
   it('builds JSON-LD with offer and video metadata', async () => {
     const { buildProductJsonLd } = await import('../../../src/utils/productSeo.js');
     const jsonLd = buildProductJsonLd(product);
@@ -84,6 +109,21 @@ describe('productSeo', () => {
       thumbnailUrl: 'http://test.local/posters/candle.webp',
       duration: 'PT8S',
     });
+  });
+
+  it('localizes generated English video JSON-LD copy', async () => {
+    const { buildProductJsonLd } = await import('../../../src/utils/productSeo.js');
+    const jsonLd = buildProductJsonLd(
+      {
+        ...product,
+        description: '',
+      },
+      'en'
+    );
+
+    expect(jsonLd.description).not.toMatch(/[А-Яа-я]/);
+    expect(jsonLd.video[0].name).toBe('Colorful Candle - video 1');
+    expect(jsonLd.video[0].description).toBe(jsonLd.description);
   });
 
   it('omits optional JSON-LD fields when product data is missing', async () => {
@@ -166,6 +206,7 @@ describe('productSeo', () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
     const {
+      buildProductSeoDescription,
       buildProductMetadata,
       isProductTranslationFallback,
       shouldRenderProductJsonLd,
@@ -186,6 +227,9 @@ describe('productSeo', () => {
       bg: '/bg/products/product-1',
       'x-default': '/bg/products/product-1',
     });
+    expect(metadata.description).toBe(buildProductSeoDescription(fallbackProduct, 'bg'));
+    expect(metadata.openGraph.description).toBe(metadata.description);
+    expect(metadata.openGraph.locale).toBe('bg_BG');
     expect(metadata.openGraph.url).toBe('/bg/products/product-1');
   });
 
@@ -203,6 +247,11 @@ describe('productSeo', () => {
 
     expect(shouldRenderProductJsonLd(translatedProduct, 'en')).toBe(true);
     expect(metadata).not.toHaveProperty('robots');
+    expect(metadata.description).not.toMatch(/[А-Яа-я]/);
+    expect(metadata.openGraph.description).toBe(metadata.description);
+    expect(metadata.openGraph.locale).toBe('en_US');
+    expect(metadata.openGraph.alternateLocale).toEqual(['bg_BG']);
+    expect(metadata.twitter.description).toBe(metadata.description);
     expect(metadata.alternates.canonical).toBe('/en/products/product-1');
     expect(metadata.alternates.languages).toEqual({
       bg: '/bg/products/product-1',
@@ -230,6 +279,8 @@ describe('productSeo', () => {
         'x-default': '/bg/products/product-1',
       },
     });
+    expect(metadata.openGraph.locale).toBe('bg_BG');
+    expect(metadata.openGraph.alternateLocale).toEqual(['en_US']);
   });
 
   it('omits English hreflang for Bulgarian product metadata without a valid English alternate', async () => {

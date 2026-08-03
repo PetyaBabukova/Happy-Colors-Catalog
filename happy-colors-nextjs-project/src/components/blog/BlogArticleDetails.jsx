@@ -6,27 +6,9 @@ import useTranslations from '@/i18n/useTranslations';
 import BlogArticleActions from './BlogArticleActions';
 import styles from './blogPublic.module.css';
 
-function formatBulgarianDate(value) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return new Intl.DateTimeFormat('bg-BG', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
-}
-
-function formatDate(value, formatter, locale) {
+function formatDate(value, formatter) {
   if (!value) {
     return '';
-  }
-
-  if (locale === 'bg') {
-    return formatBulgarianDate(value);
   }
 
   try {
@@ -37,10 +19,10 @@ function formatDate(value, formatter, locale) {
 }
 
 export default function BlogArticleDetails({ article, articles = [] }) {
-  const { locale, t, formatVisibleDate } = useTranslations('blog');
+  const { t, formatVisibleDate } = useTranslations('blog');
   const { publicHref } = useLocaleNavigation();
   const publishedAt = article.publishedAt || article.createdAt;
-  const publishedDate = formatDate(publishedAt, formatVisibleDate, locale);
+  const publishedDate = formatDate(publishedAt, formatVisibleDate);
   const asideArticles = articles.filter((item) => item?._id);
 
   return (
@@ -77,7 +59,7 @@ export default function BlogArticleDetails({ article, articles = [] }) {
           <ul className={styles.asideList}>
             {asideArticles.map((asideArticle) => {
               const asidePublishedAt = asideArticle.publishedAt || asideArticle.createdAt;
-              const asidePublishedDate = formatDate(asidePublishedAt, formatVisibleDate, locale);
+              const asidePublishedDate = formatDate(asidePublishedAt, formatVisibleDate);
 
               return (
                 <li key={asideArticle._id}>

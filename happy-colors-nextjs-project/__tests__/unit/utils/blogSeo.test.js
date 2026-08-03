@@ -34,6 +34,28 @@ describe('blogSeo', () => {
     expect(buildBlogSeoDescription({ excerpt: 'Fallback excerpt' })).toBe('Fallback excerpt');
   });
 
+  it('uses English generic SEO and JSON-LD copy when optional article summaries are empty', () => {
+    const minimalEnglishArticle = {
+      title: 'A handmade story',
+      seoTitle: '',
+      seoDescription: '',
+      excerpt: '',
+      contentText: '',
+    };
+
+    expect(buildBlogSeoTitle({}, 'en')).toBe('Blog');
+    expect(buildBlogSeoDescription(minimalEnglishArticle, 'en')).toBe(
+      'Ideas, stories, and inspiration from Happy Colors.'
+    );
+
+    const metadata = buildBlogMetadata(minimalEnglishArticle, 'article-2', 'en');
+    const jsonLd = buildBlogArticleJsonLd(minimalEnglishArticle, 'article-2', 'en');
+
+    expect(metadata.description).not.toMatch(/[А-Яа-я]/);
+    expect(metadata.openGraph.description).toBe(metadata.description);
+    expect(jsonLd.description).toBe(metadata.description);
+  });
+
   it('builds article metadata with canonical, Open Graph, and Twitter image data', () => {
     const metadata = buildBlogMetadata(article, article._id);
 
@@ -123,6 +145,8 @@ describe('blogSeo', () => {
         'x-default': '/bg/blog/article-1',
       },
     });
+    expect(metadata.openGraph.locale).toBe('en_US');
+    expect(metadata.openGraph.alternateLocale).toEqual(['bg_BG']);
   });
 
   it('adds reciprocal English hreflang for Bulgarian articles with a valid English alternate', () => {
@@ -146,6 +170,8 @@ describe('blogSeo', () => {
         'x-default': '/bg/blog/article-1',
       },
     });
+    expect(metadata.openGraph.locale).toBe('bg_BG');
+    expect(metadata.openGraph.alternateLocale).toEqual(['en_US']);
   });
 
   it('marks a defensive English blog fallback as noindex with a Bulgarian canonical', () => {
@@ -169,5 +195,9 @@ describe('blogSeo', () => {
         'x-default': '/bg/blog/article-1',
       },
     });
+    expect(metadata.description).toBe(buildBlogSeoDescription(fallbackArticle, 'bg'));
+    expect(metadata.openGraph.description).toBe(metadata.description);
+    expect(metadata.openGraph.locale).toBe('bg_BG');
+    expect(metadata.openGraph).not.toHaveProperty('alternateLocale');
   });
 });

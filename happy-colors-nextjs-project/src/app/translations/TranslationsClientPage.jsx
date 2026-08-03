@@ -20,6 +20,7 @@ const ENTITY_LABELS = {
 };
 
 const STATUS_LABELS = {
+  current: 'Актуален EN превод',
   missing: 'Липсва EN превод',
   needs_decision: 'BG е променен',
   pending_review: 'EN чернова за преглед',
@@ -88,7 +89,10 @@ function buildInitialFields(item, fields) {
   }, {});
 }
 
-export default function TranslationsClientPage() {
+export default function TranslationsClientPage({
+  targetEntityType = '',
+  targetEntityId = '',
+}) {
   const [queue, setQueue] = useState({ items: [], unresolvedCount: 0 });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
@@ -105,7 +109,13 @@ export default function TranslationsClientPage() {
     setMessageType('');
 
     try {
-      setQueue(await getTranslationQueue({ locale: 'en' }));
+      setQueue(
+        await getTranslationQueue({
+          locale: 'en',
+          entityType: targetEntityType,
+          entityId: targetEntityId,
+        })
+      );
     } catch (error) {
       setMessage(error?.message || 'Не успяхме да заредим опашката за преводи.');
       setMessageType('error');
@@ -116,7 +126,7 @@ export default function TranslationsClientPage() {
 
   useEffect(() => {
     loadQueue();
-  }, []);
+  }, [targetEntityId, targetEntityType]);
 
   function updateDraftField(itemKey, fieldName, value) {
     setDraftFields((current) => ({
@@ -210,6 +220,13 @@ export default function TranslationsClientPage() {
           Обнови
         </button>
       </section>
+
+      {targetEntityType && targetEntityId ? (
+        <MessageBox
+          type="info"
+          message="Управление на английския превод за избрания запис."
+        />
+      ) : null}
 
       {message ? <MessageBox type={messageType || 'info'} message={message} /> : null}
 

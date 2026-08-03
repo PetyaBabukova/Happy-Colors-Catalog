@@ -14,6 +14,13 @@ export function pathEndPattern(path) {
   return new RegExp(`${escapedPath}\\/?(?:[?#].*)?$`);
 }
 
+export function getSeededProductCard(page) {
+  return page
+    .locator('a[href*="/products/"]')
+    .filter({ hasText: 'E2E Smoke Product' })
+    .first();
+}
+
 export async function addSeededProductToCart(page) {
   await page.goto(defaultCatalogPath);
   await page.getByRole('link', { name: /E2E Smoke Product/ }).first().click();

@@ -1,7 +1,7 @@
 // happy-colors-nextjs-project/src/app/products/page.jsx
 
 import { getProducts } from '@/managers/productsManager';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { getProductsPageContent } from '@/content/publicPages/products';
 import Shop from './Shop';
 
@@ -10,10 +10,11 @@ export async function generateMetadata(props = {}) {
   const locale = params?.locale;
   const content = getProductsPageContent(locale);
 
-  return {
+  return buildPageMetadata({
     ...content.metadata,
-    alternates: buildLocalizedAlternates('/products', locale),
-  };
+    path: '/products',
+    locale,
+  });
 }
 
 export default async function ProductsPage(props) {

@@ -1,1 +1,1 @@
-export { default, metadata, dynamic, revalidate } from '@/app/newsletter/confirm/page';
+export { default, generateMetadata, dynamic, revalidate } from '@/app/newsletter/confirm/page';

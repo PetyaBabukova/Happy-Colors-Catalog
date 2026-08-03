@@ -99,12 +99,16 @@ function buildStaticEntries(now) {
     ['/', { changeFrequency: 'weekly', priority: 1 }],
     ['/products', { changeFrequency: 'daily', priority: 0.9 }],
     ...(isCartoonsServiceEnabled
-      ? [['/cartoons', { changeFrequency: 'weekly', priority: 0.8 }]]
+      ? [
+          ['/cartoons', { changeFrequency: 'weekly', priority: 0.8 }],
+          ['/cartoons/offer', { changeFrequency: 'monthly', priority: 0.7 }],
+        ]
       : []),
     ['/aboutus', { changeFrequency: 'monthly', priority: 0.7 }],
     ['/faq', { changeFrequency: 'monthly', priority: 0.6 }],
     ['/blog', { changeFrequency: 'weekly', priority: 0.7 }],
     ['/contacts', { changeFrequency: 'monthly', priority: 0.7 }],
+    ['/partners', { changeFrequency: 'monthly', priority: 0.6 }],
   ];
 
   return staticPaths.flatMap(([path, fields]) =>

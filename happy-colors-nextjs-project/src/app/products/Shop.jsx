@@ -64,9 +64,21 @@ export default function Shop({ products, showTitle = true }) {
       <section className={`${styles.categories} pageInline`}>
         {categories.map((category) => {
           const categoryGroup = grouped[category];
+          const isCategoryTranslationPending =
+            locale === 'en' &&
+            categoryGroup.category?.contentLocale === 'bg' &&
+            categoryGroup.category?.translationPending === true;
+
           return (
             <article key={category} className={styles.shoppingCategory}>
-              <h3>{category}</h3>
+              <h3>
+                <span lang={isCategoryTranslationPending ? 'bg' : undefined}>{category}</span>
+                {isCategoryTranslationPending && (
+                  <span className={styles.categoryTranslationBadge}>
+                    {t('products.translationPending')}
+                  </span>
+                )}
+              </h3>
               <div className={styles.productList}>
                 {categoryGroup.products.map((product) => (
                   <ProductCard key={product._id} product={product} />

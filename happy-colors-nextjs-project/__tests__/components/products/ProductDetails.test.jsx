@@ -111,6 +111,13 @@ describe('ProductDetails', () => {
     ]);
   });
 
+  it('localizes inactive video poster alt text on English product routes', () => {
+    render(<ProductDetails product={product} />, { locale: 'en' });
+
+    expect(screen.getAllByAltText('Lavender Candle video')).not.toHaveLength(0);
+    expect(screen.queryByAltText('Lavender Candle видео')).not.toBeInTheDocument();
+  });
+
   it('marks Bulgarian fallback detail content as translation pending', () => {
     render(
       <ProductDetails
@@ -229,6 +236,11 @@ describe('ProductDetails', () => {
 
     expect(ownerRender.container.querySelector('a[href="/products/product-1/edit"]')).toBeInTheDocument();
     expect(ownerRender.container.querySelector('a[href="/products/product-1/delete"]')).toBeInTheDocument();
+    expect(
+      ownerRender.container.querySelector(
+        'a[href="/translations?entityType=product&entityId=product-1"]'
+      )
+    ).not.toBeInTheDocument();
 
     ownerRender.unmount();
 
@@ -256,6 +268,11 @@ describe('ProductDetails', () => {
 
     expect(container.querySelector('a[href="/products/product-1/edit"]')).toBeInTheDocument();
     expect(container.querySelector('a[href="/products/product-1/delete"]')).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        'a[href="/translations?entityType=product&entityId=product-1"]'
+      )
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Одобри' }));
 

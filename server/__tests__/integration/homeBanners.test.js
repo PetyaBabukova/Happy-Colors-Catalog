@@ -108,6 +108,58 @@ describe('home banners integration', () => {
     expect(bgRes.body[0]).not.toHaveProperty('sourceRevision');
   });
 
+  it('projects approved image-only cartoon banners for English public requests', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const translated = await createHomeBanner({
+      owner,
+      placement: 'cartoons',
+      title: '',
+      description: '',
+      ctaLabel: '',
+      ctaHref: '',
+      sourceRevision: 2,
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoons-en.webp',
+      translations: {
+        en: {
+          title: '',
+          description: '',
+          ctaLabel: '',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    await createHomeBanner({
+      owner,
+      placement: 'cartoons',
+      title: '',
+      description: '',
+      ctaLabel: '',
+      ctaHref: '',
+      imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/cartoons-bg-only.webp',
+    });
+
+    const res = await request(app)
+      .get('/home-banners')
+      .query({ placement: 'cartoons', locale: 'en' })
+      .expect(200);
+
+    expect(res.body).toEqual([
+      expect.objectContaining({
+        _id: String(translated._id),
+        placement: 'cartoons',
+        title: '',
+        description: '',
+        ctaLabel: '',
+        contentLocale: 'en',
+        translationPending: false,
+      }),
+    ]);
+    expect(res.body[0]).not.toHaveProperty('translations');
+    expect(res.body[0]).not.toHaveProperty('sourceRevision');
+  });
+
   it('bumps home banner sourceRevision when source copy is edited', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();

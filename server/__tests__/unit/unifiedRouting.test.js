@@ -132,6 +132,23 @@ describe('createUnifiedRoutingApp', () => {
     expect(response.body.url).toBe('/products/123');
   });
 
+  it('keeps translation management requests on the Express /api mount', async () => {
+    const { expressApp, handlerSpy } = buildExpressApp();
+    const nextHandler = buildNextHandler();
+    const app = createUnifiedRoutingApp({ expressApp, nextHandler });
+
+    const response = await request(app)
+      .get('/api/translations/queue?locale=en')
+      .expect(200);
+
+    expect(nextHandler).not.toHaveBeenCalled();
+    expect(handlerSpy).toHaveBeenCalledWith({
+      originalUrl: '/api/translations/queue?locale=en',
+      url: '/translations/queue?locale=en',
+    });
+    expect(response.body.url).toBe('/translations/queue?locale=en');
+  });
+
   it('keeps cartoon order creation and admin subroutes on Express without taking over Next-owned upload routes', async () => {
     const { expressApp, handlerSpy, bodyParserSpy } = buildExpressApp();
     const nextHandler = buildNextHandler();

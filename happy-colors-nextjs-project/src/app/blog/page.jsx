@@ -1,6 +1,6 @@
 import BlogArticleDetails from '@/components/blog/BlogArticleDetails';
 import { getBlogPageContent } from '@/content/publicPages/blog';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { getBlogArticle } from '@/lib/getBlogArticle';
 import { getBlogArticles } from '@/managers/blogArticlesManager';
 import styles from '@/components/blog/blogPublic.module.css';
@@ -12,10 +12,11 @@ export async function generateMetadata(props = {}) {
   const locale = params?.locale;
   const content = getBlogPageContent(locale);
 
-  return {
+  return buildPageMetadata({
     ...content.metadata,
-    alternates: buildLocalizedAlternates('/blog', locale),
-  };
+    path: '/blog',
+    locale,
+  });
 }
 
 export default async function BlogPage(props = {}) {

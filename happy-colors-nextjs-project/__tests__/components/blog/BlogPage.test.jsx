@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '../test-utils.jsx';
 
+vi.hoisted(() => {
+  vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+  vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu/');
+});
+
 import BlogPage, { generateMetadata } from '@/app/blog/page';
 import { generateMetadata as generateLocalizedMetadata } from '@/app/(localized)/[locale]/blog/page';
 import { getBlogArticle } from '@/lib/getBlogArticle';

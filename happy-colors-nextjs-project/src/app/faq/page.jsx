@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import styles from './faq.module.css';
 
@@ -375,10 +375,11 @@ export async function generateMetadata(props = {}) {
   const locale = params?.locale;
   const content = getFaqContent(locale);
 
-  return {
+  return buildPageMetadata({
     ...content.metadata,
-    alternates: buildLocalizedAlternates('/faq', locale),
-  };
+    path: '/faq',
+    locale,
+  });
 }
 
 export default async function FaqPage(props = {}) {

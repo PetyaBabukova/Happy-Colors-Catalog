@@ -123,6 +123,11 @@ export default function EditProductClient({ params }) {
         legendText="Редактиране на продукта"
         successMessage="Продуктът беше редактиран успешно!"
         canManageGalleryFlags={user?.role === 'full_admin'}
+        translationHref={
+          user?.role === 'full_admin'
+            ? `/translations?entityType=product&entityId=${encodeURIComponent(productId)}`
+            : ''
+        }
       />
     </>
   );

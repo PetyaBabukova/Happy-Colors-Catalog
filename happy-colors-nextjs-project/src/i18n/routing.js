@@ -8,6 +8,11 @@ import {
 const INTERNAL_URL_BASE = 'https://happycolors.local';
 const LOCALE_PATH_PATTERN = /^\/([A-Za-z]{2})(?=\/|$)/;
 const ABSOLUTE_OR_SCHEME_RELATIVE_PATTERN = /^(?:[A-Za-z][A-Za-z0-9+.-]*:|\/\/)/;
+export const LOCALE_COUNTRY_HEADER_NAMES = Object.freeze([
+  'cf-ipcountry',
+  'x-vercel-ip-country',
+  'cloudfront-viewer-country',
+]);
 export const PUBLIC_QUERY_PARAM_ALLOWLIST = Object.freeze([
   'category',
   'created',
@@ -144,67 +149,40 @@ export function switchPublicLocaleHref(href, locale, options = {}) {
   return localizePublicHref(href, locale, options);
 }
 
-export function parseAcceptLanguage(header) {
-  if (typeof header !== 'string' || header.trim() === '') {
-    return [];
+export function getRequestCountryCode(headers) {
+  if (!headers || typeof headers.get !== 'function') {
+    return '';
   }
 
-  return header
-    .split(',')
-    .map((item, index) => {
-      const [rawRange, ...params] = item.trim().split(';');
-      const range = rawRange.trim().toLowerCase();
+  for (const headerName of LOCALE_COUNTRY_HEADER_NAMES) {
+    const value = headers.get(headerName);
 
-      if (!range || (!/^[a-z*][a-z0-9*-]*(?:-[a-z0-9*]+)*$/i.test(range))) {
-        return null;
-      }
-
-      const qParam = params.find((param) => param.trim().toLowerCase().startsWith('q='));
-      const q = qParam ? Number(qParam.split('=')[1]) : 1;
-
-      if (!Number.isFinite(q) || q <= 0) {
-        return null;
-      }
-
-      return {
-        range,
-        quality: Math.min(q, 1),
-        index,
-      };
-    })
-    .filter(Boolean)
-    .sort((left, right) => right.quality - left.quality || left.index - right.index);
-}
-
-function matchSupportedLocale(range, enabledLocales) {
-  if (range === '*') {
-    return getDefaultEnabledLocale(enabledLocales);
-  }
-
-  const primarySubtag = range.split('-')[0];
-
-  return enabledLocales.includes(primarySubtag) ? primarySubtag : null;
-}
-
-export function negotiateLocale(acceptLanguageHeader, {
-  enabledLocales = getEnabledPublicLocales(),
-} = {}) {
-  const normalizedEnabledLocales = normalizeEnabledLocales(enabledLocales);
-  const parsedLanguages = parseAcceptLanguage(acceptLanguageHeader);
-
-  if (parsedLanguages.length === 0) {
-    return normalizedEnabledLocales.includes(DEFAULT_LOCALE)
-      ? DEFAULT_LOCALE
-      : normalizedEnabledLocales[0];
-  }
-
-  for (const language of parsedLanguages) {
-    const matchedLocale = matchSupportedLocale(language.range, normalizedEnabledLocales);
-
-    if (matchedLocale) {
-      return matchedLocale;
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value.trim().toUpperCase();
     }
   }
 
-  return getDefaultEnabledLocale(normalizedEnabledLocales);
+  return '';
+}
+
+export function selectLocaleForCountry(countryCode, {
+  enabledLocales = getEnabledPublicLocales(),
+} = {}) {
+  const normalizedEnabledLocales = normalizeEnabledLocales(enabledLocales);
+  const normalizedCountryCode = String(countryCode || '').trim().toUpperCase();
+  const defaultLocale = getDefaultEnabledLocale(normalizedEnabledLocales);
+
+  if (normalizedCountryCode === 'BG') {
+    return normalizedEnabledLocales.includes('bg') ? 'bg' : defaultLocale;
+  }
+
+  if (
+    /^[A-Z]{2}$/.test(normalizedCountryCode) &&
+    normalizedCountryCode !== 'XX' &&
+    normalizedEnabledLocales.includes('en')
+  ) {
+    return 'en';
+  }
+
+  return defaultLocale;
 }

@@ -1,7 +1,7 @@
 // happy-colors-nextjs-project/src/app/contacts/page.jsx
 
 import { Suspense } from 'react';
-import { buildLocalizedAlternates } from '@/config/siteSeo';
+import { buildPageMetadata } from '@/config/siteSeo';
 import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getDictionary } from '@/i18n/getDictionary';
 import ContactForm from '../../components/contacts/ContactForm';
@@ -17,11 +17,12 @@ export async function generateMetadata(props = {}) {
   const locale = params?.locale || DEFAULT_LOCALE;
   const contacts = getContactPageDictionary(locale);
 
-  return {
+  return buildPageMetadata({
     title: contacts.title,
     description: contacts.pageDescription,
-    alternates: buildLocalizedAlternates('/contacts', locale),
-  };
+    path: '/contacts',
+    locale,
+  });
 }
 
 export default async function ContactPage({ params, searchParams } = {}) {

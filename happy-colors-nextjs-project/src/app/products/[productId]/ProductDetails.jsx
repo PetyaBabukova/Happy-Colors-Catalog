@@ -23,22 +23,6 @@ import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import useTranslations from '@/i18n/useTranslations';
 import styles from './details.module.css';
 
-const deliveryContent = `
-Начини на доставка:
-• офис на Еконт или Спиди
-• автомат на Еконт или Спиди
-• автомат на Box Now
-Към момента не предлагаме доставка до личен адрес.
-Цена на доставката:
-За поръчки на стойност над 50 евро доставката е безплатна.
-За поръчки под тази стойност цената на доставката е за сметка на клиента и се определя според тарифите на куриерската фирма.
-Срок за изпращане:
-Наличните продукти се изпращат в рамките на до 1 работен ден.
-Срокът за получаване зависи от куриерската фирма и локацията на получателя.
-Неналични продукти:
-Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
-`;
-
 function warnAutoplay(message, details = {}) {
 	if (process.env.NODE_ENV !== 'development') {
 		return;
@@ -597,6 +581,15 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 								</div>
 							)}
 
+							{isFullAdmin && (
+								<Link
+									href={`/translations?entityType=product&entityId=${encodeURIComponent(product._id)}`}
+									className={styles.actionBtn}
+								>
+									EN превод
+								</Link>
+							)}
+
 							{isFullAdmin && isPendingReview && (
 								<div className={styles.ownerActions}>
 									<button
@@ -700,7 +693,7 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 												) : (
 													<Image
 														src={slide.posterUrl}
-														alt={`${product.title} видео`}
+														alt={t('products.videoLabel', { title: product.title })}
 														width={1600}
 														height={1600}
 														sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"

@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useProducts } from '@/context/ProductContext';
 import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
+import { persistLocalePreference } from '@/i18n/browserLocale';
 import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import useTranslations from '@/i18n/useTranslations';
 import { fetchAdminUsers } from '@/managers/usersAdminManager';
@@ -58,7 +59,10 @@ function LanguageSelector({ onNavigate }) {
             <Link
               href={switchLocaleHref(currentHref, enabledLocale)}
               aria-current={enabledLocale === locale ? 'true' : undefined}
-              onClick={onNavigate}
+              onClick={() => {
+                persistLocalePreference(enabledLocale);
+                onNavigate();
+              }}
             >
               {t('languageOption', {
                 languageCode: enabledLocale.toUpperCase(),
@@ -101,21 +105,6 @@ export default function Header() {
       setMobileMenuOpen(false);
     }
   }, []);
-  const getCategoryLabel = useCallback(
-    (category) => {
-      if (!category?.name) {
-        return '';
-      }
-
-      if (locale !== 'en') {
-        return category.name;
-      }
-
-      return dictionary?.navigation?.categoryFallbacks?.[category.name] || category.name;
-    },
-    [dictionary, locale]
-  );
-
   useEffect(() => {
     if (!isFullAdmin) {
       setPendingReviewCount(0);
@@ -197,13 +186,25 @@ export default function Header() {
                   <li>
                     <Link href={publicHref('/products')}>{t('allProducts')}</Link>
                   </li>
-                  {visibleCategories.map((cat) => (
-                    <li key={cat._id}>
-                      <Link href={publicHref(`/products?category=${encodeURIComponent(getCategoryFilterValue(cat))}`)}>
-                        {getCategoryLabel(cat)}
-                      </Link>
-                    </li>
-                  ))}
+                  {visibleCategories.map((cat) => {
+                    const isCategoryTranslationPending =
+                      locale === 'en' &&
+                      cat?.contentLocale === 'bg' &&
+                      cat?.translationPending === true;
+
+                    return (
+                      <li key={cat._id}>
+                        <Link href={publicHref(`/products?category=${encodeURIComponent(getCategoryFilterValue(cat))}`)}>
+                          <span lang={isCategoryTranslationPending ? 'bg' : undefined}>{cat.name}</span>
+                          {isCategoryTranslationPending && (
+                            <span className={styles.categoryTranslationBadge}>
+                              {dictionary.products.translationPending}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </li>
@@ -249,6 +250,7 @@ export default function Header() {
             )}
             {isFullAdmin && (
               <>
+                <li><Link href="/translations">EN преводи</Link></li>
                 <li><Link href="/homepage-featured">Любими продукти</Link></li>
                 <li><Link href="/categories/create">Създай категория</Link></li>
                 <li><Link href="/categories">Категории</Link></li>

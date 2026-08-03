@@ -25,7 +25,7 @@ const ADMIN_LABELS = {
 export default function HomeHeroCarousel({ banners = [] }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { locale, publicHref } = useLocaleNavigation();
+  const { publicHref } = useLocaleNavigation();
   const { t } = useTranslations('homeHero');
   const activeBanners = useMemo(() => banners.filter((banner) => banner?.imageUrl), [banners]);
   const pointerIdRef = useRef(null);
@@ -86,13 +86,12 @@ export default function HomeHeroCarousel({ banners = [] }) {
     );
   }
 
-  const currentBanner = activeBanners[currentIndex];
-  const bannerTitle = locale === 'en' ? t('fallbackTitle') : currentBanner.title;
-  const bannerDescription = locale === 'en' ? '' : currentBanner.description;
-  const bannerImageAlt = locale === 'en' ? t('fallbackImageAlt') : currentBanner.title;
-  const bannerCtaLabel = locale === 'en'
-    ? t('bannerCta')
-    : currentBanner.ctaLabel || t('bannerCta');
+  const safeCurrentIndex = currentIndex < activeBanners.length ? currentIndex : 0;
+  const currentBanner = activeBanners[safeCurrentIndex];
+  const bannerTitle = currentBanner.title || t('fallbackTitle');
+  const bannerDescription = currentBanner.description || '';
+  const bannerImageAlt = currentBanner.title || t('fallbackImageAlt');
+  const bannerCtaLabel = currentBanner.ctaLabel || t('bannerCta');
 
   async function handleDeleteBanner(bannerId) {
     if (!window.confirm(ADMIN_LABELS.confirmDelete)) {
@@ -175,7 +174,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
             alt={bannerImageAlt}
             className={styles.bannerImage}
             draggable="false"
-            fetchPriority={currentIndex === 0 ? 'high' : 'auto'}
+            fetchPriority={safeCurrentIndex === 0 ? 'high' : 'auto'}
           />
         </picture>
         <div className={styles.content}>

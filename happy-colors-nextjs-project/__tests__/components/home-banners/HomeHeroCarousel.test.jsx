@@ -50,18 +50,23 @@ describe('HomeHeroCarousel', () => {
     expect(screen.getByRole('link', { name: 'Виж декорация' })).toHaveAttribute('href', '/search?q=декорация');
   });
 
-  it('uses localized chrome for admin banner CTA labels on English routes', () => {
+  it('renders approved translated banner content on English routes', () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
     setMockNavigation({ pathname: '/en' });
+    const translatedBanners = [{
+      ...banners[0],
+      title: 'Crochet animals',
+      description: 'Handmade companions for a thoughtful gift.',
+      ctaLabel: 'Explore animals',
+    }];
 
-    render(<HomeHeroCarousel banners={banners} />, { locale: 'en' });
+    render(<HomeHeroCarousel banners={translatedBanners} />, { locale: 'en' });
 
-    expect(screen.queryByRole('heading', { name: banners[0].title })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Handmade crochet toys, accessories, and home decor' })).toBeInTheDocument();
-    expect(screen.getByAltText('Crocheted lion and colorful yarn from Happy Colors')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: banners[0].ctaLabel })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Catalog' })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Crochet animals' })).toBeInTheDocument();
+    expect(screen.getByText('Handmade companions for a thoughtful gift.')).toBeInTheDocument();
+    expect(screen.getByAltText('Crochet animals')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Explore animals' })).toHaveAttribute(
       'href',
       `/en/search?q=${encodeURIComponent('животинки')}`
     );
@@ -122,6 +127,16 @@ describe('HomeHeroCarousel', () => {
     fireEvent(mediaFrame, pointerUp);
 
     expect(screen.getByRole('heading', { name: 'Декорация' })).toBeInTheDocument();
+  });
+
+  it('does not crash when the current banner index is out of range after a list shrink', () => {
+    const { rerender } = render(<HomeHeroCarousel banners={banners} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Следващ банер' }));
+    expect(screen.getByRole('heading', { name: 'Декорация' })).toBeInTheDocument();
+
+    expect(() => rerender(<HomeHeroCarousel banners={[banners[0]]} />)).not.toThrow();
+    expect(screen.getByRole('heading', { name: 'Животинки' })).toBeInTheDocument();
   });
 
   it('shows edit and delete controls only for authenticated users', async () => {

@@ -34,6 +34,37 @@ describe('translationsManager', () => {
     );
   });
 
+  it('targets a single entity when translation management is opened from its edit page', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { items: [], unresolvedCount: 0 } }));
+
+    await getTranslationQueue({
+      locale: 'en',
+      entityType: 'product',
+      entityId: 'product-1',
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/translations/queue?locale=en&entityType=product&entityId=product-1',
+      expect.objectContaining({ credentials: 'include', cache: 'no-store' })
+    );
+  });
+
+  it('forwards partial entity filters so the server can reject malformed links', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'Both fields are required.' } }));
+
+    await expect(
+      getTranslationQueue({
+        locale: 'en',
+        entityType: 'product',
+      })
+    ).rejects.toThrow('Both fields are required.');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/translations/queue?locale=en&entityType=product',
+      expect.objectContaining({ credentials: 'include', cache: 'no-store' })
+    );
+  });
+
   it('sends manual translation payloads as JSON', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ body: { status: 'current' } }));
 

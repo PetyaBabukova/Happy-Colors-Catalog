@@ -98,6 +98,12 @@ describe('sitemap', () => {
         priority: 0.7,
       },
       {
+        url: 'https://happycolors.eu/partners',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.6,
+      },
+      {
         url: 'https://happycolors.eu/products/red-candle',
         lastModified: new Date('2026-05-01T12:00:00.000Z'),
         changeFrequency: 'weekly',
@@ -134,6 +140,7 @@ describe('sitemap', () => {
     const entries = await sitemap();
 
     expect(entries.map((entry) => entry.url)).toContain('https://happycolors.eu/cartoons');
+    expect(entries.map((entry) => entry.url)).toContain('https://happycolors.eu/cartoons/offer');
   });
 
   it('emits localized sitemap entries and includes English dynamic URLs only for translated content', async () => {
@@ -183,6 +190,8 @@ describe('sitemap', () => {
 
     expect(urls).toContain('https://happycolors.eu/bg');
     expect(urls).toContain('https://happycolors.eu/en');
+    expect(urls).toContain('https://happycolors.eu/bg/partners');
+    expect(urls).toContain('https://happycolors.eu/en/partners');
     expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
     expect(urls).toContain('https://happycolors.eu/en/products/translated-product');
     expect(urls).toContain('https://happycolors.eu/bg/products/fallback-product');
@@ -282,7 +291,7 @@ describe('sitemap', () => {
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
       next: { revalidate: 3600, tags: ['blog-articles'] },
     });
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(7);
     expect(entries.map((entry) => entry.url)).toEqual([
       'https://happycolors.eu/',
       'https://happycolors.eu/products',
@@ -290,6 +299,7 @@ describe('sitemap', () => {
       'https://happycolors.eu/faq',
       'https://happycolors.eu/blog',
       'https://happycolors.eu/contacts',
+      'https://happycolors.eu/partners',
     ]);
   });
 });

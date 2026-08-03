@@ -53,7 +53,10 @@ describe('ProductDetailsPage locale wiring', () => {
       { _id: 'product-1', title: 'Crochet Lion' },
       'en'
     );
-    expect(buildProductJsonLdMock).toHaveBeenCalledWith({ _id: 'product-1', title: 'Crochet Lion' });
+    expect(buildProductJsonLdMock).toHaveBeenCalledWith(
+      { _id: 'product-1', title: 'Crochet Lion' },
+      'en'
+    );
   });
 
   it('omits product JSON-LD for English fallback product content', async () => {

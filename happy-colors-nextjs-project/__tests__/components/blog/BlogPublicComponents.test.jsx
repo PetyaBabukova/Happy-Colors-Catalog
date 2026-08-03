@@ -40,11 +40,6 @@ describe('public blog components', () => {
 
   it('renders an aside list and marks the selected article', () => {
     render(<BlogArticleDetails article={article} articles={[article, olderArticle]} />);
-    const expectedBgDate = new Intl.DateTimeFormat('bg-BG', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(article.publishedAt));
 
     expect(screen.getByRole('complementary')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Colorful article/ })).toHaveAttribute('aria-current', 'page');
@@ -56,7 +51,7 @@ describe('public blog components', () => {
       'src',
       article.heroImageUrl
     );
-    expect(screen.getAllByText(expectedBgDate)).toHaveLength(3);
+    expect(screen.getAllByText('15.05.2026')).toHaveLength(3);
     expect(document.querySelector(`img[src="${olderArticle.thumbnailImageUrl}"]`)).toBeInTheDocument();
   });
 

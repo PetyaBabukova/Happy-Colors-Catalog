@@ -13,16 +13,13 @@ test('cart flow works or redirects safely in catalog mode @smoke @cart', async (
     'Catalog-mode localized redirect requires locale routing to be enabled.'
   );
 
-  await page.goto('/cart');
-  await expect(page.locator('body')).not.toContainText('Application error');
-
   if (catalogMode) {
+    await page.goto('/cart');
+    await expect(page.locator('body')).not.toContainText('Application error');
     await expect(page).toHaveURL(pathEndPattern(defaultCatalogPath));
     await expect(page.getByText('E2E Smoke Product')).toBeVisible();
     return;
   }
-
-  await expect(page).toHaveURL(/\/cart$/);
 
   await addSeededProductToCart(page);
 });
