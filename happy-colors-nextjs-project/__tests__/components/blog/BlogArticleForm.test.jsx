@@ -136,6 +136,29 @@ describe('BlogArticleForm', () => {
     expect(screen.queryByLabelText('Статус')).not.toBeInTheDocument();
   });
 
+  it('renders edit header actions when provided', () => {
+    render(
+      <BlogArticleForm
+        mode="edit"
+        initialValues={{
+          title: 'Статия',
+          contentHtml: '<p>Текст</p>',
+          contentText: 'Текст',
+          heroImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/hero/old.webp',
+          thumbnailImageUrl: 'https://storage.googleapis.com/test-bucket/blog/articles/thumbnails/old.webp',
+          heroImageAlt: 'Снимка',
+        }}
+        onSubmit={vi.fn()}
+        headerActions={<a href="/translations?entityType=blogArticle&entityId=article-1">EN превод</a>}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'EN превод' })).toHaveAttribute(
+      'href',
+      '/translations?entityType=blogArticle&entityId=article-1'
+    );
+  });
+
   it('enforces SEO and alt text length before submit', async () => {
     const onSubmit = vi.fn();
 

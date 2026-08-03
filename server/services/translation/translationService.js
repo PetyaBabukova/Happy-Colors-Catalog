@@ -63,32 +63,122 @@ function getMapEntry(map, locale) {
   return map[locale] || null;
 }
 
-function setMapEntry(entity, fieldName, locale, value) {
-  if (!entity[fieldName]) {
-    entity[fieldName] = new Map();
-  }
-
-  if (typeof entity[fieldName].set === 'function') {
-    entity[fieldName].set(locale, value);
-  } else {
-    entity[fieldName][locale] = value;
-  }
-
-  entity.markModified(fieldName);
+function buildLocalePath(fieldName, locale) {
+  return `${fieldName}.${locale}`;
 }
 
-function deleteMapEntry(entity, fieldName, locale) {
-  if (!entity[fieldName]) {
-    return;
+function buildSourceRevisionGuard(expectedSourceRevision) {
+  const expected = normalizeExpectedRevision(expectedSourceRevision, 'expectedSourceRevision');
+
+  if (expected === 1) {
+    return {
+      $or: [
+        { sourceRevision: expected },
+        { sourceRevision: { $exists: false } },
+        { sourceRevision: null },
+      ],
+    };
   }
 
-  if (typeof entity[fieldName].delete === 'function') {
-    entity[fieldName].delete(locale);
-  } else {
-    delete entity[fieldName][locale];
+  return { sourceRevision: expected };
+}
+
+function buildStoredEntryRevisionGuard(fieldName, locale, revisionField, expected) {
+  const revisionPath = `${buildLocalePath(fieldName, locale)}.${revisionField}`;
+
+  if (expected === 0) {
+    return {
+      $or: [
+        { [revisionPath]: 0 },
+        { [revisionPath]: { $exists: false } },
+        { [revisionPath]: null },
+      ],
+    };
   }
 
-  entity.markModified(fieldName);
+  return { [revisionPath]: expected };
+}
+
+function buildEntryRevisionGuard(fieldName, locale, expectedFieldName, expectedValue) {
+  const expected = normalizeExpectedRevision(expectedValue, expectedFieldName);
+  const revisionField =
+    expectedFieldName === 'expectedDraftRevision' ? 'draftRevision' : 'translationRevision';
+
+  return buildStoredEntryRevisionGuard(fieldName, locale, revisionField, expected);
+}
+
+function buildDraftStateGuard(locale, draft) {
+  return buildStoredEntryRevisionGuard(
+    'translationDrafts',
+    locale,
+    'draftRevision',
+    readRevision(draft, 'draftRevision')
+  );
+}
+
+function buildActiveTranslationWriteGuards(locale, payload) {
+  return [
+    buildSourceRevisionGuard(payload.expectedSourceRevision),
+    buildEntryRevisionGuard(
+      'translations',
+      locale,
+      'expectedTranslationRevision',
+      payload.expectedTranslationRevision
+    ),
+  ];
+}
+
+function buildDraftTranslationWriteGuards(locale, payload) {
+  return [
+    buildSourceRevisionGuard(payload.expectedSourceRevision),
+    buildEntryRevisionGuard(
+      'translationDrafts',
+      locale,
+      'expectedDraftRevision',
+      payload.expectedDraftRevision
+    ),
+  ];
+}
+
+async function persistTranslationChanges(
+  config,
+  entity,
+  { setEntries = [], unsetEntries = [], guardClauses = [] } = {}
+) {
+  const $set = {};
+  const $unset = {};
+
+  for (const { fieldName, locale, value } of setEntries) {
+    $set[buildLocalePath(fieldName, locale)] = value;
+  }
+
+  for (const { fieldName, locale } of unsetEntries) {
+    $unset[buildLocalePath(fieldName, locale)] = '';
+  }
+
+  const update = {};
+
+  if (Object.keys($set).length > 0) {
+    update.$set = $set;
+  }
+
+  if (Object.keys($unset).length > 0) {
+    update.$unset = $unset;
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw createTranslationError('No translation changes to persist.', 400);
+  }
+
+  const result = await config.model.updateOne(
+    { $and: [{ _id: entity._id }, ...guardClauses] },
+    update,
+    { runValidators: true, context: 'query' }
+  );
+
+  if (result.matchedCount !== 1) {
+    throw createTranslationError('The source or English translation changed. Reload and retry.', 409);
+  }
 }
 
 function readRevision(entry, fieldName) {
@@ -139,6 +229,90 @@ function collectUrls(value) {
   return [...new Set(urls)].sort();
 }
 
+function getInternalHostnames() {
+  const allowLocalHosts = process.env.NODE_ENV !== 'production';
+  const localHostnames = new Set(['localhost', '127.0.0.1']);
+  const configuredHosts = [
+    process.env.CLIENT_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.PUBLIC_SITE_URL,
+    process.env.NEWSLETTER_PUBLIC_SITE_URL,
+  ]
+    .map((value) => {
+      try {
+        return new URL(String(value || '')).hostname.toLowerCase();
+      } catch {
+        return '';
+      }
+    })
+    .filter((hostname) => hostname && (allowLocalHosts || !localHostnames.has(hostname)));
+
+  return new Set([
+    'happycolors.eu',
+    'www.happycolors.eu',
+    ...(allowLocalHosts ? localHostnames : []),
+    ...configuredHosts,
+  ]);
+}
+
+function normalizeInternalPath(pathname = '') {
+  const normalizedPathname = pathname || '/';
+  const localeMatch = normalizedPathname.match(/^\/(?:bg|en)(?=\/|$)/);
+  let pathWithoutLocale = localeMatch
+    ? normalizedPathname.slice(localeMatch[0].length) || '/'
+    : normalizedPathname;
+
+  if (pathWithoutLocale.length > 1) {
+    pathWithoutLocale = pathWithoutLocale.replace(/\/+$/, '');
+  }
+
+  return pathWithoutLocale || '/';
+}
+
+function buildComparableInternalUrl(parsedUrl) {
+  const pathname = normalizeInternalPath(parsedUrl.pathname);
+  const search = pathname === '/search' ? '' : parsedUrl.search;
+
+  return `internal:${pathname}${search}${parsedUrl.hash}`;
+}
+
+function normalizeExternalUrl(parsedUrl) {
+  if (parsedUrl.pathname === '/' && !parsedUrl.search && !parsedUrl.hash) {
+    return `${parsedUrl.protocol}//${parsedUrl.host.toLowerCase()}`;
+  }
+
+  return parsedUrl.href;
+}
+
+function normalizeComparableUrl(value) {
+  const text = String(value || '').trim();
+
+  if (text.startsWith('/') && !text.startsWith('//')) {
+    const parsedRelativeUrl = new URL(text, 'https://happycolors.eu');
+
+    return buildComparableInternalUrl(parsedRelativeUrl);
+  }
+
+  try {
+    const parsedUrl = new URL(text);
+    const hostname = parsedUrl.hostname.toLowerCase();
+
+    if (getInternalHostnames().has(hostname)) {
+      return buildComparableInternalUrl(parsedUrl);
+    }
+
+    return normalizeExternalUrl(parsedUrl);
+  } catch {
+    return text;
+  }
+
+  return text;
+}
+
+function collectComparableUrls(value) {
+  return collectUrls(value).map(normalizeComparableUrl).sort();
+}
+
 function assertSameProtectedValues(sourceValues, translatedValues, fieldName, collector, label) {
   const sourceTokens = collector(sourceValues?.[fieldName]);
   const translatedTokens = collector(translatedValues?.[fieldName]);
@@ -151,7 +325,7 @@ function assertSameProtectedValues(sourceValues, translatedValues, fieldName, co
 function assertProtectedContentPreserved({ sourceFields, translatedFields, fields }) {
   for (const fieldName of fields) {
     assertSameProtectedValues(sourceFields, translatedFields, fieldName, collectProtectedTokens, 'placeholders');
-    assertSameProtectedValues(sourceFields, translatedFields, fieldName, collectUrls, 'URLs');
+    assertSameProtectedValues(sourceFields, translatedFields, fieldName, collectComparableUrls, 'URLs');
   }
 }
 
@@ -221,10 +395,10 @@ function serializeQueueItem(entity, config, locale) {
   const draftCurrent = draft && normalizeSourceRevision(draft.sourceRevision) === sourceRevision;
   let status = 'missing';
 
-  if (activeCurrent) {
-    status = 'current';
-  } else if (config.activation === 'draft' && draftCurrent) {
+  if (config.activation === 'draft' && draftCurrent) {
     status = 'pending_review';
+  } else if (activeCurrent) {
+    status = 'current';
   } else if (draft && !draftCurrent) {
     status = 'outdated_draft';
   } else if (active) {
@@ -355,14 +529,16 @@ export async function saveManualTranslation({
       }),
     };
 
-    setMapEntry(entity, 'translationDrafts', locale, nextDraft);
-    await entity.save();
+    await persistTranslationChanges(config, entity, {
+      setEntries: [{ fieldName: 'translationDrafts', locale, value: nextDraft }],
+      guardClauses: buildDraftTranslationWriteGuards(locale, payload),
+    });
 
     return {
       status: 'pending_review',
       activation: config.activation,
       translation: serializeTranslation(active, config.translationFields),
-      draft: serializeTranslation(getMapEntry(entity.translationDrafts, locale), config.translationFields),
+      draft: serializeTranslation(nextDraft, config.translationFields),
     };
   }
 
@@ -378,13 +554,15 @@ export async function saveManualTranslation({
     }),
   };
 
-  setMapEntry(entity, 'translations', locale, nextTranslation);
-  await entity.save();
+  await persistTranslationChanges(config, entity, {
+    setEntries: [{ fieldName: 'translations', locale, value: nextTranslation }],
+    guardClauses: buildActiveTranslationWriteGuards(locale, payload),
+  });
 
   return {
     status: 'current',
     activation: config.activation,
-    translation: serializeTranslation(getMapEntry(entity.translations, locale), config.translationFields),
+    translation: serializeTranslation(nextTranslation, config.translationFields),
     draft: null,
   };
 }
@@ -428,14 +606,19 @@ export async function acceptCurrentTranslation({
     }),
   };
 
-  setMapEntry(entity, 'translations', locale, nextTranslation);
-  deleteMapEntry(entity, 'translationDrafts', locale);
-  await entity.save();
+  await persistTranslationChanges(config, entity, {
+    setEntries: [{ fieldName: 'translations', locale, value: nextTranslation }],
+    unsetEntries: [{ fieldName: 'translationDrafts', locale }],
+    guardClauses: [
+      ...buildActiveTranslationWriteGuards(locale, payload),
+      buildDraftStateGuard(locale, getMapEntry(entity.translationDrafts, locale)),
+    ],
+  });
 
   return {
     status: 'current',
     activation: config.activation,
-    translation: serializeTranslation(getMapEntry(entity.translations, locale), config.translationFields),
+    translation: serializeTranslation(nextTranslation, config.translationFields),
     draft: null,
   };
 }
@@ -482,14 +665,16 @@ export async function approveTranslationDraft({
     }),
   };
 
-  setMapEntry(entity, 'translations', locale, nextTranslation);
-  deleteMapEntry(entity, 'translationDrafts', locale);
-  await entity.save();
+  await persistTranslationChanges(config, entity, {
+    setEntries: [{ fieldName: 'translations', locale, value: nextTranslation }],
+    unsetEntries: [{ fieldName: 'translationDrafts', locale }],
+    guardClauses: buildDraftTranslationWriteGuards(locale, payload),
+  });
 
   return {
     status: 'current',
     activation: config.activation,
-    translation: serializeTranslation(getMapEntry(entity.translations, locale), config.translationFields),
+    translation: serializeTranslation(nextTranslation, config.translationFields),
     draft: null,
   };
 }
@@ -516,8 +701,10 @@ export async function rejectTranslationDraft({
 
   assertCurrentSourceRevision(entity, payload.expectedSourceRevision);
   assertExpectedEntryRevision(draft, 'expectedDraftRevision', payload.expectedDraftRevision);
-  deleteMapEntry(entity, 'translationDrafts', locale);
-  await entity.save();
+  await persistTranslationChanges(config, entity, {
+    unsetEntries: [{ fieldName: 'translationDrafts', locale }],
+    guardClauses: buildDraftTranslationWriteGuards(locale, payload),
+  });
 
   return {
     status: getMapEntry(entity.translations, locale) ? 'needs_decision' : 'missing',
@@ -594,14 +781,16 @@ export async function generateTranslation({
       }),
     };
 
-    setMapEntry(freshEntity, 'translationDrafts', locale, nextDraft);
-    await freshEntity.save();
+    await persistTranslationChanges(config, freshEntity, {
+      setEntries: [{ fieldName: 'translationDrafts', locale, value: nextDraft }],
+      guardClauses: buildDraftTranslationWriteGuards(locale, payload),
+    });
 
     return {
       status: 'pending_review',
       activation: config.activation,
       translation: serializeTranslation(freshActive, config.translationFields),
-      draft: serializeTranslation(getMapEntry(freshEntity.translationDrafts, locale), config.translationFields),
+      draft: serializeTranslation(nextDraft, config.translationFields),
     };
   }
 
@@ -617,13 +806,15 @@ export async function generateTranslation({
     }),
   };
 
-  setMapEntry(freshEntity, 'translations', locale, nextTranslation);
-  await freshEntity.save();
+  await persistTranslationChanges(config, freshEntity, {
+    setEntries: [{ fieldName: 'translations', locale, value: nextTranslation }],
+    guardClauses: buildActiveTranslationWriteGuards(locale, payload),
+  });
 
   return {
     status: 'current',
     activation: config.activation,
-    translation: serializeTranslation(getMapEntry(freshEntity.translations, locale), config.translationFields),
+    translation: serializeTranslation(nextTranslation, config.translationFields),
     draft: null,
   };
 }

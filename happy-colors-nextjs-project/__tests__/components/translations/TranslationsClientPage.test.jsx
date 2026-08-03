@@ -116,7 +116,7 @@ describe('TranslationsClientPage', () => {
     render(<TranslationsClientPage />);
 
     const item = await screen.findByRole('article');
-    fireEvent.click(within(item).getByRole('button', { name: 'Ръчен превод' }));
+    fireEvent.click(within(item).getByRole('button', { name: 'Редактирай EN' }));
     expect(screen.getByLabelText('EN заглавие')).toHaveValue('Existing English title');
     expect(screen.getByLabelText('EN описание')).toHaveValue('Existing English description.');
 
@@ -126,7 +126,7 @@ describe('TranslationsClientPage', () => {
     fireEvent.change(screen.getByLabelText('EN описание'), {
       target: { value: 'Soft handmade toy.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Запази ръчен EN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Запази EN' }));
 
     await waitFor(() =>
       expect(saveManualTranslation).toHaveBeenCalledWith({
@@ -141,5 +141,104 @@ describe('TranslationsClientPage', () => {
         },
       })
     );
+  });
+
+  it('edits a current blog translation as a new draft from targeted management', async () => {
+    getTranslationQueue
+      .mockResolvedValueOnce({
+        unresolvedCount: 0,
+        items: [
+          {
+            entityType: 'blogArticle',
+            entityId: 'article-1',
+            label: 'Блог статия',
+            locale: 'en',
+            status: 'current',
+            activation: 'draft',
+            sourceRevision: 4,
+            translationRevision: 2,
+            draftRevision: 0,
+            translation: {
+              title: 'Current English article',
+              contentHtml: '<p>Current body.</p>',
+              heroImageAlt: 'Current hero',
+              seoTitle: 'Current SEO',
+              seoDescription: 'Current SEO description',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        unresolvedCount: 1,
+        items: [
+          {
+            entityType: 'blogArticle',
+            entityId: 'article-1',
+            label: 'Блог статия',
+            locale: 'en',
+            status: 'pending_review',
+            activation: 'draft',
+            sourceRevision: 4,
+            translationRevision: 2,
+            draftRevision: 1,
+            translation: {
+              title: 'Current English article',
+              contentHtml: '<p>Current body.</p>',
+              heroImageAlt: 'Current hero',
+              seoTitle: 'Current SEO',
+              seoDescription: 'Current SEO description',
+            },
+            draft: {
+              title: 'Server normalized article',
+              contentHtml: '<p>Server normalized body.</p>',
+              heroImageAlt: 'Current hero',
+              seoTitle: 'Current SEO',
+              seoDescription: 'Current SEO description',
+            },
+          },
+        ],
+      });
+    render(
+      <TranslationsClientPage
+        targetEntityType="blogArticle"
+        targetEntityId="article-1"
+      />
+    );
+
+    const item = await screen.findByRole('article');
+    expect(within(item).queryByRole('button', { name: 'Приеми текущия EN' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('EN заглавие')).toHaveValue('Current English article');
+    expect(screen.getByRole('button', { name: 'Запази промените' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('EN заглавие'), {
+      target: { value: 'Edited English article' },
+    });
+    fireEvent.change(screen.getByLabelText('EN HTML съдържание'), {
+      target: { value: '<p>Edited <a href="/en/blog/bg-source">content</a></p>' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Запази промените' }));
+    await waitFor(() =>
+      expect(saveManualTranslation).toHaveBeenCalledWith({
+        entityType: 'blogArticle',
+        entityId: 'article-1',
+        locale: 'en',
+        expectedSourceRevision: 4,
+        expectedDraftRevision: 0,
+        fields: {
+          title: 'Edited English article',
+          contentHtml: '<p>Edited <a href="/en/blog/bg-source">content</a></p>',
+          heroImageAlt: 'Current hero',
+          seoTitle: 'Current SEO',
+          seoDescription: 'Current SEO description',
+        },
+      })
+    );
+    expect(await screen.findByText('Корекциите са запазени като EN чернова за преглед.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Запази промените' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Приеми текущия EN' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Одобри чернова' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Редактирай EN' }));
+    expect(screen.getByLabelText('EN заглавие')).toHaveValue('Server normalized article');
   });
 });

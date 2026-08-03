@@ -28,6 +28,9 @@ describe('BlogArticleActions', () => {
     });
 
     expect(container.querySelector(`a[href="/blog/${articleId}/edit"]`)).toBeInTheDocument();
+    expect(
+      container.querySelector(`a[href="/translations?entityType=blogArticle&entityId=${articleId}"]`)
+    ).toBeInTheDocument();
     const newsletterLink = container.querySelector(`a[href="/newsletter/send?source=blog&id=${articleId}"]`);
 
     expect(newsletterLink).toBeInTheDocument();

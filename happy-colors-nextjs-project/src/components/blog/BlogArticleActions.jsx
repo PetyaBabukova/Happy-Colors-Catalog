@@ -45,6 +45,12 @@ export default function BlogArticleActions({ articleId }) {
           Редактирай
         </Link>
         <Link
+          href={`/translations?entityType=blogArticle&entityId=${encodeURIComponent(articleId)}`}
+          className={styles.articleActionLink}
+        >
+          EN превод
+        </Link>
+        <Link
           href={`/newsletter/send?source=blog&id=${articleId}`}
           className={`${styles.articleActionLink} ${styles.newsletterActionLink}`}
         >

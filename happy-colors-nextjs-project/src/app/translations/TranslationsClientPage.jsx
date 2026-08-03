@@ -89,6 +89,24 @@ function buildInitialFields(item, fields) {
   }, {});
 }
 
+function getManualToggleLabel(item, isEditing) {
+  if (isEditing) {
+    return 'Затвори редакцията';
+  }
+
+  return item.translationRevision > 0 || item.draftRevision > 0
+    ? 'Редактирай EN'
+    : 'Ръчен превод';
+}
+
+function getManualSaveLabel(item) {
+  if (item.activation === 'draft' && (item.translationRevision > 0 || item.draftRevision > 0)) {
+    return 'Запази промените';
+  }
+
+  return item.activation === 'draft' ? 'Запази EN чернова' : 'Запази EN';
+}
+
 export default function TranslationsClientPage({
   targetEntityType = '',
   targetEntityId = '',
@@ -100,13 +118,16 @@ export default function TranslationsClientPage({
   const [busyId, setBusyId] = useState('');
   const [editingId, setEditingId] = useState('');
   const [draftFields, setDraftFields] = useState({});
+  const [autoOpenedTargetKey, setAutoOpenedTargetKey] = useState('');
 
   const items = useMemo(() => queue.items || [], [queue.items]);
 
-  async function loadQueue() {
+  async function loadQueue({ preserveMessage = false } = {}) {
     setLoading(true);
-    setMessage('');
-    setMessageType('');
+    if (!preserveMessage) {
+      setMessage('');
+      setMessageType('');
+    }
 
     try {
       setQueue(
@@ -127,6 +148,35 @@ export default function TranslationsClientPage({
   useEffect(() => {
     loadQueue();
   }, [targetEntityId, targetEntityType]);
+
+  useEffect(() => {
+    setEditingId('');
+    setAutoOpenedTargetKey('');
+  }, [targetEntityId, targetEntityType]);
+
+  useEffect(() => {
+    if (!targetEntityType || !targetEntityId || editingId || autoOpenedTargetKey) {
+      return;
+    }
+
+    const targetItem = items.find(
+      (item) => item.entityType === targetEntityType && item.entityId === targetEntityId
+    );
+
+    if (!targetItem) {
+      return;
+    }
+
+    const fields = FIELD_CONFIG[targetItem.entityType] || [];
+    const itemKey = getItemKey(targetItem);
+
+    setDraftFields((current) => ({
+      ...current,
+      [itemKey]: current[itemKey] || buildInitialFields(targetItem, fields),
+    }));
+    setEditingId(itemKey);
+    setAutoOpenedTargetKey(itemKey);
+  }, [autoOpenedTargetKey, editingId, items, targetEntityId, targetEntityType]);
 
   function updateDraftField(itemKey, fieldName, value) {
     setDraftFields((current) => ({
@@ -196,11 +246,20 @@ export default function TranslationsClientPage({
           ...buildManualPayload(item, draftFields[getItemKey(item)] || {}),
         });
         setEditingId('');
+        setDraftFields((current) => {
+          const next = { ...current };
+          delete next[getItemKey(item)];
+          return next;
+        });
       }
 
-      setMessage('Промяната е запазена.');
+      setMessage(
+        action === 'save' && item.activation === 'draft'
+          ? 'Корекциите са запазени като EN чернова за преглед.'
+          : 'Промяната е запазена.'
+      );
       setMessageType('success');
-      await loadQueue();
+      await loadQueue({ preserveMessage: true });
     } catch (error) {
       setMessage(error?.message || 'Промяната не беше запазена.');
       setMessageType('error');
@@ -275,7 +334,7 @@ export default function TranslationsClientPage({
               </dl>
 
               <div className={styles.actions}>
-                {item.translationRevision > 0 ? (
+                {item.translationRevision > 0 && item.status !== 'current' && !item.draftRevision ? (
                   <button
                     type="button"
                     onClick={() => runAction(item, 'accept')}
@@ -314,7 +373,7 @@ export default function TranslationsClientPage({
                   onClick={() => toggleEditing(item, fields)}
                   disabled={isBusy}
                 >
-                  {isEditing ? 'Затвори ръчен превод' : 'Ръчен превод'}
+                  {getManualToggleLabel(item, isEditing)}
                 </button>
               </div>
 
@@ -347,7 +406,7 @@ export default function TranslationsClientPage({
                     onClick={() => runAction(item, 'save')}
                     disabled={isBusy}
                   >
-                    Запази ръчен EN
+                    {getManualSaveLabel(item)}
                   </button>
                 </div>
               ) : null}
