@@ -4,7 +4,7 @@ import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Globe2, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useProducts } from '@/context/ProductContext';
@@ -26,6 +26,30 @@ function HeaderRouteWatcher({ onRouteChange }) {
   }, [onRouteChange, pathname, searchParamsKey]);
 
   return null;
+}
+
+function FlagIcon({ locale }) {
+  if (locale === 'bg') {
+    return (
+      <svg className={styles.localeFlag} viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+        <rect width="28" height="20" rx="3" fill="#fff" />
+        <path d="M0 6.67h28V20H0z" fill="#00966e" />
+        <path d="M0 13.33h28V20H0z" fill="#d62612" />
+        <rect width="28" height="20" rx="3" fill="none" stroke="rgba(0,0,0,.16)" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={styles.localeFlag} viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+      <rect width="28" height="20" rx="3" fill="#012169" />
+      <path d="M0 0l28 20M28 0L0 20" stroke="#fff" strokeWidth="4" />
+      <path d="M0 0l28 20M28 0L0 20" stroke="#c8102e" strokeWidth="2.4" />
+      <path d="M14 0v20M0 10h28" stroke="#fff" strokeWidth="6" />
+      <path d="M14 0v20M0 10h28" stroke="#c8102e" strokeWidth="3.4" />
+      <rect width="28" height="20" rx="3" fill="none" stroke="rgba(0,0,0,.18)" />
+    </svg>
+  );
 }
 
 function LanguageSelector({ onNavigate }) {
@@ -50,7 +74,7 @@ function LanguageSelector({ onNavigate }) {
   return (
     <details className={styles.localeSelector}>
       <summary aria-label={t('languageTrigger', { languageCode: locale.toUpperCase() })}>
-        <Globe2 aria-hidden="true" size={18} strokeWidth={1.8} />
+        <FlagIcon locale={locale} />
         <span>{locale.toUpperCase()}</span>
       </summary>
       <ul className={styles.localeMenu} aria-label={t('languageMenuLabel')}>
@@ -64,6 +88,7 @@ function LanguageSelector({ onNavigate }) {
                 onNavigate();
               }}
             >
+              <FlagIcon locale={enabledLocale} />
               {t('languageOption', {
                 languageCode: enabledLocale.toUpperCase(),
                 languageName: localeDetails[enabledLocale].label,
