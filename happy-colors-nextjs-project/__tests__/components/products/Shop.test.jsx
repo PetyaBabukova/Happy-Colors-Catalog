@@ -6,12 +6,12 @@ vi.mock('@/app/products/ProductCard', () => ({
   default: ({ product }) => <article data-testid={`product-${product._id}`}>{product.title}</article>,
 }));
 
-function product(_id, title, categoryName, availability = 'available') {
+function product(_id, title, categoryName, availability = 'available', categoryOverrides = {}) {
   return {
     _id,
     title,
     availability,
-    category: categoryName ? { name: categoryName } : null,
+    category: categoryName ? { name: categoryName, ...categoryOverrides } : null,
   };
 }
 
@@ -27,6 +27,17 @@ describe('Shop', () => {
     ).toBeInTheDocument();
     expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0);
     expect(screen.queryAllByTestId(/product-/)).toHaveLength(0);
+  });
+
+  it('can hide the catalog title when embedded in search results', () => {
+    render(<Shop products={[]} showTitle={false} />);
+
+    expect(
+      screen.queryByRole('heading', {
+        level: 1,
+        name: 'Плетени играчки, аксесоари и декорация',
+      })
+    ).not.toBeInTheDocument();
   });
 
   it('groups products by category and puts unavailable products last within each group', () => {
@@ -67,5 +78,43 @@ describe('Shop', () => {
     const headings = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
 
     expect(headings.at(-1)).toMatch(/Други/);
+  });
+
+  it('moves localized miscellaneous categories to the end by public filter slug', () => {
+    render(
+      <Shop
+        products={[
+          product('other', 'Other Item', 'Other', 'available', { filterSlug: 'drugi' }),
+          product('aaa', 'A Item', 'Aardvark'),
+        ]}
+      />,
+      { locale: 'en' }
+    );
+
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
+
+    expect(headings.at(-1)).toMatch(/Other/);
+  });
+
+  it('marks a Bulgarian category fallback on the English catalog', () => {
+    render(
+      <Shop
+        products={[
+          product('fallback', 'Translated product', 'Приказни герои', 'available', {
+            contentLocale: 'bg',
+            translationPending: true,
+          }),
+        ]}
+      />,
+      { locale: 'en' }
+    );
+
+    const heading = screen.getByRole('heading', {
+      level: 3,
+      name: 'Приказни герои Translation pending',
+    });
+
+    expect(within(heading).getByText('Приказни герои')).toHaveAttribute('lang', 'bg');
+    expect(within(heading).getByText('Translation pending')).toBeInTheDocument();
   });
 });

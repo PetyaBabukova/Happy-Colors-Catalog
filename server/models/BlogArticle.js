@@ -1,4 +1,8 @@
 import mongoose from 'mongoose';
+import {
+  createTranslationDraftMapSchema,
+  createTranslationMapSchema,
+} from './localizationSchemas.js';
 
 const blogArticleSchema = new mongoose.Schema(
   {
@@ -55,6 +59,98 @@ const blogArticleSchema = new mongoose.Schema(
       trim: true,
       maxlength: 170,
     },
+    sourceRevision: {
+      type: Number,
+      default: 1,
+      min: 1,
+      required: true,
+    },
+    translations: createTranslationMapSchema({
+      title: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 160,
+      },
+      contentHtml: {
+        type: String,
+        required: true,
+        maxlength: 50000,
+      },
+      contentText: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 20000,
+      },
+      excerpt: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 240,
+      },
+      heroImageAlt: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 180,
+      },
+      seoTitle: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 70,
+      },
+      seoDescription: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 170,
+      },
+    }),
+    translationDrafts: createTranslationDraftMapSchema({
+      title: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 160,
+      },
+      contentHtml: {
+        type: String,
+        required: true,
+        maxlength: 50000,
+      },
+      contentText: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 20000,
+      },
+      excerpt: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 240,
+      },
+      heroImageAlt: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 180,
+      },
+      seoTitle: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 70,
+      },
+      seoDescription: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 170,
+      },
+    }),
     status: {
       type: String,
       enum: ['published'],

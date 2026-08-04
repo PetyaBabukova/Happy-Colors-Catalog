@@ -42,10 +42,42 @@ describe('productsManager', () => {
     await expect(getProducts('Свещи и подаръци')).resolves.toEqual(products);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8%20%D0%B8%20%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
+      'http://localhost:3000/api/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8+%D0%B8+%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
       expect.objectContaining({
         cache: 'no-store',
       })
+    );
+  });
+
+  it('threads locale params through public product reads', async () => {
+    const products = [{ _id: 'p1', title: 'English Candle' }];
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: products }))
+      .mockResolvedValueOnce(jsonResponse({ body: products }))
+      .mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getProducts('English Toys', { locale: 'en' })).resolves.toEqual(products);
+    await expect(getHomepageFeaturedProducts({ locale: 'en' })).resolves.toEqual(products);
+    await expect(getCartoonGalleryProducts({ locale: 'en' })).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/products?locale=en&category=English+Toys',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3000/api/products/homepage-featured?locale=en',
+      expect.objectContaining({
+        next: expect.objectContaining({
+          tags: ['products', 'homepage-featured-products'],
+        }),
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:3000/api/products/cartoon-gallery?locale=en',
+      expect.objectContaining({ cache: 'no-store' })
     );
   });
 
@@ -68,6 +100,64 @@ describe('productsManager', () => {
           revalidate: 60,
           tags: ['products', 'homepage-featured-products'],
         },
+      })
+    );
+  });
+
+  it('threads Bulgarian and English homepage product locales into distinct URLs', async () => {
+    const products = [{ _id: 'product-1', title: 'Featured' }];
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: products }))
+      .mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getHomepageFeaturedProducts({ locale: 'bg' })).resolves.toEqual(products);
+    await expect(getHomepageFeaturedProducts({ locale: 'en' })).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/products/homepage-featured?locale=bg',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'homepage-featured-products'],
+        },
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3000/api/products/homepage-featured?locale=en',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products', 'homepage-featured-products'],
+        },
+      })
+    );
+  });
+
+  it('loads homepage featured and cartoon gallery products without locale params', async () => {
+    const products = [{ _id: 'product-1', title: 'Featured' }];
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: products }))
+      .mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getHomepageFeaturedProducts()).resolves.toEqual(products);
+    await expect(getCartoonGalleryProducts()).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/products/homepage-featured',
+      expect.objectContaining({
+        next: expect.objectContaining({
+          tags: ['products', 'homepage-featured-products'],
+        }),
+      })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3000/api/products/cartoon-gallery',
+      expect.objectContaining({
+        cache: 'no-store',
       })
     );
   });
@@ -285,6 +375,52 @@ describe('productsManager', () => {
     expect(router.push).toHaveBeenCalledWith('/products/product-1?updated=review-pending');
     expect(router.refresh).toHaveBeenCalled();
     expect(setSuccess).toHaveBeenCalledWith(true);
+  });
+
+  it('surfaces direct edit English translation decisions without navigating first', async () => {
+    const setSuccess = vi.fn();
+    const setError = vi.fn();
+    const setInvalidFields = vi.fn();
+    const router = { push: vi.fn(), refresh: vi.fn() };
+    const onTranslationDecision = vi.fn();
+    const englishTranslationDecision = {
+      locale: 'en',
+      status: 'needs_decision',
+      sourceRevision: 3,
+      translationRevision: 1,
+      translationSourceRevision: 2,
+    };
+
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          _id: 'product-1',
+          publicationStatus: 'published',
+          englishTranslationDecision,
+        },
+      })
+    );
+
+    await onEditProductSubmit(
+      buildFormValues(),
+      setSuccess,
+      setError,
+      setInvalidFields,
+      { _id: 'admin-1', role: 'full_admin' },
+      router,
+      'product-1',
+      { onTranslationDecision }
+    );
+
+    expect(onTranslationDecision).toHaveBeenCalledWith(
+      englishTranslationDecision,
+      expect.objectContaining({ _id: 'product-1' })
+    );
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.refresh).not.toHaveBeenCalled();
+    expect(setSuccess).toHaveBeenCalledWith(true);
+    expect(setError).toHaveBeenCalledWith('');
+    expect(setInvalidFields).toHaveBeenCalledWith([]);
   });
 
   it('deletes product images with credentials and returns backend result', async () => {

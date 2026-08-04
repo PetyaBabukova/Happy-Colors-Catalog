@@ -1,10 +1,14 @@
-import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { loadTestEnv } from '../scripts/loadTestEnv.js';
 import { AUTH_COOKIE_NAME, getJwtSecret, signAuthToken } from '../server/middlewares/auth.js';
 import mongoose from '../server/mongoose.js';
+import {
+  PRODUCT_PUBLICATION_STATUSES,
+  PRODUCT_REVIEW_STATUSES,
+} from '../server/utils/productPublication.js';
 
 mongoose.set('bufferCommands', false);
 
@@ -62,7 +66,7 @@ function buildStorageState({ baseURL, token, expires }) {
 }
 
 export default async function globalSetup(config) {
-  dotenv.config({ path: path.resolve(repoRoot, '.env.test') });
+  loadTestEnv();
 
   const mongoUri = process.env.MONGO_URI;
   const baseURL = config.projects[0].use.baseURL;
@@ -105,11 +109,14 @@ export default async function globalSetup(config) {
       title: productTitle,
       description: 'Seeded product for Playwright smoke tests.',
       price: 12.5,
-      imageUrl: '/homepage_background_laptop.webp',
-      imageUrls: ['/homepage_background_laptop.webp'],
+      imageUrl: '/lion_banner.webp',
+      imageUrls: ['/lion_banner.webp'],
       category: category._id,
       owner: owner._id,
       availability: 'available',
+      isInCatalog: true,
+      publicationStatus: PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
+      reviewStatus: PRODUCT_REVIEW_STATUSES.NONE,
     });
 
     const issuedAt = Math.floor(Date.now() / 1000);

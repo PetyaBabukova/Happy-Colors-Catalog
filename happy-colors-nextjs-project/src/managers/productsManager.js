@@ -3,6 +3,19 @@
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 
+function buildUrl(path, params = {}) {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.set(key, value);
+    }
+  }
+
+  const query = searchParams.toString();
+  return `${baseURL}${path}${query ? `?${query}` : ''}`;
+}
+
 export async function onCreateProductSubmit(
   formValues,
   setSuccess,
@@ -80,7 +93,8 @@ export async function onEditProductSubmit(
   setInvalidFields,
   user,
   router,
-  productId
+  productId,
+  options = {}
 ) {
   try {
     const normalizedImageUrls = Array.isArray(formValues.imageUrls)
@@ -119,6 +133,15 @@ export async function onEditProductSubmit(
     setSuccess(true);
     setError('');
     setInvalidFields([]);
+
+    if (
+      result?.englishTranslationDecision &&
+      typeof options.onTranslationDecision === 'function'
+    ) {
+      options.onTranslationDecision(result.englishTranslationDecision, result);
+      return result;
+    }
+
     router.push(
       result?.reviewStatus === 'pending_review' || result?.publicationStatus === 'pending_review'
         ? `/products/${productId}?updated=review-pending`
@@ -137,15 +160,15 @@ export async function onEditProductSubmit(
   }
 }
 
-export async function getProducts(categoryName) {
+export async function getProducts(categoryName, { locale } = {}) {
   try {
-    let url = `${baseURL}/products`;
+    const params = { locale };
 
     if (categoryName && categoryName !== 'Всички') {
-      url += `?category=${encodeURIComponent(categoryName)}`;
+      params.category = categoryName;
     }
 
-    const res = await fetch(url, {
+    const res = await fetch(buildUrl('/products', params), {
       cache: 'no-store',
     });
 
@@ -166,9 +189,9 @@ export async function getProducts(categoryName) {
   }
 }
 
-export async function getHomepageFeaturedProducts() {
+export async function getHomepageFeaturedProducts({ locale } = {}) {
   try {
-    const res = await fetch(`${baseURL}/products/homepage-featured`, {
+    const res = await fetch(buildUrl('/products/homepage-featured', { locale }), {
       next: {
         revalidate: 60,
         tags: ['products', 'homepage-featured-products'],
@@ -192,9 +215,9 @@ export async function getHomepageFeaturedProducts() {
   }
 }
 
-export async function getCartoonGalleryProducts() {
+export async function getCartoonGalleryProducts({ locale } = {}) {
   try {
-    const res = await fetch(`${baseURL}/products/cartoon-gallery`, {
+    const res = await fetch(buildUrl('/products/cartoon-gallery', { locale }), {
       cache: 'no-store',
     });
 

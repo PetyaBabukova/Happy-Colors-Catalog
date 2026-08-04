@@ -1,4 +1,8 @@
 import mongoose from 'mongoose';
+import {
+  createTranslationDraftMapSchema,
+  createTranslationMapSchema,
+} from './localizationSchemas.js';
 
 const homeBannerSchema = new mongoose.Schema(
   {
@@ -40,6 +44,48 @@ const homeBannerSchema = new mongoose.Schema(
       ],
       trim: true,
     },
+    sourceRevision: {
+      type: Number,
+      default: 1,
+      min: 1,
+      required: true,
+    },
+    translations: createTranslationMapSchema({
+      title: {
+        type: String,
+        trim: true,
+        maxlength: 120,
+      },
+      description: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 600,
+      },
+      ctaLabel: {
+        type: String,
+        trim: true,
+        maxlength: 60,
+      },
+    }),
+    translationDrafts: createTranslationDraftMapSchema({
+      title: {
+        type: String,
+        trim: true,
+        maxlength: 120,
+      },
+      description: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 600,
+      },
+      ctaLabel: {
+        type: String,
+        trim: true,
+        maxlength: 60,
+      },
+    }),
     imageUrl: {
       type: String,
       required: [true, 'Image URL is required!'],

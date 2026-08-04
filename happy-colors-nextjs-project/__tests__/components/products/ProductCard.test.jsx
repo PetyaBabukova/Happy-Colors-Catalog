@@ -110,6 +110,23 @@ describe('ProductCard', () => {
     expect(screen.queryByText('Налично')).not.toBeInTheDocument();
   });
 
+  it('marks Bulgarian fallback products as translation pending', () => {
+    render(
+      <ProductCard
+        product={{
+          ...product,
+          title: 'Българско заглавие',
+          contentLocale: 'bg',
+          translationPending: true,
+        }}
+      />,
+      { locale: 'en' }
+    );
+
+    expect(screen.getByText('Translation pending')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Българско заглавие' })).toHaveAttribute('lang', 'bg');
+  });
+
   it('renders the active video slide when it is in view', () => {
     useImageSlideshow.mockReturnValueOnce({
       currentItem: {

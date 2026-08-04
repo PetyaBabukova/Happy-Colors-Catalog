@@ -1,11 +1,15 @@
 import mongoose from 'mongoose';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createNewsletterConfirmationPageUrl,
   createNewsletterConfirmationToken,
+  createNewsletterPreferencesPageUrl,
+  createNewsletterPreferencesToken,
+  createUnsubscribePageUrl,
   createSubscribeFormToken,
   createUnsubscribeToken,
   verifyNewsletterConfirmationToken,
+  verifyNewsletterPreferencesToken,
   verifySubscribeFormToken,
   verifyUnsubscribeToken,
 } from '../../../services/newsletterService.js';
@@ -14,6 +18,7 @@ function buildSubscriber(overrides = {}) {
   return {
     _id: new mongoose.Types.ObjectId(),
     unsubscribeTokenVersion: 1,
+    preferenceTokenVersion: 1,
     ...overrides,
   };
 }
@@ -25,7 +30,12 @@ function decodePayload(token) {
 }
 
 describe('newsletterService token helpers', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', 'https://happycolors.eu');
+  });
+
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.NEWSLETTER_UNSUBSCRIBE_SECRET;
     delete process.env.NEWSLETTER_SUBSCRIBE_TOKEN_MIN_AGE_SECONDS;
   });
@@ -146,6 +156,86 @@ describe('newsletterService token helpers', () => {
     });
   });
 
+  it('can bind confirmation tokens and public page URLs to an allowed newsletter locale', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const subscriber = buildSubscriber({ unsubscribeTokenVersion: 4 });
+    const token = createNewsletterConfirmationToken(' Petya@Example.COM ', subscriber, {
+      locale: 'en',
+      localeChangeRequestVersion: 3,
+    });
+    const decoded = verifyNewsletterConfirmationToken(token);
+
+    expect(decoded).toMatchObject({
+      purpose: 'newsletter-confirm',
+      email: 'petya@example.com',
+      ver: 4,
+      locale: 'en',
+      localeVer: 3,
+    });
+    expect(createNewsletterConfirmationPageUrl(token, { locale: 'en' })).toBe(
+      `https://happycolors.eu/en/newsletter/confirm#token=${encodeURIComponent(token)}`
+    );
+    expect(createUnsubscribePageUrl('unsubscribe-token', { locale: 'en' })).toBe(
+      'https://happycolors.eu/en/newsletter/unsubscribe?token=unsubscribe-token'
+    );
+  });
+
+  it('creates dedicated 30-day preferences tokens and localized fragment URLs', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const subscriber = buildSubscriber({ preferenceTokenVersion: 5 });
+
+    const firstToken = createNewsletterPreferencesToken(subscriber);
+    const secondToken = createNewsletterPreferencesToken(subscriber);
+    const decoded = verifyNewsletterPreferencesToken(firstToken);
+
+    expect(firstToken).not.toBe(secondToken);
+    expect(decoded).toEqual({
+      purpose: 'newsletter-preferences',
+      sub: String(subscriber._id),
+      ver: 5,
+      iat: expect.any(Number),
+      nonce: expect.any(String),
+    });
+    expect(createNewsletterPreferencesPageUrl(firstToken, { locale: 'en' })).toBe(
+      `https://happycolors.eu/en/newsletter/preferences#token=${encodeURIComponent(firstToken)}`
+    );
+  });
+
+  it('rejects tampered, wrong-purpose, and expired preferences tokens', () => {
+    process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
+    const token = createNewsletterPreferencesToken(buildSubscriber());
+    const [payload, signature] = token.split('.');
+    const decoded = decodePayload(token);
+    const tamperedPayload = Buffer.from(JSON.stringify({ ...decoded, ver: decoded.ver + 1 })).toString('base64url');
+    const wrongPurposePayload = Buffer.from(JSON.stringify({ ...decoded, purpose: 'newsletter-confirm' })).toString('base64url');
+
+    let tamperedError;
+    let wrongPurposeError;
+    let expiredError;
+
+    try {
+      verifyNewsletterPreferencesToken(`${tamperedPayload}.${signature}`);
+    } catch (error) {
+      tamperedError = error;
+    }
+
+    try {
+      verifyNewsletterPreferencesToken(`${wrongPurposePayload}.${signature}`);
+    } catch (error) {
+      wrongPurposeError = error;
+    }
+
+    try {
+      verifyNewsletterPreferencesToken(token, { nowSeconds: decoded.iat + 31 * 24 * 60 * 60 });
+    } catch (error) {
+      expiredError = error;
+    }
+
+    expect(tamperedError?.code).toBe('invalid_preferences_token');
+    expect(wrongPurposeError?.code).toBe('invalid_preferences_token');
+    expect(expiredError?.code).toBe('expired_preferences_token');
+  });
+
   it('rejects tampered, expired, wrong-purpose, unsubscribe, and subscribe form tokens at confirmation verification', () => {
     process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'unit-newsletter-secret';
     const confirmationToken = createNewsletterConfirmationToken('petya@example.com');
@@ -217,11 +307,11 @@ describe('newsletterService token helpers', () => {
       const token = createNewsletterConfirmationToken('petya@example.com');
       const url = createNewsletterConfirmationPageUrl(token);
 
-      expect(url).toBe(`https://happycolors.eu/newsletter/confirm#token=${encodeURIComponent(token)}`);
+      expect(url).toBe(`https://happycolors.eu/bg/newsletter/confirm#token=${encodeURIComponent(token)}`);
       expect(url).not.toContain('?token=');
       process.env.NEWSLETTER_PUBLIC_SITE_URL = 'https://newsletter.example';
       expect(createNewsletterConfirmationPageUrl(token)).toBe(
-        `https://newsletter.example/newsletter/confirm#token=${encodeURIComponent(token)}`
+        `https://newsletter.example/bg/newsletter/confirm#token=${encodeURIComponent(token)}`
       );
     } finally {
       process.env.CLIENT_URL = previousClientUrl;

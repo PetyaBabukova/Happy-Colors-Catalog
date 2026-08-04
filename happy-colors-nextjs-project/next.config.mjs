@@ -134,6 +134,10 @@ const nextConfig = {
         source: '/api/delivery/:path*',
         destination: `${backendBaseUrl}/delivery/:path*`,
       },
+      {
+        source: '/api/translations/:path*',
+        destination: `${backendBaseUrl}/translations/:path*`,
+      },
     ];
   },
   images: {

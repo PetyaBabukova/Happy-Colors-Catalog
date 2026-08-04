@@ -273,7 +273,7 @@ describe('CartoonOrdersClientPage', () => {
     expect(await screen.findByRole('heading', { name: 'Запитвания' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Поръчки' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Изпълнени поръчки' })).toBeInTheDocument();
-    expect(screen.getByText('Completed Customer')).toBeInTheDocument();
+    expect(await screen.findByText('Completed Customer')).toBeInTheDocument();
     expect(fetchCartoonOrders).toHaveBeenCalledWith();
   });
 

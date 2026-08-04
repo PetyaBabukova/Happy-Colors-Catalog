@@ -9,6 +9,8 @@ import useImageSlideshow from '@/hooks/useImageSlideshow';
 import { buildProductHref } from '@/utils/cartoonServiceRoutes';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
+import useTranslations from '@/i18n/useTranslations';
 import styles from './shop.module.css';
 
 function buildCardMediaSlides(product) {
@@ -29,6 +31,8 @@ function buildCardMediaSlides(product) {
 }
 
 export default function ProductCard({ product, serviceContext = '' }) {
+  const { publicHref } = useLocaleNavigation();
+  const { t } = useTranslations();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const mediaSlides = useMemo(() => buildCardMediaSlides(product), [product]);
@@ -66,9 +70,10 @@ export default function ProductCard({ product, serviceContext = '' }) {
   const shouldRenderVideo = currentSlide?.type === 'video' && isInView;
   const isAvailable = product?.availability !== 'unavailable';
   const showAvailabilityBadge = isAvailable && serviceContext !== 'cartoons';
+  const isTranslationPending = product?.translationPending && product?.contentLocale === 'bg';
 
   return (
-    <Link href={buildProductHref(product._id, serviceContext)} className={styles.product}>
+    <Link href={publicHref(buildProductHref(product._id, serviceContext))} className={styles.product}>
       <div
         ref={containerRef}
         data-testid="product-card-media"
@@ -77,7 +82,10 @@ export default function ProductCard({ product, serviceContext = '' }) {
         onMouseLeave={resume}
       >
         {showAvailabilityBadge && (
-          <span className={styles.availabilityBadge}>Налично</span>
+          <span className={styles.availabilityBadge}>{t('products.availableBadge')}</span>
+        )}
+        {isTranslationPending && (
+          <span className={styles.translationBadge}>{t('products.translationPending')}</span>
         )}
 
         {shouldRenderVideo ? (
@@ -91,7 +99,7 @@ export default function ProductCard({ product, serviceContext = '' }) {
             preload="metadata"
             poster={currentSlide.posterUrl}
             className={styles.productImage}
-            aria-label={`${product.title} видео`}
+            aria-label={t('products.videoLabel', { title: product.title })}
           >
             <source src={currentSlide.videoUrl} type={currentSlide.mimeType} />
           </video>
@@ -121,7 +129,9 @@ export default function ProductCard({ product, serviceContext = '' }) {
           />
         ) : null}
       </div>
-      <h4 className={styles.productTitle}>{product.title}</h4>
+      <h4 className={styles.productTitle} lang={isTranslationPending ? 'bg' : undefined}>
+        {product.title}
+      </h4>
       {/* <p>{isCatalogMode ? 'Цена при запитване' : `Цена: ${product.price} €`}</p> */}
     </Link>
   );

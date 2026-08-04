@@ -40,6 +40,8 @@ describe('apiRouteOwnership', () => {
     '/api/payments/webhook',
     '/api/users/me',
     '/api/newsletter/send',
+    '/api/translations/queue',
+    '/api/translations/product/665f1f77bcf86cd799439011/en/generate',
     '/api/cartoon-orders',
     '/api/cartoon-orders/665f1f77bcf86cd799439011',
     '/api/cartoon-orders/665f1f77bcf86cd799439011/statuses',
@@ -127,6 +129,7 @@ describe('apiRouteOwnership', () => {
       '/api/orders',
       '/api/payments',
       '/api/delivery',
+      '/api/translations',
     ]);
     expect(BACKEND_API_EXACT_PATHS).toEqual([
       '/api/cartoon-orders',

@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import { deleteBlogArticle } from '@/managers/blogArticlesManager';
 import styles from './blogPublic.module.css';
 
 export default function BlogArticleActions({ articleId }) {
   const { user } = useAuth();
   const router = useRouter();
+  const { publicHref } = useLocaleNavigation();
   const [busyAction, setBusyAction] = useState('');
   const [error, setError] = useState('');
 
@@ -27,7 +29,7 @@ export default function BlogArticleActions({ articleId }) {
 
     try {
       await deleteBlogArticle(articleId);
-      router.push('/blog');
+      router.push(publicHref('/blog'));
       router.refresh();
     } catch (err) {
       setError(err.message || 'Неуспешно изтриване на статията.');
@@ -41,6 +43,12 @@ export default function BlogArticleActions({ articleId }) {
       <div className={styles.articleActionsRow}>
         <Link href={`/blog/${articleId}/edit`} className={styles.articleActionLink}>
           Редактирай
+        </Link>
+        <Link
+          href={`/translations?entityType=blogArticle&entityId=${encodeURIComponent(articleId)}`}
+          className={styles.articleActionLink}
+        >
+          EN превод
         </Link>
         <Link
           href={`/newsletter/send?source=blog&id=${articleId}`}

@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CategoriesManagerPage from '@/app/categories/CategoriesClientPage';
 import EditCategoryClient from '@/app/categories/[categoryId]/edit/EditCategoryClient';
 import { useProducts } from '@/context/ProductContext';
+import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 import { setMockNavigation } from '../setup.js';
 
 vi.mock('@/context/ProductContext', () => ({
   useProducts: vi.fn(),
+}));
+
+vi.mock('@/managers/translationsManager', () => ({
+  acceptCurrentTranslation: vi.fn(),
+  generateTranslation: vi.fn(),
 }));
 
 function jsonResponse({ ok = true, body = {} } = {}) {
@@ -26,6 +32,10 @@ describe('category admin pages', () => {
     triggerCategoriesReload.mockClear();
     useProducts.mockReturnValue({ triggerCategoriesReload });
     setMockNavigation({ params: { categoryId: 'cat-1' } });
+    acceptCurrentTranslation.mockClear();
+    generateTranslation.mockClear();
+    acceptCurrentTranslation.mockResolvedValue({ ok: true });
+    generateTranslation.mockResolvedValue({ ok: true });
   });
 
   it('redirects guests away from category management without loading categories', async () => {
@@ -101,13 +111,27 @@ describe('category admin pages', () => {
   it('loads a category for edit and submits the updated name', async () => {
     const mockRouterPush = vi.fn();
     fetch
-      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'cat-1', name: 'Candles' } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            _id: 'cat-1',
+            name: 'Candles',
+            slug: 'candles',
+            canonicalSlug: 'candles',
+            canonicalSlugReviewed: false,
+            slugAliases: [],
+          },
+        })
+      )
       .mockResolvedValueOnce(jsonResponse({ body: { _id: 'cat-1', name: 'Decor' } }));
 
     const { container } = render(<EditCategoryClient />, { mockRouterPush });
 
     await waitFor(() => expect(container.querySelector('input[name="name"]')).toHaveValue('Candles'));
     fireEvent.change(container.querySelector('input[name="name"]'), { target: { value: 'Decor' } });
+    fireEvent.change(container.querySelector('input[name="canonicalSlug"]'), { target: { value: 'decor' } });
+    fireEvent.change(container.querySelector('input[name="slugAliases"]'), { target: { value: 'candles, old-candles' } });
+    fireEvent.click(container.querySelector('input[name="canonicalSlugReviewed"]'));
     fireEvent.submit(container.querySelector('form'));
 
     await waitFor(() =>
@@ -117,7 +141,12 @@ describe('category admin pages', () => {
         expect.objectContaining({
           method: 'PUT',
           credentials: 'include',
-          body: JSON.stringify({ name: 'Decor' }),
+          body: JSON.stringify({
+            name: 'Decor',
+            canonicalSlug: 'decor',
+            canonicalSlugReviewed: true,
+            slugAliases: ['candles', 'old-candles'],
+          }),
         })
       )
     );
@@ -125,8 +154,116 @@ describe('category admin pages', () => {
     expect(mockRouterPush).toHaveBeenCalledWith('/categories');
   });
 
+  it('opens an English translation decision after editing a translated category name', async () => {
+    const mockRouterPush = vi.fn();
+    fetch
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            _id: 'cat-1',
+            name: 'Candles',
+            slug: 'candles',
+            canonicalSlug: 'candles',
+            canonicalSlugReviewed: true,
+            slugAliases: ['old-candles'],
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            _id: 'cat-1',
+            name: 'Decor',
+            sourceRevision: 3,
+            englishTranslationDecision: {
+              locale: 'en',
+              status: 'needs_decision',
+              sourceRevision: 3,
+              translationRevision: 1,
+              translationSourceRevision: 2,
+            },
+          },
+        })
+      );
+
+    const { container } = render(<EditCategoryClient />, { mockRouterPush });
+
+    await waitFor(() => expect(container.querySelector('input[name="name"]')).toHaveValue('Candles'));
+    fireEvent.change(container.querySelector('input[name="name"]'), { target: { value: 'Decor' } });
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Yes, update EN/i }));
+
+    await waitFor(() =>
+      expect(generateTranslation).toHaveBeenCalledWith({
+        entityType: 'category',
+        entityId: 'cat-1',
+        locale: 'en',
+        expectedSourceRevision: 3,
+        expectedTranslationRevision: 1,
+      })
+    );
+    expect(triggerCategoriesReload).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).toHaveBeenCalledWith('/categories');
+  });
+
+  it('can accept the current English category translation after editing the source name', async () => {
+    const mockRouterPush = vi.fn();
+    fetch
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            _id: 'cat-1',
+            name: 'Candles',
+            slug: 'candles',
+            canonicalSlug: 'candles',
+            canonicalSlugReviewed: true,
+            slugAliases: [],
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          body: {
+            _id: 'cat-1',
+            name: 'Decor',
+            sourceRevision: 4,
+            englishTranslationDecision: {
+              locale: 'en',
+              status: 'needs_decision',
+              sourceRevision: 4,
+              translationRevision: 2,
+              translationSourceRevision: 3,
+            },
+          },
+        })
+      );
+
+    const { container } = render(<EditCategoryClient />, { mockRouterPush });
+
+    await waitFor(() => expect(container.querySelector('input[name="name"]')).toHaveValue('Candles'));
+    fireEvent.change(container.querySelector('input[name="name"]'), { target: { value: 'Decor' } });
+    fireEvent.submit(container.querySelector('form'));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /No, keep current EN/i }));
+
+    await waitFor(() =>
+      expect(acceptCurrentTranslation).toHaveBeenCalledWith({
+        entityType: 'category',
+        entityId: 'cat-1',
+        locale: 'en',
+        expectedSourceRevision: 4,
+        expectedTranslationRevision: 2,
+      })
+    );
+    expect(triggerCategoriesReload).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).toHaveBeenCalledWith('/categories');
+  });
+
   it('validates short edit names before calling the update endpoint', async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'cat-1', name: 'Candles' } }));
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'cat-1', name: 'Candles', slug: 'candles' } }));
     const { container } = render(<EditCategoryClient />);
 
     await waitFor(() => expect(container.querySelector('input[name="name"]')).toHaveValue('Candles'));
@@ -139,7 +276,7 @@ describe('category admin pages', () => {
 
   it('maps edit field errors from the backend', async () => {
     fetch
-      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'cat-1', name: 'Candles' } }))
+      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'cat-1', name: 'Candles', slug: 'candles' } }))
       .mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'Name exists', field: 'name' } }));
     const { container } = render(<EditCategoryClient />);
 

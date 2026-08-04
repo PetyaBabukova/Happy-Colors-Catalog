@@ -10,26 +10,29 @@ import {
   updateCategory 
 } from '../services/categoryServices.js';
 import { requireAuth, requireFullAdmin } from '../middlewares/auth.js';
+import { getRequestPublicLocale } from '../services/localization/publicProjection.js';
 
 const router = express.Router();
 
 // 🟢 Всички категории (за create/edit форми)
 router.get('/', async (req, res) => {
   try {
-    const categories = await getAllCategories();
+    const locale = getRequestPublicLocale(req);
+    const categories = await getAllCategories({ locale });
     res.json(categories);
   } catch (err) {
-    res.status(500).json({ message: 'Грешка при зареждане на категориите.' });
+    res.status(err.statusCode || 500).json({ message: 'Грешка при зареждане на категориите.' });
   }
 });
 
 // 🟢 Само категории с продукти (за хедъра и shop страницата)
 router.get('/visible', async (req, res) => {
   try {
-    const visibleCategories = await getVisibleCategories();
+    const locale = getRequestPublicLocale(req);
+    const visibleCategories = await getVisibleCategories({ locale });
     res.json(visibleCategories);
   } catch (err) {
-    res.status(500).json({ message: 'Грешка при зареждане на видимите категории.' });
+    res.status(err.statusCode || 500).json({ message: 'Грешка при зареждане на видимите категории.' });
   }
 });
 
@@ -46,7 +49,7 @@ router.post('/', requireAuth, requireFullAdmin, async (req, res) => {
       message = first?.message || 'Невалиден вход';
     }
 
-    res.status(400).json({ message });
+    res.status(err.statusCode || 400).json({ message, field: err.field });
   }
 });
 
@@ -70,7 +73,7 @@ router.get('/:categoryId', requireAuth, requireFullAdmin, async (req, res) => {
     res.json(category);
   } catch (err) {
     console.error('Грешка при зареждане на категорията:', err);
-    res.status(500).json({ message: 'Грешка при зареждане на категорията.' });
+    res.status(err.statusCode || 500).json({ message: 'Грешка при зареждане на категорията.' });
   }
 });
 
@@ -91,7 +94,7 @@ router.put('/:categoryId', requireAuth, requireFullAdmin, async (req, res) => {
       message = first?.message || 'Невалидни данни.';
     }
 
-    res.status(400).json({ message });
+    res.status(err.statusCode || 400).json({ message, field: err.field });
   }
 });
 

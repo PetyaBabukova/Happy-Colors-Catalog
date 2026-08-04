@@ -13,6 +13,7 @@ import blogArticlesController from './controllers/blogArticlesController.js';
 import newsletterController from './controllers/newsletterController.js';
 import newsletterSendController from './controllers/newsletterSendController.js';
 import newsletterSubscribersController from './controllers/newsletterSubscribersController.js';
+import translationsController from './controllers/translationsController.js';
 import { createRateLimiter } from './middlewares/rateLimit.js';
 
 const router = express.Router();
@@ -55,6 +56,7 @@ router.use('/newsletter/send', newsletterSendController);
 router.use('/newsletter/subscribers', newsletterSubscribersController);
 // Newsletter applies endpoint-specific rate limiters in its controller.
 router.use('/newsletter', newsletterController);
+router.use('/translations', translationsController);
 router.use('/categories', categoryController);
 router.use('/search', searchController);
 router.use('/contacts', contactsLimiter, contactsController);

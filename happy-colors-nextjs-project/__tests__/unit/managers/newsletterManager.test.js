@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmNewsletterSubscription,
+  exchangeNewsletterPreferencesToken,
   getNewsletterSubscribeToken,
   subscribeToNewsletter,
   unsubscribeFromNewsletter,
+  updateNewsletterPreferences,
 } from '../../../src/managers/newsletterManager.js';
 
 function jsonResponse({ ok = true, body = {} } = {}) {
@@ -63,6 +65,44 @@ describe('newsletterManager', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: 'token-1' }),
+      })
+    );
+  });
+
+  it('exchanges newsletter preferences tokens and returns parsed responses', async () => {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ body: { sessionToken: 'session-1', currentLocale: 'bg', supportedLocales: ['bg', 'en'] } })
+    );
+
+    await expect(exchangeNewsletterPreferencesToken('token-1')).resolves.toEqual({
+      sessionToken: 'session-1',
+      currentLocale: 'bg',
+      supportedLocales: ['bg', 'en'],
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/newsletter/preferences/exchange',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: 'token-1' }),
+      })
+    );
+  });
+
+  it('posts newsletter preferences updates and returns parsed responses', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { message: 'saved', currentLocale: 'en' } }));
+
+    await expect(
+      updateNewsletterPreferences({ sessionToken: 'session-1', locale: 'en' })
+    ).resolves.toEqual({ message: 'saved', currentLocale: 'en' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/newsletter/preferences',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionToken: 'session-1', locale: 'en' }),
       })
     );
   });

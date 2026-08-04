@@ -87,6 +87,7 @@ export default function BlogArticleForm({
   onSubmit,
   mode = 'create',
   submitLabel = 'Запази',
+  headerActions = null,
 }) {
   const normalizedInitialValues = useMemo(() => normalizeValues(initialValues), [initialValues]);
   const [values, setValues] = useState(normalizedInitialValues);
@@ -237,7 +238,10 @@ export default function BlogArticleForm({
 
   return (
     <div className={styles.formContainer}>
-      <h1 className={styles.formTitle}>{formHeading}</h1>
+      <div className={styles.formHeader}>
+        <h1 className={styles.formTitle}>{formHeading}</h1>
+        {headerActions ? <div className={styles.formHeaderActions}>{headerActions}</div> : null}
+      </div>
       {error && <MessageBox type="error" message={`Грешка: ${error}`} />}
       {values.archivedAt && <MessageBox type="error" message="Тази статия е архивирана. Запазването няма да я публикува отново." />}
 

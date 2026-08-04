@@ -10,6 +10,7 @@ export const BACKEND_API_PREFIXES = Object.freeze([
   '/api/orders',
   '/api/payments',
   '/api/delivery',
+  '/api/translations',
 ]);
 
 export const BACKEND_API_EXACT_PATHS = Object.freeze([

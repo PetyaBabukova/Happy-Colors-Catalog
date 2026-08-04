@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import useTranslations from '@/i18n/useTranslations';
 import { deleteHomeBanner } from '@/managers/homeBannersManager';
 import styles from './HomeHeroCarousel.module.css';
 
@@ -13,6 +14,7 @@ const SWIPE_THRESHOLD_PX = 50;
 export default function CartoonsHeroCarousel({ banners = [] }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { t } = useTranslations('cartoonsHero');
   const activeBanners = useMemo(() => banners.filter((banner) => banner?.imageUrl), [banners]);
   const pointerIdRef = useRef(null);
   const dragStartXRef = useRef(0);
@@ -106,7 +108,7 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
   }
 
   return (
-    <section className={`${styles.carousel} pageInline`} aria-label="Шарж банери">
+    <section className={`${styles.carousel} pageInline`} aria-label={t('carouselAriaLabel')}>
       <div
         className={`${styles.mediaFrame} ${isDragging ? styles.mediaFrameDragging : ''}`}
         onPointerDown={handlePointerDown}
@@ -120,7 +122,7 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
           ) : null}
           <img
             src={currentBanner.imageUrl}
-            alt={currentBanner.title || 'Шарж банер'}
+            alt={currentBanner.title || t('fallbackImageAlt')}
             className={styles.bannerImage}
             draggable="false"
             fetchPriority={safeCurrentIndex === 0 ? 'high' : 'auto'}
@@ -151,11 +153,11 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
         )}
 
         {activeBanners.length > 1 && (
-          <div className={styles.carouselControls} aria-label="Навигация в банерите">
+          <div className={styles.carouselControls} aria-label={t('navigationAriaLabel')}>
             <button
               type="button"
               className={`${styles.carouselArrow} ${styles.previousArrow}`}
-              aria-label="Предишен банер"
+              aria-label={t('previous')}
               onClick={showPreviousBanner}
             >
               ‹
@@ -163,7 +165,7 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
             <button
               type="button"
               className={`${styles.carouselArrow} ${styles.nextArrow}`}
-              aria-label="Следващ банер"
+              aria-label={t('next')}
               onClick={showNextBanner}
             >
               ›

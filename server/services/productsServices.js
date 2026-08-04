@@ -34,6 +34,7 @@ import {
   canViewProduct,
   canWithdrawProductReview,
 } from '../utils/productPermissions.js';
+import { getSourceRevision, projectPublicProduct } from './localization/publicProjection.js';
 
 const ALLOWED_PRODUCT_FIELDS = new Set([
   'title',
@@ -106,6 +107,49 @@ function normalizeProductMedia(product) {
     ...normalizedImages,
     videos: normalizeStoredVideos(normalizedImages.videos),
   };
+}
+
+function getTranslationEntry(translations, locale) {
+  if (!translations) {
+    return null;
+  }
+
+  if (typeof translations.get === 'function') {
+    return translations.get(locale) || null;
+  }
+
+  return translations[locale] || null;
+}
+
+function getTranslationDecision(product, { changedPublicSource = false } = {}) {
+  const englishTranslation = getTranslationEntry(product?.translations, 'en');
+  const sourceRevision = getSourceRevision(product?.sourceRevision);
+  const translationSourceRevision = getSourceRevision(englishTranslation?.sourceRevision);
+  const translationRevision = Number(englishTranslation?.translationRevision) || 0;
+
+  if (!changedPublicSource || !englishTranslation || translationSourceRevision === sourceRevision) {
+    return null;
+  }
+
+  return {
+    locale: 'en',
+    status: 'needs_decision',
+    sourceRevision,
+    translationRevision,
+    translationSourceRevision,
+  };
+}
+
+function withTranslationDecision(product, options) {
+  const normalized = normalizeProductMedia(product);
+  const decision = getTranslationDecision(normalized, options);
+
+  return decision
+    ? {
+        ...normalized,
+        englishTranslationDecision: decision,
+      }
+    : normalized;
 }
 
 function hasDraftContent(product) {
@@ -390,8 +434,46 @@ function buildEditProductData(data) {
   return normalizedFields;
 }
 
+function hasChangedField(target, updates, field) {
+  if (!Object.prototype.hasOwnProperty.call(updates, field)) {
+    return false;
+  }
+
+  return String(target?.[field] ?? '').trim() !== String(updates[field] ?? '').trim();
+}
+
+function hasProductSourceCopyChange(target, updates = {}) {
+  return (
+    hasChangedField(target, updates, 'title') ||
+    hasChangedField(target, updates, 'description')
+  );
+}
+
 function toStrictBoolean(value) {
   return value === true || value === 'true';
+}
+
+function normalizeCategoryFilterValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function categoryMatchesPublicFilter(category, filterValue) {
+  const normalizedFilter = normalizeCategoryFilterValue(filterValue);
+
+  if (!normalizedFilter) {
+    return true;
+  }
+
+  const englishTranslation = getTranslationEntry(category?.translations, 'en');
+  const candidates = [
+    category?.canonicalSlug,
+    category?.slug,
+    category?.name,
+    englishTranslation?.name,
+    ...(Array.isArray(category?.slugAliases) ? category.slugAliases : []),
+  ];
+
+  return candidates.some((candidate) => normalizeCategoryFilterValue(candidate) === normalizedFilter);
 }
 
 // Прилага галерийните флагове само по admin път.
@@ -558,7 +640,7 @@ async function deleteAssetsFromStorage(
   }
 }
 
-export async function getAllProducts(categoryName) {
+export async function getAllProducts(categoryName, { locale = 'bg' } = {}) {
   const products = await Product.find({
     // $and, защото buildPublicProductFilter() сам ползва $or за publicationStatus.
     // Legacy handling: продукти без isInCatalog се третират като каталожни.
@@ -568,19 +650,15 @@ export async function getAllProducts(categoryName) {
       { $or: [{ isInCatalog: true }, { isInCatalog: { $exists: false } }] },
     ],
   })
-    .populate('category', 'name')
+    .populate('category', 'name slug canonicalSlug slugAliases translations sourceRevision')
     .lean();
 
-  const normalizedProducts = products.map(normalizeProductMedia);
-
-  if (categoryName) {
-    return normalizedProducts.filter((product) => product.category?.name === categoryName);
-  }
-
-  return normalizedProducts;
+  return products
+    .filter((product) => categoryMatchesPublicFilter(product.category, categoryName))
+    .map((product) => projectPublicProduct(normalizeProductMedia(product), locale));
 }
 
-export async function getHomepageFeaturedProducts() {
+export async function getHomepageFeaturedProducts({ locale = 'bg' } = {}) {
   const products = await Product.find({
     ...buildPublicProductFilter(),
     isHomepageFeatured: true,
@@ -588,22 +666,22 @@ export async function getHomepageFeaturedProducts() {
   })
     .sort({ homepageFeaturedOrder: 1, _id: 1 })
     .limit(HOMEPAGE_FEATURED_PRODUCTS_LIMIT)
-    .populate('category', 'name')
+    .populate('category', 'name slug canonicalSlug slugAliases translations sourceRevision')
     .lean();
 
-  return products.map(normalizeProductMedia);
+  return products.map((product) => projectPublicProduct(normalizeProductMedia(product), locale));
 }
 
-export async function getCartoonGalleryProducts() {
+export async function getCartoonGalleryProducts({ locale = 'bg' } = {}) {
   const products = await Product.find({
     ...buildPublicProductFilter(),
     isCartoonGallery: true,
     availability: { $ne: 'unavailable' },
   })
-    .populate('category', 'name')
+    .populate('category', 'name slug canonicalSlug slugAliases translations sourceRevision')
     .lean();
 
-  return products.map(normalizeProductMedia);
+  return products.map((product) => projectPublicProduct(normalizeProductMedia(product), locale));
 }
 
 function validateHomepageFeaturedProductIds(productIds) {
@@ -714,16 +792,20 @@ export async function createProduct(data, user) {
   return normalizeProductMedia(savedProduct.toObject());
 }
 
-export async function getProductById(productId, viewer = null) {
+export async function getProductById(productId, viewer = null, { locale = 'bg' } = {}) {
   const product = await Product.findById(productId)
-    .populate('category', 'name')
+    .populate('category', 'name slug canonicalSlug slugAliases translations sourceRevision')
     .lean();
 
   if (!canViewProduct(product, viewer)) {
     return null;
   }
 
-  return normalizeProductForViewer(product, viewer);
+  if (shouldExposeDraftContent(product, viewer)) {
+    return normalizeProductForViewer(product, viewer);
+  }
+
+  return projectPublicProduct(normalizeProductMedia(product), locale);
 }
 
 export async function getManagedProductById(productId, user) {
@@ -824,6 +906,7 @@ export async function editProduct(productId, productData, user) {
   const editSource = isArtistEditingPublishedProduct && hasDraftContent(product)
     ? product.draftContent
     : product;
+  const hasSourceCopyChange = hasProductSourceCopyChange(editSource, sanitizedProductData);
   const sourceImageUrls = Array.isArray(editSource.imageUrls)
     ? editSource.imageUrls.filter(Boolean)
     : editSource.imageUrl
@@ -873,6 +956,10 @@ export async function editProduct(productId, productData, user) {
     return normalizeProductForViewer(product.toObject(), user);
   }
 
+  if (hasSourceCopyChange) {
+    product.sourceRevision = (Number(product.sourceRevision) || 1) + 1;
+  }
+
   for (const [key, value] of Object.entries(sanitizedProductData)) {
     if (key === 'imageUrl' || key === 'imageUrls' || key === 'videos') {
       continue;
@@ -920,7 +1007,12 @@ export async function editProduct(productId, productData, user) {
     await revalidateProductSurfaces({ productId: product._id });
   }
 
-  return normalizeProductForViewer(product.toObject(), user);
+  return withTranslationDecision(product.toObject(), {
+    changedPublicSource:
+      isAdminEdit &&
+      product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED &&
+      hasSourceCopyChange,
+  });
 }
 
 export async function deleteProduct(productId, user) {
@@ -1035,17 +1127,26 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
 
   const wasPublic = isPublicProduct(product);
   let approvedDraftAssetsToDelete = [];
+  let approvedDraftChangedPublicSource = false;
   product.reviewedBy = user._id;
   product.reviewedAt = new Date();
 
   if (nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED && hasDraftContent(product)) {
-    const draftContent = product.draftContent;
+    const draftContent = typeof product.draftContent.toObject === 'function'
+      ? product.draftContent.toObject()
+      : product.draftContent;
     const previousPublicAssetUrls = collectProductAssetUrls(product.toObject());
     const nextPublicAssetUrls = new Set(collectProductAssetUrls(draftContent));
+    const hasSourceCopyChange = hasProductSourceCopyChange(product, draftContent);
 
     approvedDraftAssetsToDelete = previousPublicAssetUrls.filter(
       (assetUrl) => !nextPublicAssetUrls.has(assetUrl)
     );
+
+    if (hasSourceCopyChange) {
+      product.sourceRevision = (Number(product.sourceRevision) || 1) + 1;
+      approvedDraftChangedPublicSource = true;
+    }
 
     product.title = draftContent.title;
     product.description = draftContent.description;
@@ -1095,7 +1196,11 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
     await revalidateProductSurfaces({ productId: product._id });
   }
 
-  return normalizeProductMedia(product.toObject());
+  return withTranslationDecision(product.toObject(), {
+    changedPublicSource:
+      nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED &&
+      approvedDraftChangedPublicSource,
+  });
 }
 
 export function approveProduct(productId, user) {

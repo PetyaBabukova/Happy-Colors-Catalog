@@ -57,6 +57,28 @@ describe('blogArticlesManager', () => {
     );
   });
 
+  it('threads locale params through public blog reads', async () => {
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: [] }))
+      .mockResolvedValueOnce(jsonResponse({ body: { _id: 'a'.repeat(24) } }));
+
+    await expect(getBlogArticles({ locale: 'en' })).resolves.toEqual([]);
+    await expect(getBlogArticleById('a'.repeat(24), { locale: 'en' })).resolves.toEqual({
+      _id: 'a'.repeat(24),
+    });
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/blog-articles?locale=en',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3000/api/blog-articles/aaaaaaaaaaaaaaaaaaaaaaaa?locale=en',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+  });
+
   it('creates and edits articles while invalidating caches', async () => {
     fetch
       .mockResolvedValueOnce(jsonResponse({ body: { _id: 'article-1' } }))

@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { deleteImageFromGCS } from '../../helpers/gcsImageHelper.js';
 import { sendEmail } from '../../helpers/sendEmail.js';
+import Category from '../../models/Category.js';
 import Product from '../../models/Product.js';
 import { createExpressApp } from '../../server.js';
 import {
@@ -17,20 +18,514 @@ import {
 } from './factories.js';
 
 describe('products integration', () => {
-  it('lists products and filters by category name', async () => {
+  function expectNoPublicProductReviewFields(payload) {
+    expect(payload).not.toHaveProperty('deletedAt');
+    expect(payload).not.toHaveProperty('deletedBy');
+    expect(payload).not.toHaveProperty('draftContent');
+    expect(payload).not.toHaveProperty('draftRevision');
+    expect(payload).not.toHaveProperty('draftSubmittedAt');
+    expect(payload).not.toHaveProperty('draftSubmittedBy');
+    expect(payload).not.toHaveProperty('draftUpdatedAt');
+    expect(payload).not.toHaveProperty('reviewNote');
+    expect(payload).not.toHaveProperty('reviewNotes');
+    expect(payload).not.toHaveProperty('reviewStatus');
+    expect(payload).not.toHaveProperty('reviewedAt');
+    expect(payload).not.toHaveProperty('reviewedBy');
+  }
+
+  it('lists products and filters by stable category slug', async () => {
     const app = createExpressApp();
     const owner = await createUser();
-    const candles = await createCategory({ name: 'Candles', slug: 'candles' });
-    const paintings = await createCategory({ name: 'Paintings', slug: 'paintings' });
+    const candles = await createCategory({
+      name: 'Candles',
+      slug: 'candles',
+      canonicalSlug: 'candles-stable',
+      slugAliases: ['candles-old'],
+    });
+    const paintings = await createCategory({ name: 'Paintings', slug: 'paintings', canonicalSlug: 'paintings-stable' });
     await createProduct({ owner, category: candles, title: 'Red Candle' });
     await createProduct({ owner, category: paintings, title: 'Blue Painting' });
 
     const allRes = await request(app).get('/products').expect(200);
-    const filteredRes = await request(app).get('/products').query({ category: 'Candles' }).expect(200);
+    const filteredRes = await request(app).get('/products').query({ category: 'candles-stable' }).expect(200);
+    const aliasRes = await request(app).get('/products').query({ category: 'candles-old' }).expect(200);
 
     expect(allRes.body).toHaveLength(2);
     expect(filteredRes.body).toHaveLength(1);
     expect(filteredRes.body[0]).toMatchObject({ title: 'Red Candle' });
+    expect(aliasRes.body).toHaveLength(1);
+    expect(aliasRes.body[0]).toMatchObject({ title: 'Red Candle' });
+  });
+
+  it('keeps old category filters working after a category rename', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory({
+      name: 'Old Category',
+      slug: 'old-category',
+      canonicalSlug: 'stable-category',
+      canonicalSlugReviewed: true,
+    });
+    const product = await createProduct({ owner, category, title: 'Stable Link Product' });
+
+    await request(app)
+      .put(`/categories/${category._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({ name: 'New Category' })
+      .expect(200);
+
+    for (const categoryFilter of ['stable-category', 'old-category', 'new-category']) {
+      const res = await request(app)
+        .get('/products')
+        .query({ category: categoryFilter })
+        .expect(200);
+
+      expect(res.body.map((item) => item._id)).toEqual([String(product._id)]);
+    }
+  });
+
+  it('filters legacy categories without canonical slugs by their slug', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory({
+      name: 'Legacy Category',
+      slug: 'legacy-category',
+      canonicalSlug: '',
+    });
+    const product = await createProduct({ owner, category, title: 'Legacy Category Product' });
+
+    const productsRes = await request(app)
+      .get('/products')
+      .query({ category: 'legacy-category' })
+      .expect(200);
+    const categoriesRes = await request(app).get('/categories').expect(200);
+    const storedCategory = await Category.findById(category._id).lean();
+
+    expect(storedCategory.canonicalSlug).toBe('');
+    expect(productsRes.body.map((item) => item._id)).toEqual([String(product._id)]);
+    expect(categoriesRes.body).toEqual([
+      expect.objectContaining({
+        _id: String(category._id),
+        filterSlug: 'legacy-category',
+      }),
+    ]);
+  });
+
+  it('projects translated products and categories for English public requests', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory({
+      name: 'Source Toys',
+      slug: 'source-toys',
+      canonicalSlug: 'toys',
+      sourceRevision: 2,
+      translations: {
+        en: {
+          name: 'English Toys',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Source Lion',
+      description: 'Source product description',
+      sourceRevision: 3,
+      isHomepageFeatured: true,
+      homepageFeaturedOrder: 1,
+      translations: {
+        en: {
+          title: 'English Lion',
+          description: 'English product description',
+          sourceRevision: 3,
+          method: 'manual',
+        },
+      },
+    });
+
+    const listRes = await request(app)
+      .get('/products')
+      .query({ locale: 'en', category: 'toys' })
+      .expect(200);
+    const detailRes = await request(app)
+      .get(`/products/${product._id}`)
+      .query({ locale: 'en' })
+      .expect(200);
+    const bgDetailRes = await request(app)
+      .get(`/products/${product._id}`)
+      .expect(200);
+    const featuredRes = await request(app)
+      .get('/products/homepage-featured')
+      .query({ locale: 'en' })
+      .expect(200);
+
+    for (const payload of [listRes.body[0], detailRes.body, featuredRes.body[0]]) {
+      expect(payload).toMatchObject({
+        _id: String(product._id),
+        title: 'English Lion',
+        description: 'English product description',
+        availableLocales: ['bg', 'en'],
+        contentLocale: 'en',
+        translationPending: false,
+        category: expect.objectContaining({
+          name: 'English Toys',
+          filterSlug: 'toys',
+          contentLocale: 'en',
+          translationPending: false,
+        }),
+      });
+      expect(payload).not.toHaveProperty('translations');
+      expect(payload).not.toHaveProperty('translationDrafts');
+      expect(payload).not.toHaveProperty('sourceRevision');
+      expectNoPublicProductReviewFields(payload);
+      expect(payload.category).not.toHaveProperty('translations');
+      expect(payload.category).not.toHaveProperty('sourceRevision');
+      expect(payload.category).not.toHaveProperty('canonicalSlug');
+      expect(payload.category).not.toHaveProperty('canonicalSlugReviewed');
+      expect(payload.category).not.toHaveProperty('slugAliases');
+      expect(payload.category).not.toHaveProperty('slug');
+    }
+    expect(bgDetailRes.body).toMatchObject({
+      _id: String(product._id),
+      title: 'Source Lion',
+      description: 'Source product description',
+      availableLocales: ['bg', 'en'],
+    });
+    expect(bgDetailRes.body).not.toHaveProperty('contentLocale');
+    expect(bgDetailRes.body).not.toHaveProperty('translationPending');
+  });
+
+  it('does not expose pending draft or review metadata in public product reads', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Approved public title',
+      description: 'Approved public description',
+      publicationStatus: 'published',
+      draftContent: {
+        title: 'Unapproved draft title',
+        description: 'Unapproved draft description',
+        price: 99,
+      },
+      deletedAt: null,
+      deletedBy: owner._id,
+      draftRevision: 4,
+      draftSubmittedAt: new Date(),
+      draftSubmittedBy: owner._id,
+      draftUpdatedAt: new Date(),
+      reviewNote: 'Internal review note',
+      reviewStatus: 'pending_review',
+      reviewedAt: new Date(),
+      reviewedBy: owner._id,
+    });
+
+    const listRes = await request(app).get('/products').expect(200);
+    const detailRes = await request(app).get(`/products/${product._id}`).expect(200);
+
+    const listProduct = listRes.body.find((item) => item._id === String(product._id));
+    expect(listProduct).toMatchObject({
+      title: 'Approved public title',
+      description: 'Approved public description',
+    });
+    expect(detailRes.body).toMatchObject({
+      title: 'Approved public title',
+      description: 'Approved public description',
+    });
+    expectNoPublicProductReviewFields(listProduct);
+    expectNoPublicProductReviewFields(detailRes.body);
+  });
+
+  it('marks missing and stale English product/category translations as fallbacks', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory({
+      name: 'Bulgarian Only Category',
+      slug: 'bulgarian-only-category',
+      sourceRevision: 2,
+    });
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Bulgarian Only Product',
+      description: 'Bulgarian only description',
+      sourceRevision: 4,
+    });
+    await createProduct({
+      owner,
+      category: await createCategory({
+        name: 'Fresh Category Name',
+        slug: 'fresh-category-name',
+        sourceRevision: 3,
+        translations: {
+          en: {
+            name: 'Stale English Category',
+            sourceRevision: 2,
+            method: 'manual',
+          },
+        },
+      }),
+      title: 'Fresh Product Title',
+      description: 'Fresh product description',
+      sourceRevision: 5,
+      translations: {
+        en: {
+          title: 'Stale English Product',
+          description: 'Stale English description',
+          sourceRevision: 4,
+          method: 'manual',
+        },
+      },
+    });
+
+    const enRes = await request(app)
+      .get('/products')
+      .query({ locale: 'en' })
+      .expect(200);
+    const bgRes = await request(app)
+      .get(`/products/${product._id}`)
+      .expect(200);
+
+    expect(enRes.body[0]).toMatchObject({
+      title: 'Bulgarian Only Product',
+      description: 'Bulgarian only description',
+      availableLocales: ['bg'],
+      contentLocale: 'bg',
+      translationPending: true,
+      category: expect.objectContaining({
+        name: 'Bulgarian Only Category',
+        contentLocale: 'bg',
+        translationPending: true,
+      }),
+    });
+    expect(enRes.body[0]).not.toHaveProperty('translations');
+    expect(enRes.body[0]).not.toHaveProperty('sourceRevision');
+    expect(enRes.body[0].category).not.toHaveProperty('translations');
+    expect(enRes.body[0].category).not.toHaveProperty('sourceRevision');
+    expect(enRes.body[1]).toMatchObject({
+      title: 'Fresh Product Title',
+      description: 'Fresh product description',
+      availableLocales: ['bg'],
+      contentLocale: 'bg',
+      translationPending: true,
+      category: expect.objectContaining({
+        name: 'Fresh Category Name',
+        contentLocale: 'bg',
+        translationPending: true,
+      }),
+    });
+    expect(bgRes.body).toMatchObject({
+      title: 'Bulgarian Only Product',
+      description: 'Bulgarian only description',
+      availableLocales: ['bg'],
+    });
+    expect(bgRes.body).not.toHaveProperty('contentLocale');
+    expect(bgRes.body).not.toHaveProperty('translationPending');
+    expect(bgRes.body).not.toHaveProperty('translations');
+    expect(bgRes.body).not.toHaveProperty('sourceRevision');
+  });
+
+  it('bumps product sourceRevision when source copy is edited', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Original title',
+      description: 'Original description',
+      sourceRevision: 1,
+    });
+
+    const res = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        title: 'Updated title',
+        description: 'Original description',
+        price: product.price,
+        category: String(category._id),
+        imageUrls: product.imageUrls,
+        availability: product.availability,
+      })
+      .expect(200);
+
+    expect(res.body.sourceRevision).toBe(2);
+  });
+
+  it('does not bump product sourceRevision when only non-copy fields are edited', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Original title',
+      description: 'Original description',
+      price: 20,
+      sourceRevision: 3,
+    });
+
+    const res = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        title: product.title,
+        description: product.description,
+        price: 25,
+        category: String(category._id),
+        imageUrls: product.imageUrls,
+        availability: product.availability,
+      })
+      .expect(200);
+
+    expect(res.body.sourceRevision).toBe(3);
+  });
+
+  it('marks English translation decisions after a full-admin public source edit', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Original title',
+      description: 'Original description',
+      sourceRevision: 1,
+      translations: {
+        en: {
+          title: 'Original English title',
+          description: 'Original English description',
+          sourceRevision: 1,
+          translationRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+
+    const res = await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(owner))
+      .send({
+        title: 'Updated title',
+        description: 'Original description',
+        price: product.price,
+        category: String(category._id),
+        imageUrls: product.imageUrls,
+        availability: product.availability,
+      })
+      .expect(200);
+
+    expect(res.body.englishTranslationDecision).toEqual({
+      locale: 'en',
+      status: 'needs_decision',
+      sourceRevision: 2,
+      translationRevision: 2,
+      translationSourceRevision: 1,
+    });
+  });
+
+  it('rejects unsupported public product locales', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner,
+      category,
+      isHomepageFeatured: true,
+      isCartoonGallery: true,
+    });
+
+    await request(app)
+      .get('/products')
+      .query({ locale: 'fr' })
+      .expect(400);
+    await request(app)
+      .get(`/products/${product._id}`)
+      .query({ locale: 'fr' })
+      .expect(400);
+    await request(app)
+      .get('/products/homepage-featured')
+      .query({ locale: 'fr' })
+      .expect(400);
+    await request(app)
+      .get('/products/cartoon-gallery')
+      .query({ locale: 'fr' })
+      .expect(400);
+  });
+
+  it('projects translated cartoon gallery products for English public requests', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory({
+      name: 'Cartoon Source Category',
+      slug: 'cartoon-source-category',
+      sourceRevision: 2,
+      translations: {
+        en: {
+          name: 'Cartoon Category',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    const product = await createProduct({
+      owner,
+      category,
+      title: 'Cartoon Source Product',
+      description: 'Cartoon source description',
+      sourceRevision: 2,
+      isInCatalog: false,
+      isCartoonGallery: true,
+      deletedAt: null,
+      deletedBy: owner._id,
+      draftContent: {
+        title: 'Unapproved cartoon draft',
+        description: 'Unapproved cartoon description',
+      },
+      draftRevision: 3,
+      draftSubmittedAt: new Date(),
+      draftSubmittedBy: owner._id,
+      draftUpdatedAt: new Date(),
+      reviewNote: 'Internal cartoon review note',
+      reviewStatus: 'pending_review',
+      reviewedAt: new Date(),
+      reviewedBy: owner._id,
+      translations: {
+        en: {
+          title: 'Cartoon English Product',
+          description: 'Cartoon English description',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+
+    const res = await request(app)
+      .get('/products/cartoon-gallery')
+      .query({ locale: 'en' })
+      .expect(200);
+
+    expect(res.body).toEqual([
+      expect.objectContaining({
+        _id: String(product._id),
+        title: 'Cartoon English Product',
+        description: 'Cartoon English description',
+        availableLocales: ['bg', 'en'],
+        contentLocale: 'en',
+        translationPending: false,
+        category: expect.objectContaining({
+          name: 'Cartoon Category',
+          contentLocale: 'en',
+          translationPending: false,
+        }),
+      }),
+    ]);
+    expectNoPublicProductReviewFields(res.body[0]);
   });
 
   it('creates a product for an authenticated owner', async () => {
@@ -651,6 +1146,49 @@ describe('products integration', () => {
       'https://storage.googleapis.com/test-bucket/products/images/public-old.webp',
       { throwOnError: false }
     );
+  });
+
+  it('marks English translation decisions after approving changed public draft copy', async () => {
+    const app = createExpressApp();
+    const artist = await createActiveArtist({ email: 'translation-decision-artist@example.com' });
+    const admin = await createFullAdmin({ email: 'translation-decision-admin@example.com' });
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: artist,
+      category,
+      publicationStatus: 'published',
+      title: 'Approved title',
+      description: 'Approved description',
+      sourceRevision: 1,
+      translations: {
+        en: {
+          title: 'Approved English title',
+          description: 'Approved English description',
+          sourceRevision: 1,
+          translationRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+
+    await request(app)
+      .put(`/products/${product._id}`)
+      .set('Cookie', authCookie(artist))
+      .send({ title: 'Pending changed title' })
+      .expect(200);
+
+    const approveRes = await request(app)
+      .patch(`/products/${product._id}/approve`)
+      .set('Cookie', authCookie(admin))
+      .expect(200);
+
+    expect(approveRes.body.englishTranslationDecision).toEqual({
+      locale: 'en',
+      status: 'needs_decision',
+      sourceRevision: 2,
+      translationRevision: 1,
+      translationSourceRevision: 1,
+    });
   });
 
   it('requires a review note when rejecting a product', async () => {

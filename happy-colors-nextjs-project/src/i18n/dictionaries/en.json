@@ -1,0 +1,222 @@
+{
+  "common": {
+    "brand": "Happy Colors",
+    "loading": "Loading...",
+    "retry": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No",
+    "required": "Required field",
+    "email": "Email",
+    "phone": "Phone"
+  },
+  "navigation": {
+    "home": "Home",
+    "catalog": "Catalog",
+    "allProducts": "All",
+    "cartoons": "Caricatures",
+    "blog": "Blog",
+    "about": "About Happy Colors",
+    "faq": "Questions",
+    "contacts": "Contacts",
+    "searchPlaceholder": "Search",
+    "searchSubmit": "Search",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "cart": "Cart",
+    "languageTrigger": "Language: {languageCode}",
+    "languageMenuLabel": "Choose language",
+    "languageOption": "{languageCode} — {languageName}"
+  },
+  "footer": {
+    "copyright": "© {year} Happy Colors. All rights reserved.",
+    "socialHeading": "Follow us:",
+    "socialNavLabel": "Social profiles",
+    "facebookLabel": "Happy Colors on Facebook",
+    "instagramLabel": "Happy Colors on Instagram",
+    "creditPrefix": "Online catalog by"
+  },
+  "homeHero": {
+    "fallbackTitle": "Handmade crochet toys, accessories, and home decor",
+    "fallbackDescription": "Handmade pieces for gifts, cozy homes, and special occasions.",
+    "fallbackCta": "Catalog",
+    "bannerCta": "Catalog",
+    "carouselAriaLabel": "Home banners",
+    "navigationAriaLabel": "Banner navigation",
+    "previous": "Previous banner",
+    "next": "Next banner",
+    "fallbackImageAlt": "Crocheted lion and colorful yarn from Happy Colors"
+  },
+  "cartoonsHero": {
+    "carouselAriaLabel": "Caricature banners",
+    "navigationAriaLabel": "Banner navigation",
+    "previous": "Previous banner",
+    "next": "Next banner",
+    "fallbackImageAlt": "Caricature banner"
+  },
+  "catalogMode": {
+    "cartUnavailable": "The cart is unavailable in catalog mode.",
+    "checkoutUnavailable": "Orders are unavailable in catalog mode.",
+    "inquiryCta": "Ask",
+    "productInquiry": "For availability and details, please send an inquiry.",
+    "disabledEnglishNotice": "English is temporarily unavailable. You are viewing the Bulgarian version."
+  },
+  "products": {
+    "catalogTitle": "Handmade crochet toys, accessories, and decor",
+    "uncategorizedCategory": "Uncategorized",
+    "notFoundTitle": "Product not found",
+    "notFoundDescription": "Try again or choose another product.",
+    "availabilityLabel": "Availability:",
+    "availableBadge": "Available",
+    "availableCatalog": "Ready-made item available — send an inquiry to confirm",
+    "unavailableCatalog": "Can be made after confirmation.",
+    "cartoonAvailability": "Made after an individual inquiry.",
+    "priceInquiry": "Price {price} €. For availability and details, please send an inquiry.",
+    "price": "Price {price} \u20ac",
+    "cartoonPriceIntro": "Guide price from {price} \u20ac.",
+    "cartoonPriceDetails": "The final price depends on the number of people, complexity, style, and production timing. See details about prices and options",
+    "cartoonOfferLink": "here",
+    "addToCart": "Add to cart",
+    "descriptionTab": "description",
+    "deliveryTab": "delivery and payment",
+    "deliveryContent": "Delivery options:\n- Econt or Speedy office\n- Econt or Speedy parcel locker\n- Box Now locker\nAt the moment, delivery to a personal address is not available.\nDelivery price:\nFor orders above 50 \u20ac, delivery is free.\nFor orders below this amount, delivery is paid by the customer according to the courier company tariff.\nDispatch time:\nAvailable products are dispatched within 1 business day.\nDelivery time depends on the courier company and recipient location.\nUnavailable products:\nIf the product is not available, you can send an inquiry through the contact form on the site.",
+    "videoLabel": "{title} video",
+    "videoUnsupported": "Your browser does not support video. You can view the product photos.",
+    "videoBadge": "Video",
+    "previousImage": "Previous image",
+    "nextImage": "Next image",
+    "translationPending": "Translation pending",
+    "createdReviewNotice": "Your product was created successfully. It will be published after administrator approval.",
+    "updatedReviewNotice": "The changes were saved and will be published after administrator approval.",
+    "pendingReviewNotice": "This product is waiting for administrator approval.",
+    "adminReviewNotice": "This product is waiting for approval. Review the publication and choose an action.",
+    "approveError": "Product approval failed.",
+    "rejectPrompt": "Rejection reason:",
+    "rejectRequired": "Please enter a rejection reason.",
+    "rejectError": "Product rejection failed.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "approving": "Approving...",
+    "approve": "Approve",
+    "rejecting": "Rejecting...",
+    "reject": "Reject",
+    "sendNewsletter": "Send to subscribers"
+  },
+  "contacts": {
+    "title": "Contacts",
+    "pageDescription": "Contact Happy Colors with questions about handmade crocheted toys, accessories, and home decorations.",
+    "formTitle": "Send an inquiry",
+    "success": "Thank you! Your message was sent successfully.",
+    "submit": "Send",
+    "name": "Name",
+    "message": "Message",
+    "productContext": "Inquiry about product: {productTitle}"
+  },
+  "blog": {
+    "title": "Blog",
+    "readMore": "Read more",
+    "empty": "There are no published articles yet.",
+    "notFoundTitle": "Blog article not found",
+    "notFoundDescription": "Try again or choose another blog article.",
+    "asideLabel": "More topics",
+    "asideTitle": "More topics:"
+  },
+  "newsletter": {
+    "title": "Get news from Happy Colors",
+    "subscribe": "Subscribe",
+    "emailPlaceholder": "Your email",
+    "languageLabel": "Newsletter language",
+    "consentLabel": "I agree to receive news from Happy Colors",
+    "emailRequired": "Please enter an email address.",
+    "consentRequired": "Please confirm that you agree to receive news.",
+    "submitting": "Sending...",
+    "subscribeSuccess": "Thank you. If confirmation is needed, you will receive an email with a subscription link.",
+    "subscribeError": "We could not subscribe you. Please try again later.",
+    "confirming": "Confirming your subscription...",
+    "unsubscribe": "Unsubscribe",
+    "confirmPage": {
+      "title": "Confirm subscription",
+      "copy": "Confirm your subscription to Happy Colors news.",
+      "submit": "Confirm subscription",
+      "submitting": "Confirming...",
+      "home": "Home",
+      "missingToken": "This confirmation link is invalid or incomplete.",
+      "success": "Your subscription has been confirmed successfully.",
+      "error": "This confirmation link is invalid or expired. Please submit the subscription form again."
+    },
+    "unsubscribePage": {
+      "title": "Unsubscribe from news",
+      "copy": "Confirm that you want to stop receiving news from Happy Colors.",
+      "submit": "Unsubscribe me",
+      "submitting": "Unsubscribing...",
+      "home": "Home",
+      "missingToken": "This unsubscribe link is invalid or incomplete.",
+      "success": "You have unsubscribed successfully.",
+      "error": "We could not unsubscribe you."
+    },
+    "preferences": {
+      "title": "Newsletter language",
+      "loading": "Loading your newsletter preferences...",
+      "missingToken": "This newsletter preferences link is invalid or incomplete.",
+      "loadError": "We could not load your newsletter preferences.",
+      "saveError": "We could not update your newsletter language.",
+      "success": "Your newsletter language has been updated.",
+      "current": "Current newsletter language: {locale}",
+      "languageLabel": "Preferred newsletter language",
+      "save": "Save language",
+      "saving": "Saving...",
+      "home": "Home",
+      "locales": {
+        "bg": "Bulgarian",
+        "en": "English"
+      }
+    }
+  },
+  "privacy": {
+    "bannerAriaLabel": "Cookie notice",
+    "summary": "We use cookies and similar technologies to keep the site working correctly and, when you consent, to analyze visits and improve our content and marketing messages.",
+    "secondary": "You can accept all, continue with necessary technologies only, or manage your choices in settings. More information is available in the Cookie Policy.",
+    "acceptAll": "Accept all",
+    "necessaryOnly": "Necessary only",
+    "settings": "Settings",
+    "settingsTitle": "Cookie settings",
+    "closeSettings": "Close cookie settings",
+    "settingsIntro": "Happy Colors processes data through cookies and similar technologies according to your choices and the categories described below.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "saveChoice": "Save choice",
+    "footerLink": "Cookies and privacy settings",
+    "policyTitle": "Cookie Policy",
+    "policyIntro": "Cookies and similar technologies help the site work correctly, securely, and according to your choices.",
+    "policyNecessary": "Necessary technologies support the basic and secure operation of the site, including administrative access and saving your cookie choices.",
+    "policyFunctional": "Functional local or session storage may be used in technical or future customer flows without requiring a public profile or checkout completion.",
+    "policyOptional": "Analytics and marketing technologies are used only after your consent.",
+    "policyContact": "You can change your choices at any time from the footer link. For questions: happy.colors.bg@gmail.com.",
+    "categories": {
+      "necessary": {
+        "label": "Necessary",
+        "description": "These technologies are needed for the correct and secure operation of the site. They cannot be turned off from settings."
+      },
+      "analytics": {
+        "label": "Analytics",
+        "description": "They help us understand how the site is used so we can improve the content and user experience."
+      },
+      "marketing": {
+        "label": "Marketing",
+        "description": "They allow us to measure and improve advertising messages and campaigns when we use such tools."
+      }
+    }
+  },
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundDescription": "Check the address or return to the home page.",
+    "genericTitle": "Something went wrong",
+    "genericDescription": "Please try again in a moment."
+  },
+  "dates": {
+    "publishedOn": "Published on {date}",
+    "updatedOn": "Updated on {date}"
+  }
+}

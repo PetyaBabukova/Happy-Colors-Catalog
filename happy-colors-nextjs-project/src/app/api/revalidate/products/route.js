@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
 import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
+import { revalidateLocalizedPath } from '../_lib/localizedPaths';
 
 function hasValidRevalidateSecret(request) {
   const secret = String(process.env.PRODUCT_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET || '').trim();
@@ -26,13 +27,13 @@ export async function POST(request) {
     revalidateTag('products');
     revalidateTag('homepage-featured-products');
     revalidateTag('cartoon-gallery-products');
-    revalidatePath('/products');
-    revalidatePath('/');
-    revalidatePath('/cartoons');
+    revalidateLocalizedPath('/products');
+    revalidateLocalizedPath('/');
+    revalidateLocalizedPath('/cartoons');
     revalidatePath('/sitemap.xml');
 
     if (productId) {
-      revalidatePath(`/products/${productId}`);
+      revalidateLocalizedPath(`/products/${productId}`);
     }
 
     return NextResponse.json({ success: true }, { status: 200 });

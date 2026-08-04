@@ -38,6 +38,8 @@ describe('/api/revalidate/cartoon-hero-banners', () => {
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('cartoon-hero-banners');
     expect(revalidatePath).toHaveBeenCalledWith('/cartoons');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/cartoons');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/cartoons');
   });
 
   it('rejects unauthenticated requests', async () => {

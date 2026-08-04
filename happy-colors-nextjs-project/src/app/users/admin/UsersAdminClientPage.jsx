@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle, ExternalLink, FolderOpen, Save, ShieldAlert, XCircle } from 'lucide-react';
 import MessageBox from '@/components/ui/MessageBox';
 import { useAuth } from '@/context/AuthContext';
+import TranslationDecisionModal from '@/components/translations/TranslationDecisionModal';
+import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
 import {
   approveAdminProduct,
   fetchAdminUserDossier,
@@ -58,6 +60,9 @@ export default function UsersAdminClientPage() {
   const [detailsLoadingId, setDetailsLoadingId] = useState('');
   const [reviewProduct, setReviewProduct] = useState(null);
   const [reviewActionLoading, setReviewActionLoading] = useState('');
+  const [translationDecision, setTranslationDecision] = useState(null);
+  const [translationDecisionLoading, setTranslationDecisionLoading] = useState('');
+  const [translationDecisionError, setTranslationDecisionError] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -216,10 +221,22 @@ export default function UsersAdminClientPage() {
     setReviewActionLoading(product._id);
     setError('');
     setMessage('');
+    setTranslationDecisionError('');
 
     try {
       const updated = await approveAdminProduct(product._id);
       setReviewProduct(updated);
+      if (updated?.englishTranslationDecision) {
+        setTranslationDecision({
+          ...updated.englishTranslationDecision,
+          entityType: 'product',
+          entityId: updated._id || product._id,
+        });
+        setMessage('Product approved. English translation decision is required.');
+        await refreshCurrentDossier();
+        await loadUsers();
+        return;
+      }
       setMessage('Продуктът е одобрен и публикуван.');
       await refreshCurrentDossier();
       await loadUsers();
@@ -227,6 +244,41 @@ export default function UsersAdminClientPage() {
       setError(err.message || 'Неуспешно одобряване на продукта.');
     } finally {
       setReviewActionLoading('');
+    }
+  }
+
+  async function handleTranslationDecision(action) {
+    if (!translationDecision) {
+      return;
+    }
+
+    setTranslationDecisionLoading(action);
+    setTranslationDecisionError('');
+    setError('');
+
+    const payload = {
+      entityType: translationDecision.entityType,
+      entityId: translationDecision.entityId,
+      locale: translationDecision.locale,
+      expectedSourceRevision: translationDecision.sourceRevision,
+      expectedTranslationRevision: translationDecision.translationRevision || 0,
+    };
+
+    try {
+      if (action === 'yes') {
+        await generateTranslation(payload);
+      } else {
+        await acceptCurrentTranslation(payload);
+      }
+
+      setTranslationDecision(null);
+      setMessage('English translation decision saved.');
+      await refreshCurrentDossier();
+      await loadUsers();
+    } catch (err) {
+      setTranslationDecisionError(err.message || 'English translation decision was not saved.');
+    } finally {
+      setTranslationDecisionLoading('');
     }
   }
 
@@ -310,6 +362,15 @@ export default function UsersAdminClientPage() {
 
   return (
     <section className={styles.wrapper}>
+      <TranslationDecisionModal
+        decision={translationDecision}
+        entityLabel="product"
+        busyAction={translationDecisionLoading}
+        error={translationDecisionError}
+        onYes={() => handleTranslationDecision('yes')}
+        onNo={() => handleTranslationDecision('no')}
+        onDismiss={() => setTranslationDecision(null)}
+      />
       <div className={styles.header}>
         <div>
           <h1>Потребители</h1>

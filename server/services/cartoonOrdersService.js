@@ -40,6 +40,7 @@ import {
   MAX_CARTOON_ORDER_PHOTO_SIZE_BYTES,
   MAX_CARTOON_ORDER_PHOTOS,
 } from '../config/productLimits.js';
+import { PUBLIC_LOCALES } from '../models/localizationSchemas.js';
 import { classifyStorageError } from '../helpers/storageErrorClassifier.js';
 import { buildPublicProductFilter } from '../utils/productPublication.js';
 
@@ -64,6 +65,16 @@ const STATUS_KEYS = new Set(['ordered', 'designApproved', 'paid']);
 const PHOTO_LINK_UNAVAILABLE_MESSAGE = 'Photo links unavailable.';
 const CARTOON_ORDER_CUSTOMER_THANK_YOU_BG =
   '\u041f\u043e\u043b\u0443\u0447\u0438\u0445\u043c\u0435 \u0437\u0430\u043f\u0438\u0442\u0432\u0430\u043d\u0435\u0442\u043e \u0432\u0438 \u0437\u0430 \u0448\u0430\u0440\u0436, \u0431\u043b\u0430\u0433\u043e\u0434\u0430\u0440\u0438\u043c! \u0429\u0435 \u0441\u0435 \u0441\u0432\u044a\u0440\u0436\u0435\u043c \u0441 \u0432\u0430\u0441 \u043f\u0440\u0438 \u043f\u044a\u0440\u0432\u0430 \u0432\u044a\u0437\u043c\u043e\u0436\u043d\u043e\u0441\u0442.\n\n\u041f\u043e\u0437\u0434\u0440\u0430\u0432\u0438,\n\u0415\u043a\u0438\u043f\u044a\u0442 \u043d\u0430 Happy Colors';
+const CARTOON_ORDER_CUSTOMER_THANK_YOU_EN =
+  'We received your caricature inquiry, thank you! We will contact you as soon as possible.\n\nBest regards,\nThe Happy Colors team';
+const CARTOON_ORDER_CUSTOMER_SUBJECTS = {
+  bg: '\u041f\u043e\u043b\u0443\u0447\u0438\u0445\u043c\u0435 \u0437\u0430\u043f\u0438\u0442\u0432\u0430\u043d\u0435\u0442\u043e \u0432\u0438 \u0437\u0430 \u0448\u0430\u0440\u0436',
+  en: 'We received your caricature inquiry',
+};
+const CARTOON_ORDER_CUSTOMER_MESSAGES = {
+  bg: CARTOON_ORDER_CUSTOMER_THANK_YOU_BG,
+  en: CARTOON_ORDER_CUSTOMER_THANK_YOU_EN,
+};
 const NOTIFICATION_STATUSES = new Set(['pending', 'sent', 'failed']);
 const WORKFLOW_STATUSES = new Set(['inquiry', 'waiting', 'ordered', 'completed']);
 const WORKFLOW_TRANSITIONS = new Map([
@@ -104,6 +115,22 @@ function sanitizeText(value) {
 
 function normalizeEmail(value) {
   return String(value ?? '').trim().toLowerCase();
+}
+
+function normalizePublicLocale(value) {
+  const locale = String(value || 'bg').trim().toLowerCase();
+
+  if (!PUBLIC_LOCALES.includes(locale)) {
+    throw createValidationError('Invalid customer locale.');
+  }
+
+  return locale;
+}
+
+function normalizeStoredPublicLocale(value) {
+  const locale = String(value || 'bg').trim().toLowerCase();
+
+  return PUBLIC_LOCALES.includes(locale) ? locale : 'bg';
 }
 
 function hasMarkup(values) {
@@ -713,6 +740,8 @@ function validateBasicPayload(rawData = {}) {
     return { honeypot: true };
   }
 
+  const customerLocale = normalizePublicLocale(rawData.locale || rawData.customerLocale);
+
   if (!name || !email || !message) {
     throw createValidationError('Missing required fields.');
   }
@@ -753,6 +782,7 @@ function validateBasicPayload(rawData = {}) {
       phone: sanitizeText(phone),
       message: sanitizeText(message),
     },
+    customerLocale,
     productId,
     consentAccepted,
   };
@@ -1099,6 +1129,7 @@ function hasPhotoReadUrlWarnings(photoReadAccess) {
 function buildAdminEmailText(order, photoReadAccess = new Map()) {
   const product = order.productSnapshot;
   const hasProduct = Boolean(product && product.productId);
+  const customerLocale = normalizeStoredPublicLocale(order.customerLocale);
   const photos = order.photos
     .map((photo, index) => {
       const readUrl = getPhotoReadUrl(photoReadAccess, photo, index);
@@ -1120,6 +1151,7 @@ function buildAdminEmailText(order, photoReadAccess = new Map()) {
     `Customer: ${order.customer.name}`,
     `Email: ${order.customer.email}`,
     `Phone: ${order.customer.phone || '-'}`,
+    `Customer locale: ${customerLocale.toUpperCase()}`,
     '',
     hasProduct ? `Product: ${product.title}` : 'Product: General inquiry (no specific product)',
     hasProduct ? `Product ID: ${product.productId}` : null,
@@ -1144,6 +1176,7 @@ function buildAdminEmailText(order, photoReadAccess = new Map()) {
 function buildAdminEmailHtml(order, photoReadAccess = new Map()) {
   const product = order.productSnapshot;
   const hasProduct = Boolean(product && product.productId);
+  const customerLocale = normalizeStoredPublicLocale(order.customerLocale);
   const photos = order.photos
     .map((photo, index) => {
       const readUrl = getPhotoReadUrl(photoReadAccess, photo, index);
@@ -1166,6 +1199,7 @@ function buildAdminEmailHtml(order, photoReadAccess = new Map()) {
     `<p><strong>Customer:</strong> ${escapeHtml(order.customer.name)}</p>`,
     `<p><strong>Email:</strong> ${escapeHtml(order.customer.email)}</p>`,
     `<p><strong>Phone:</strong> ${escapeHtml(order.customer.phone || '-')}</p>`,
+    `<p><strong>Customer locale:</strong> ${escapeHtml(customerLocale.toUpperCase())}</p>`,
     `<p><strong>Product:</strong> ${escapeHtml(hasProduct ? product.title : 'General inquiry (no specific product)')}</p>`,
     hasProduct ? `<p><strong>Product ID:</strong> ${escapeHtml(product.productId)}</p>` : null,
     hasProduct ? `<p><strong>Price snapshot:</strong> ${Number(product.price).toFixed(2)}</p>` : null,
@@ -1182,20 +1216,21 @@ function buildAdminEmailHtml(order, photoReadAccess = new Map()) {
     .join('\n');
 }
 
-function buildCustomerConfirmationText() {
-  return CARTOON_ORDER_CUSTOMER_THANK_YOU_BG;
+function buildCustomerConfirmationText(locale = 'bg') {
+  return CARTOON_ORDER_CUSTOMER_MESSAGES[normalizeStoredPublicLocale(locale)];
 }
 
-function buildCustomerConfirmationHtml() {
-  return `<p>${textToHtml(CARTOON_ORDER_CUSTOMER_THANK_YOU_BG)}</p>`;
+function buildCustomerConfirmationHtml(locale = 'bg') {
+  return `<p>${textToHtml(buildCustomerConfirmationText(locale))}</p>`;
 }
 
 async function notifyCartoonOrderAdmin(order) {
   const photoReadAccess = await buildPhotoReadUrls(order, { absoluteFallback: true });
+  const subjectPrefix = normalizeStoredPublicLocale(order.customerLocale) === 'en' ? '[EN] ' : '';
 
   await sendEmail({
     to: getCartoonOrderAdminRecipient(),
-    subject: `New cartoon order from ${order.customer.name}`,
+    subject: `${subjectPrefix}New cartoon order from ${order.customer.name}`,
     text: buildAdminEmailText(order, photoReadAccess),
     html: buildAdminEmailHtml(order, photoReadAccess),
   });
@@ -1206,11 +1241,13 @@ async function notifyCartoonOrderAdmin(order) {
 }
 
 async function notifyCartoonOrderCustomer(order) {
+  const customerLocale = normalizeStoredPublicLocale(order.customerLocale);
+
   await sendEmail({
     to: order.customer.email,
-    subject: 'Получихме запитването ви за шарж',
-    text: buildCustomerConfirmationText(),
-    html: buildCustomerConfirmationHtml(),
+    subject: CARTOON_ORDER_CUSTOMER_SUBJECTS[customerLocale],
+    text: buildCustomerConfirmationText(customerLocale),
+    html: buildCustomerConfirmationHtml(customerLocale),
   });
 }
 
@@ -1288,6 +1325,7 @@ function getOrCreateBrowserGuardCookieValue(req) {
 }
 
 async function deliverCartoonOrderNotifications(order, { failedOnly = false } = {}) {
+  order.customerLocale = normalizeStoredPublicLocale(order.customerLocale);
   const notifications = normalizeNotifications(order);
   const channels = ['admin', 'customer'].filter(
     (channel) => !failedOnly || shouldRetryNotificationChannel(notifications[channel])
@@ -1372,6 +1410,7 @@ export async function createCartoonOrder(rawData, { req = null, res = null } = {
     order = await CartoonOrder.create({
       _id: orderId,
       customer: basicPayload.customer,
+      customerLocale: basicPayload.customerLocale,
       ...(productSnapshot ? { productSnapshot } : {}),
       photos,
       statuses: { ordered: false },

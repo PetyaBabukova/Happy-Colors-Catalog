@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CartoonsHeroCarousel from '@/components/home-banners/CartoonsHeroCarousel';
 import { deleteHomeBanner } from '@/managers/homeBannersManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
+import { setMockNavigation } from '../setup.js';
 
 vi.mock('@/managers/homeBannersManager', () => ({
   deleteHomeBanner: vi.fn(),
@@ -31,6 +32,10 @@ describe('CartoonsHeroCarousel', () => {
   beforeEach(() => {
     deleteHomeBanner.mockResolvedValue(undefined);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('renders image-only banners without text or CTA overlay', () => {
@@ -65,6 +70,40 @@ describe('CartoonsHeroCarousel', () => {
       'src',
       'https://storage.googleapis.com/test-bucket/home-banners/cartoons-two.webp'
     );
+  });
+
+  it('localizes public carousel controls on English routes', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en/cartoons' });
+    const translatedBanners = banners.map((banner, index) => ({
+      ...banner,
+      title: `Caricature banner ${index + 1}`,
+    }));
+
+    const { container } = render(
+      <CartoonsHeroCarousel banners={translatedBanners} />,
+      { locale: 'en' }
+    );
+
+    expect(screen.getByRole('region', { name: 'Caricature banners' })).toBeInTheDocument();
+    expect(container.querySelector('[aria-label="Banner navigation"]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous banner' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next banner' })).toBeInTheDocument();
+    expect(screen.getByAltText('Caricature banner 1')).toBeInTheDocument();
+  });
+
+  it('uses the localized English image fallback when a banner has no title', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en/cartoons' });
+
+    render(
+      <CartoonsHeroCarousel banners={[{ ...banners[0], title: '' }]} />,
+      { locale: 'en' }
+    );
+
+    expect(screen.getByAltText('Caricature banner')).toBeInTheDocument();
   });
 
   it('does not crash when the current banner index is out of range after a list shrink', () => {

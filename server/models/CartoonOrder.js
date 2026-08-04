@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PUBLIC_LOCALES } from './localizationSchemas.js';
 
 const cartoonOrderPhotoSchema = new mongoose.Schema(
   {
@@ -51,6 +52,12 @@ const cartoonOrderSchema = new mongoose.Schema(
       message: { type: String, required: true, trim: true },
     },
     // Опционален: общите запитвания нямат конкретен продукт.
+    customerLocale: {
+      type: String,
+      enum: PUBLIC_LOCALES,
+      default: 'bg',
+      required: true,
+    },
     productSnapshot: {
       productId: {
         type: mongoose.Schema.Types.ObjectId,

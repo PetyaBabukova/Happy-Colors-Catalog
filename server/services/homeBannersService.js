@@ -7,6 +7,7 @@ import {
   extractObjectNameFromGcsUrl,
   getBucketName,
 } from '../helpers/gcsImageHelper.js';
+import { projectPublicHomeBanner } from './localization/publicProjection.js';
 
 const ALLOWED_HOME_BANNER_FIELDS = new Set([
   'title',
@@ -210,6 +211,22 @@ function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source || {}, key);
 }
 
+function hasChangedField(target, updates, field) {
+  if (!hasOwn(updates, field)) {
+    return false;
+  }
+
+  return String(target?.[field] ?? '').trim() !== String(updates[field] ?? '').trim();
+}
+
+function hasHomeBannerSourceCopyChange(target, updates = {}) {
+  return (
+    hasChangedField(target, updates, 'title') ||
+    hasChangedField(target, updates, 'description') ||
+    hasChangedField(target, updates, 'ctaLabel')
+  );
+}
+
 function normalizeHomeBannerResponse(banner) {
   if (!banner) {
     return banner;
@@ -389,13 +406,15 @@ function buildActiveBannersQuery(placement) {
   };
 }
 
-export async function getActiveHomeBanners({ placement = 'home' } = {}) {
+export async function getActiveHomeBanners({ placement = 'home', locale = 'bg' } = {}) {
   const normalizedPlacement = normalizeHomeBannerPlacement(placement);
   const banners = await HomeBanner.find(buildActiveBannersQuery(normalizedPlacement))
     .sort({ sortOrder: 1, createdAt: 1 })
     .lean();
 
-  return banners.map(normalizeHomeBannerResponse);
+  return banners
+    .map((banner) => projectPublicHomeBanner(normalizeHomeBannerResponse(banner), locale))
+    .filter(Boolean);
 }
 
 export async function getHomeBannerById(bannerId) {
@@ -442,6 +461,11 @@ export async function editHomeBanner(bannerId, data, userId) {
     currentBanner: banner,
     requireAll: false,
   });
+  const hasSourceCopyChange = hasHomeBannerSourceCopyChange(banner, nextData);
+
+  if (hasSourceCopyChange) {
+    banner.sourceRevision = (Number(banner.sourceRevision) || 1) + 1;
+  }
 
   for (const [key, value] of Object.entries(nextData)) {
     banner[key] = value;

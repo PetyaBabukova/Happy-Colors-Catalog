@@ -21,24 +21,79 @@ const initialEditorState = {
   contentText: '',
 };
 
+const DEFAULT_CTA_LABELS = {
+  bg: 'Виж повече',
+  en: 'View more',
+};
+
+const LOCALE_OPTIONS = [
+  { value: 'bg', label: 'Български' },
+  { value: 'en', label: 'English' },
+];
+
+function createEmptyLocaleContent(locale) {
+  return {
+    subject: '',
+    ...initialEditorState,
+    ctaLabel: DEFAULT_CTA_LABELS[locale],
+  };
+}
+
 const initialFormState = {
-  subject: '',
-  ...initialEditorState,
   sourceType: 'custom',
   imageUrl: 'https://happycolors.eu/logo_64pxH.svg',
   ctaUrl: '/products',
-  ctaLabel: 'Виж повече',
+  contentByLocale: {
+    bg: createEmptyLocaleContent('bg'),
+    en: createEmptyLocaleContent('en'),
+  },
 };
 
-function buildPayload(formValues) {
+function buildPayload(formValues, selectedLocales) {
+  const contentByLocale = selectedLocales.reduce((content, locale) => {
+    content[locale] = formValues.contentByLocale[locale];
+    return content;
+  }, {});
+
   return {
-    subject: formValues.subject,
-    contentHtml: formValues.contentHtml,
-    contentJson: formValues.contentJson,
-    contentText: formValues.contentText,
+    contentByLocale,
     sourceType: formValues.sourceType || 'custom',
+    locales: selectedLocales,
     ...(formValues.sourceId ? { sourceId: formValues.sourceId } : {}),
   };
+}
+
+function countSelectedSubscribers(counts, selectedLocales) {
+  return selectedLocales.reduce((total, locale) => total + Number(counts?.[locale] || 0), 0);
+}
+
+function labelForLocale(locale) {
+  return LOCALE_OPTIONS.find((option) => option.value === locale)?.label || locale.toUpperCase();
+}
+
+function mergePrefillContent(currentContentByLocale, prefill) {
+  return LOCALE_OPTIONS.reduce((contentByLocale, option) => {
+    const locale = option.value;
+    const prefillContent = prefill?.contentByLocale?.[locale] || (locale === 'bg' ? prefill : null);
+
+    if (!prefillContent) {
+      return contentByLocale;
+    }
+
+    const currentContent = currentContentByLocale[locale] || createEmptyLocaleContent(locale);
+
+    return {
+      ...contentByLocale,
+      [locale]: {
+        ...currentContent,
+        subject: prefillContent.subject || '',
+        contentHtml: prefillContent.contentHtml || '<p></p>',
+        contentJson: prefillContent.contentJson || currentContent.contentJson,
+        contentText: prefillContent.contentText || '',
+        ctaLabel: prefillContent.ctaLabel || currentContent.ctaLabel,
+      },
+    };
+  }, currentContentByLocale);
 }
 
 export default function NewsletterSendClient() {
@@ -51,6 +106,10 @@ export default function NewsletterSendClient() {
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeSubscribers, setActiveSubscribers] = useState(null);
+  const [activeSubscribersByLocale, setActiveSubscribersByLocale] = useState({ bg: 0, en: 0 });
+  const [selectedLocales, setSelectedLocales] = useState(['bg', 'en']);
+  const [activeContentLocale, setActiveContentLocale] = useState('bg');
+  const activeContent = formValues.contentByLocale[activeContentLocale] || formValues.contentByLocale.bg;
 
   useEffect(() => {
     const source = searchParams?.get('source');
@@ -77,19 +136,16 @@ export default function NewsletterSendClient() {
 
         setFormValues((current) => ({
           ...current,
-          subject: prefill.subject || '',
-          contentHtml: prefill.contentHtml || '<p></p>',
-          contentJson: prefill.contentJson || current.contentJson,
-          contentText: prefill.contentText || '',
           sourceType: source,
           sourceId: prefill.sourceId || id,
           imageUrl: prefill.imageUrl || current.imageUrl,
           ctaUrl: prefill.ctaUrl || current.ctaUrl,
-          ctaLabel: prefill.ctaLabel || current.ctaLabel,
+          contentByLocale: mergePrefillContent(current.contentByLocale, prefill),
         }));
+        setActiveContentLocale('bg');
       } catch (error) {
         if (isMounted) {
-          setStatus(error?.message || 'Не успяхме да заредим данните за продукта.', 'error');
+          setStatus(error?.message || 'Не успяхме да заредим данните за източника.', 'error');
         }
       }
     }
@@ -101,18 +157,43 @@ export default function NewsletterSendClient() {
     };
   }, [searchParams]);
 
-  function updateSubject(value) {
+  function updateLocaleContent(locale, updates) {
     setFormValues((current) => ({
       ...current,
-      subject: value,
+      contentByLocale: {
+        ...current.contentByLocale,
+        [locale]: {
+          ...current.contentByLocale[locale],
+          ...updates,
+        },
+      },
     }));
   }
 
+  function updateSubject(value) {
+    updateLocaleContent(activeContentLocale, { subject: value });
+  }
+
   function updateEditor(value) {
-    setFormValues((current) => ({
-      ...current,
-      ...value,
-    }));
+    updateLocaleContent(activeContentLocale, value);
+  }
+
+  function updateCtaLabel(value) {
+    updateLocaleContent(activeContentLocale, { ctaLabel: value });
+  }
+
+  function toggleLocale(locale) {
+    setSelectedLocales((current) => {
+      const nextLocales = current.includes(locale)
+        ? current.filter((value) => value !== locale)
+        : [...current, locale];
+
+      if (!nextLocales.includes(activeContentLocale) && nextLocales.length > 0) {
+        setActiveContentLocale(nextLocales[0]);
+      }
+
+      return nextLocales;
+    });
   }
 
   function setStatus(nextMessage, nextType) {
@@ -121,14 +202,25 @@ export default function NewsletterSendClient() {
   }
 
   function validateForm() {
-    if (!formValues.subject.trim()) {
-      setStatus('Моля, въведете тема на имейла.', 'error');
+    if (selectedLocales.length === 0) {
+      setStatus('Моля, изберете поне един език за кампанията.', 'error');
       return false;
     }
 
-    if (!String(formValues.contentText || '').trim()) {
-      setStatus('Моля, въведете съдържание на имейла.', 'error');
-      return false;
+    for (const locale of selectedLocales) {
+      const content = formValues.contentByLocale[locale];
+
+      if (!content?.subject?.trim()) {
+        setActiveContentLocale(locale);
+        setStatus(`Моля, въведете тема на имейла за ${labelForLocale(locale)}.`, 'error');
+        return false;
+      }
+
+      if (!String(content?.contentText || '').trim()) {
+        setActiveContentLocale(locale);
+        setStatus(`Моля, въведете съдържание на имейла за ${labelForLocale(locale)}.`, 'error');
+        return false;
+      }
     }
 
     return true;
@@ -144,7 +236,7 @@ export default function NewsletterSendClient() {
     setIsSendingTest(true);
 
     try {
-      const result = await sendNewsletterTest(buildPayload(formValues));
+      const result = await sendNewsletterTest(buildPayload(formValues, selectedLocales));
       setStatus(result?.message || 'Тестовият имейл е изпратен.', 'success');
     } catch (error) {
       setStatus(error?.message || 'Не успяхме да изпратим тестовия имейл.', 'error');
@@ -164,11 +256,13 @@ export default function NewsletterSendClient() {
 
     try {
       const result = await getNewsletterSendStatus();
-      const count = Number(result?.activeSubscribers || 0);
+      const counts = result?.activeSubscribersByLocale || { bg: Number(result?.activeSubscribers || 0), en: 0 };
+      const count = countSelectedSubscribers(counts, selectedLocales);
       setActiveSubscribers(count);
+      setActiveSubscribersByLocale(counts);
 
       if (count === 0) {
-        setStatus('Няма активни абонати за изпращане.', 'info');
+        setStatus('Няма активни абонати за избраните езици.', 'info');
         return;
       }
 
@@ -185,7 +279,7 @@ export default function NewsletterSendClient() {
     setStatus('', '');
 
     try {
-      const result = await sendNewsletterToSubscribers(buildPayload(formValues));
+      const result = await sendNewsletterToSubscribers(buildPayload(formValues, selectedLocales));
       const failed = Number(result?.failed || 0);
 
       if (failed > 0) {
@@ -213,22 +307,64 @@ export default function NewsletterSendClient() {
 
       <section className={styles.layout} aria-label="Форма за изпращане на новини">
         <div className={styles.formColumn}>
+          <fieldset className={styles.localeField}>
+            <legend>Езици на кампанията</legend>
+            <div className={styles.localeOptions}>
+              {LOCALE_OPTIONS.map((option) => (
+                <label key={option.value} className={styles.localeOption}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLocales.includes(option.value)}
+                    onChange={() => toggleLocale(option.value)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className={styles.localeTabs} role="tablist" aria-label="Съдържание по език">
+              {LOCALE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeContentLocale === option.value}
+                  className={`${styles.localeTab} ${activeContentLocale === option.value ? styles.localeTabActive : ''}`}
+                  onClick={() => setActiveContentLocale(option.value)}
+                >
+                  {option.value.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <label className={styles.field}>
-            <span>Тема</span>
+            <span>Тема ({activeContentLocale.toUpperCase()})</span>
             <input
               type="text"
-              value={formValues.subject}
+              value={activeContent.subject}
               onChange={(event) => updateSubject(event.target.value)}
               maxLength={160}
               className={styles.input}
             />
           </label>
 
+          <label className={styles.field}>
+            <span>Бутон ({activeContentLocale.toUpperCase()})</span>
+            <input
+              type="text"
+              value={activeContent.ctaLabel}
+              onChange={(event) => updateCtaLabel(event.target.value)}
+              maxLength={80}
+              className={styles.input}
+            />
+          </label>
+
           <div className={styles.field}>
-            <span>Съдържание</span>
+            <span>Съдържание ({activeContentLocale.toUpperCase()})</span>
             <RichTextEditor
-              id="newsletter-content"
-              value={formValues.contentHtml}
+              key={activeContentLocale}
+              id={`newsletter-content-${activeContentLocale}`}
+              value={activeContent.contentHtml}
               onChange={updateEditor}
             />
           </div>
@@ -270,8 +406,23 @@ export default function NewsletterSendClient() {
               <dd>{formValues.ctaUrl}</dd>
             </div>
             <div>
-              <dt>Бутон</dt>
-              <dd>{formValues.ctaLabel}</dd>
+              <dt>Бутони</dt>
+              <dd>
+                {selectedLocales.map((locale) => (
+                  <span key={locale} className={styles.summaryLine}>
+                    {locale.toUpperCase()}: {formValues.contentByLocale[locale]?.ctaLabel || DEFAULT_CTA_LABELS[locale]}
+                  </span>
+                ))}
+              </dd>
+            </div>
+            <div>
+              <dt>Езици</dt>
+              <dd>
+                {selectedLocales
+                  .map((locale) => LOCALE_OPTIONS.find((option) => option.value === locale)?.label)
+                  .filter(Boolean)
+                  .join(', ') || 'Няма избрани'}
+              </dd>
             </div>
           </dl>
         </aside>
@@ -289,6 +440,11 @@ export default function NewsletterSendClient() {
             <p>
               Сигурни ли сте, че искате да изпратите този имейл до {activeSubscribers} активни
               абонати?
+            </p>
+            <p className={styles.localeCounts}>
+              {LOCALE_OPTIONS.filter((option) => selectedLocales.includes(option.value))
+                .map((option) => `${option.label}: ${Number(activeSubscribersByLocale?.[option.value] || 0)}`)
+                .join(' · ')}
             </p>
             <div className={styles.modalActions}>
               <button

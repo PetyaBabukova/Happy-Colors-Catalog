@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductDetails from '@/app/products/[productId]/ProductDetails';
 import useImageSlideshow from '@/hooks/useImageSlideshow';
 import { approveAdminProduct } from '@/managers/usersAdminManager';
+import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 
 vi.mock('@/hooks/useImageSlideshow', () => ({
@@ -11,6 +12,11 @@ vi.mock('@/hooks/useImageSlideshow', () => ({
 vi.mock('@/managers/usersAdminManager', () => ({
   approveAdminProduct: vi.fn(),
   rejectAdminProduct: vi.fn(),
+}));
+
+vi.mock('@/managers/translationsManager', () => ({
+  acceptCurrentTranslation: vi.fn(),
+  generateTranslation: vi.fn(),
 }));
 
 const catalogModeState = vi.hoisted(() => ({
@@ -71,6 +77,8 @@ describe('ProductDetails', () => {
     resume.mockClear();
     handleTrackTransitionEnd.mockClear();
     approveAdminProduct.mockResolvedValue({});
+    acceptCurrentTranslation.mockResolvedValue({ status: 'current' });
+    generateTranslation.mockResolvedValue({ status: 'current' });
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,
       addEventListener: vi.fn(),
@@ -101,6 +109,32 @@ describe('ProductDetails', () => {
         posterUrl: '/images/video-poster.webp',
       }),
     ]);
+  });
+
+  it('localizes inactive video poster alt text on English product routes', () => {
+    render(<ProductDetails product={product} />, { locale: 'en' });
+
+    expect(screen.getAllByAltText('Lavender Candle video')).not.toHaveLength(0);
+    expect(screen.queryByAltText('Lavender Candle видео')).not.toBeInTheDocument();
+  });
+
+  it('marks Bulgarian fallback detail content as translation pending', () => {
+    render(
+      <ProductDetails
+        product={{
+          ...product,
+          title: 'Български продукт',
+          description: 'Описание на български.',
+          contentLocale: 'bg',
+          translationPending: true,
+        }}
+      />,
+      { locale: 'en' }
+    );
+
+    expect(screen.getByText('Translation pending')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Български продукт' })).toHaveAttribute('lang', 'bg');
+    expect(screen.getByText('Описание на български.')).toHaveAttribute('lang', 'bg');
   });
 
   it('adds the active image slide to cart and navigates to the cart', () => {
@@ -202,6 +236,11 @@ describe('ProductDetails', () => {
 
     expect(ownerRender.container.querySelector('a[href="/products/product-1/edit"]')).toBeInTheDocument();
     expect(ownerRender.container.querySelector('a[href="/products/product-1/delete"]')).toBeInTheDocument();
+    expect(
+      ownerRender.container.querySelector(
+        'a[href="/translations?entityType=product&entityId=product-1"]'
+      )
+    ).not.toBeInTheDocument();
 
     ownerRender.unmount();
 
@@ -229,10 +268,64 @@ describe('ProductDetails', () => {
 
     expect(container.querySelector('a[href="/products/product-1/edit"]')).toBeInTheDocument();
     expect(container.querySelector('a[href="/products/product-1/delete"]')).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        'a[href="/translations?entityType=product&entityId=product-1"]'
+      )
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Одобри' }));
 
     expect(approveAdminProduct).toHaveBeenCalledWith('product-1');
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+  });
+
+  it('opens an English translation decision modal after approving changed public copy', async () => {
+    const routerRefresh = vi.fn();
+    approveAdminProduct.mockResolvedValueOnce({
+      _id: 'product-1',
+      englishTranslationDecision: {
+        locale: 'en',
+        status: 'needs_decision',
+        sourceRevision: 2,
+        translationRevision: 1,
+        translationSourceRevision: 1,
+      },
+    });
+
+    render(
+      <ProductDetails
+        product={{
+          ...product,
+          publicationStatus: 'published',
+          reviewStatus: 'pending_review',
+        }}
+      />,
+      {
+        user: { _id: 'admin-1', role: 'full_admin' },
+        routerOverrides: { refresh: routerRefresh },
+      }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Одобри' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'The Bulgarian text has changed.',
+    });
+    expect(dialog).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'No, keep current EN' }));
+
+    await waitFor(() =>
+      expect(acceptCurrentTranslation).toHaveBeenCalledWith({
+        entityType: 'product',
+        entityId: 'product-1',
+        locale: 'en',
+        expectedSourceRevision: 2,
+        expectedTranslationRevision: 1,
+      })
+    );
+    expect(generateTranslation).not.toHaveBeenCalled();
     await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
   });
 

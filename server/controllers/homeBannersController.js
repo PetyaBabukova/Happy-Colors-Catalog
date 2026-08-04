@@ -8,6 +8,7 @@ import {
   getActiveHomeBanners,
   getHomeBannerById,
 } from '../services/homeBannersService.js';
+import { getRequestPublicLocale } from '../services/localization/publicProjection.js';
 
 const router = express.Router();
 
@@ -52,7 +53,8 @@ function getPlacementQuery(req) {
 
 router.get('/', async (req, res) => {
   try {
-    const banners = await getActiveHomeBanners({ placement: getPlacementQuery(req) });
+    const locale = getRequestPublicLocale(req);
+    const banners = await getActiveHomeBanners({ placement: getPlacementQuery(req), locale });
 
     res.json(banners);
   } catch (error) {

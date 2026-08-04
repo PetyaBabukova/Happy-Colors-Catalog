@@ -5,7 +5,8 @@ import React from 'react';
 import styles from './MessageBox.module.css';
 
 export default function MessageBox({ type = 'error', message }) {
-    const boxClass = `${styles.message} ${type === 'success' ? styles.success : styles.error}`;
+    const typeClass = type === 'success' ? styles.success : type === 'info' ? styles.info : styles.error;
+    const boxClass = `${styles.message} ${typeClass}`;
 
    
 

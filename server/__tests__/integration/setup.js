@@ -96,6 +96,7 @@ beforeAll(async () => {
   process.env.JWT_SECRET = 'integration-jwt-secret';
   process.env.CATALOG_MODE = 'false';
   process.env.CLIENT_URL = 'http://localhost:3000';
+  process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
   process.env.GCS_BUCKET_NAME = 'test-bucket';
   process.env.CARTOON_ORDER_ADMIN_EMAIL = 'cartoon-admin@example.com';
   process.env.NEWSLETTER_UNSUBSCRIBE_SECRET = 'test-newsletter-unsubscribe-secret';
@@ -128,6 +129,7 @@ afterAll(async () => {
   delete process.env.JWT_SECRET;
   delete process.env.CATALOG_MODE;
   delete process.env.CLIENT_URL;
+  delete process.env.NEXT_PUBLIC_SITE_URL;
   delete process.env.GCS_BUCKET_NAME;
   delete process.env.CARTOON_ORDER_ADMIN_EMAIL;
   delete process.env.NEWSLETTER_UNSUBSCRIBE_SECRET;

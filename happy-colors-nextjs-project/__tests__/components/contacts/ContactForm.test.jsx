@@ -8,6 +8,7 @@ import {
   uploadCartoonOrderPhoto,
 } from '@/managers/cartoonOrdersManager';
 import { act, fireEvent, render, screen, waitFor } from '../test-utils.jsx';
+import { setMockNavigation } from '../setup.js';
 
 vi.mock('@/managers/contactsManager', () => ({
   sendContactForm: vi.fn(),
@@ -86,6 +87,7 @@ describe('ContactForm', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it('validates required fields before sending', () => {
@@ -98,6 +100,34 @@ describe('ContactForm', () => {
     expect(container.querySelector('#name').className).not.toBe('');
     expect(container.querySelector('#email').className).not.toBe('');
     expect(container.querySelector('#message').className).not.toBe('');
+  });
+
+  it('renders normal contact form copy in English', () => {
+    const { container } = render(<ContactForm product={{ _id: 'product-1', title: 'Lavender Candle' }} />, {
+      locale: 'en',
+    });
+
+    expect(screen.getByRole('heading', { name: 'Contact us' })).toBeInTheDocument();
+    expect(screen.getByText(/You are sending an inquiry about:/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Name/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Phone')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Message/)).toBeInTheDocument();
+    expect(screen.getByText('The name must be between 3 and 20 characters.')).toBeInTheDocument();
+    expect(screen.getByText('Your message must not exceed 1000 characters.')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('Свържете се с нас');
+  });
+
+  it('renders cartoon inquiry copy in English', () => {
+    render(<ContactForm serviceContext="cartoons" />, { locale: 'en' });
+
+    expect(screen.getByRole('heading', { name: 'Caricature inquiry' })).toBeInTheDocument();
+    expect(screen.getByText(/Send an inquiry. We will contact you/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reference photos/)).toBeInTheDocument();
+    expect(screen.getByText(/Describe the caricature you imagine/)).toBeInTheDocument();
+    expect(screen.getByText(/Up to 5 photos, each up to 3 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/I agree that the uploaded photos/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   });
 
   it('sends a sanitized product enquiry payload and resets the form', async () => {
@@ -700,6 +730,51 @@ describe('ContactForm', () => {
     });
 
     expect(mockRouterPush).toHaveBeenCalledWith('/products');
+  });
+
+  it('keeps successful contact redirects in the active public locale without changing backend product URLs', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en/contacts' });
+    vi.useFakeTimers();
+    const mockRouterPush = vi.fn();
+    const { container } = render(
+      <ContactForm product={{ _id: 'product-1', title: 'Lavender Candle' }} />,
+      { mockRouterPush }
+    );
+
+    fillContactFields(container, { phone: '', message: 'Hello there' });
+    await act(async () => {
+      fireEvent.submit(container.querySelector('form'));
+      await Promise.resolve();
+    });
+
+    expect(sendContactForm).toHaveBeenCalledWith(expect.objectContaining({
+      productUrl: `${window.location.origin}/products/product-1`,
+    }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/en/products');
+  });
+
+  it('submits cartoon order inquiries with the active public locale', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en/contacts' });
+    const { container } = render(<ContactForm serviceContext="cartoons" />);
+
+    fillContactFields(container, { phone: '', message: 'Cartoon brief' });
+    await uploadPhoto(container);
+    fireEvent.click(container.querySelector('#cartoonConsent'));
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => expect(createCartoonOrder).toHaveBeenCalled());
+    expect(createCartoonOrder.mock.calls[0][0]).toMatchObject({
+      productId: null,
+      locale: 'en',
+    });
   });
 
   it('does not redirect cartoon order success to products', async () => {

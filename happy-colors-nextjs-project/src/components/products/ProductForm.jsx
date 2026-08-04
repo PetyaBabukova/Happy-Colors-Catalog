@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import useForm from '@/hooks/useForm';
 import { handleSubmit } from '@/utils/formSubmitHelper';
 import MessageBox from '@/components/ui/MessageBox';
@@ -109,6 +110,7 @@ export default function ProductForm({
   legendText,
   successMessage,
   canManageGalleryFlags = false,
+  translationHref = '',
 }) {
   const router = useRouter();
   const { categories } = useProducts();
@@ -565,6 +567,12 @@ export default function ProductForm({
       {success && <MessageBox type="success" message={successMessage || 'Успешно изпълнение'} />}
 
       <legend>{legendText}</legend>
+
+      {translationHref ? (
+        <Link href={translationHref} className={styles.translationLink}>
+          Управление на EN превода
+        </Link>
+      ) : null}
 
       <form
         className={styles.registerForm}
