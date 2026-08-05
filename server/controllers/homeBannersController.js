@@ -8,6 +8,7 @@ import {
   getActiveHomeBanners,
   getHomeBannerById,
 } from '../services/homeBannersService.js';
+import { getRequestPublicLocale } from '../services/localization/publicProjection.js';
 
 const router = express.Router();
 
@@ -37,9 +38,23 @@ function sendError(res, error, fallbackStatus = 500) {
   return res.status(statusCode).json({ message: error.message });
 }
 
+function getPlacementQuery(req) {
+  if (
+    typeof req.query.placement === 'undefined' &&
+    Object.keys(req.query || {}).some((key) => key.startsWith('placement['))
+  ) {
+    const error = new Error('Invalid banner placement.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return req.query.placement;
+}
+
 router.get('/', async (req, res) => {
   try {
-    const banners = await getActiveHomeBanners();
+    const locale = getRequestPublicLocale(req);
+    const banners = await getActiveHomeBanners({ placement: getPlacementQuery(req), locale });
 
     res.json(banners);
   } catch (error) {

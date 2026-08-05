@@ -5,9 +5,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose from './server/mongoose.js';
 import { createUnifiedRoutingApp } from './server/unifiedRouting.js';
+import { scheduleOpenNewsletterCampaignProcessing } from './server/services/newsletterSendService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV =
+    process.env.npm_lifecycle_event === 'start' ? 'production' : 'development';
+}
 
 const isTest = process.env.NODE_ENV === 'test';
 const envCandidates = isTest
@@ -61,6 +67,12 @@ await nextApp.prepare();
 
 const nextHandler = nextApp.getRequestHandler();
 const app = createUnifiedRoutingApp({ expressApp, nextHandler });
+
+scheduleOpenNewsletterCampaignProcessing().catch((error) => {
+  console.error('Newsletter campaign resume scheduling failed:', {
+    message: error?.message || 'Unknown newsletter campaign resume error',
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Unified server listening on port ${PORT}`);

@@ -20,7 +20,10 @@ export default function CreateProductClient() {
         imageUrls: [],
         videos: [],
         availability: 'available',
+        isInCatalog: false,
+        isCartoonGallery: false,
       }}
+      canManageGalleryFlags={user?.role === 'full_admin'}
       onSubmit={(values, setSuccess, setError, setInvalidFields, router) =>
         onCreateProductSubmit(
           values,

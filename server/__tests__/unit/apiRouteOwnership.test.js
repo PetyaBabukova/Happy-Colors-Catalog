@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BACKEND_API_EXACT_PATHS,
   BACKEND_API_PREFIXES,
+  NEXT_API_EXACT_PATHS,
   getRequestPathname,
   isApiPath,
   isBackendApiPath,
 } from '../../apiRouteOwnership.js';
 import nextConfig from '../../../happy-colors-nextjs-project/next.config.mjs';
 
-function rewriteSourceToBackendPrefix(source) {
-  return source.replace(/\/:path\*$/, '');
+function normalizeRewriteSource(source) {
+  return source
+    .replace(/\/:path\*$/, '')
+    .replace(/\/:orderId\(\[a-fA-F0-9\]\{24\}\)(\/|$)/, '/:orderId$1')
+    .replace(/\/:photoId\(\[A-Za-z0-9_-\]\{1,80\}\)(\/|$)/, '/:photoId$1');
 }
 
 describe('apiRouteOwnership', () => {
@@ -35,6 +40,21 @@ describe('apiRouteOwnership', () => {
     '/api/payments/webhook',
     '/api/users/me',
     '/api/newsletter/send',
+    '/api/translations/queue',
+    '/api/translations/product/665f1f77bcf86cd799439011/en/generate',
+    '/api/cartoon-orders',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/statuses',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/admin-notes',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/workflow',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/reject',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/complete',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/photo-diagnostics',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo_abc-123_DEF',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/notifications/retry',
+    '/api/cartoon-orders/purge-old-completed',
+    '/api/cartoon-orders/upload-cleanup/status',
+    '/api/cartoon-orders/upload-cleanup/run',
   ])('routes backend-owned path %s to Express', (path) => {
     expect(isBackendApiPath(path)).toBe(true);
   });
@@ -44,6 +64,7 @@ describe('apiRouteOwnership', () => {
     '/api/revalidate/products?source=admin',
     '/api/revalidate/blog',
     '/api/revalidate/home-banners',
+    '/api/revalidate/cartoon-hero-banners',
     '/api/uploads/sign',
     '/api/uploads/delete',
     '/api/uploads/proxy',
@@ -51,6 +72,9 @@ describe('apiRouteOwnership', () => {
     '/api/blog/images',
     '/api/analytics/summary',
     '/api/offices/econt',
+    '/api/cartoon-orders/upload-session',
+    '/api/cartoon-orders/uploads',
+    '/api/cartoon-orders/uploads/cleanup',
   ])('routes Next-owned path %s away from Express', (path) => {
     expect(isBackendApiPath(path)).toBe(false);
   });
@@ -59,8 +83,37 @@ describe('apiRouteOwnership', () => {
     '/api/products-v2',
     '/api/productss',
     '/api/payments-webhook',
+    '/api/cartoon-orders/not-an-object-id',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/history',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/notifications',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/notifications/history',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/photo-diagnostics/history',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/../secret',
+    '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo.with.dot',
+    '/api/cartoon-orders/upload-session/refresh',
+    '/api/cartoon-orders/uploads/cleanup',
   ])('does not treat similar prefix %s as backend-owned', (path) => {
     expect(isBackendApiPath(path)).toBe(false);
+  });
+
+  it('keeps cartoon order backend ownership limited to explicit admin routes', () => {
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/statuses')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/admin-notes')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/workflow')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/reject')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/complete')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/photo-diagnostics')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo_abc-123_DEF')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/665f1f77bcf86cd799439011/notifications/retry')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/purge-old-completed')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/upload-cleanup/status')).toBe(true);
+    expect(isBackendApiPath('/api/cartoon-orders/upload-cleanup/run')).toBe(true);
+
+    expect(isBackendApiPath('/api/cartoon-orders/upload-session')).toBe(false);
+    expect(isBackendApiPath('/api/cartoon-orders/uploads')).toBe(false);
+    expect(isBackendApiPath('/api/cartoon-orders/uploads/cleanup')).toBe(false);
+    expect(isBackendApiPath('/api/cartoon-orders/future-next-route')).toBe(false);
   });
 
   it('keeps the backend prefix list explicit', () => {
@@ -76,13 +129,38 @@ describe('apiRouteOwnership', () => {
       '/api/orders',
       '/api/payments',
       '/api/delivery',
+      '/api/translations',
+    ]);
+    expect(BACKEND_API_EXACT_PATHS).toEqual([
+      '/api/cartoon-orders',
+      '/api/cartoon-orders/purge-old-completed',
+      '/api/cartoon-orders/upload-cleanup/status',
+      '/api/cartoon-orders/upload-cleanup/run',
+    ]);
+    expect(NEXT_API_EXACT_PATHS).toEqual([
+      '/api/cartoon-orders/upload-session',
+      '/api/cartoon-orders/uploads',
+      '/api/cartoon-orders/uploads/cleanup',
     ]);
   });
 
   it('keeps backend API prefixes aligned with Next rewrites', async () => {
     const rewrites = await nextConfig.rewrites();
-    const rewriteSources = rewrites.map((rewrite) => rewriteSourceToBackendPrefix(rewrite.source));
+    const rewriteSources = rewrites.map((rewrite) => normalizeRewriteSource(rewrite.source));
+    const backendApiPaths = [
+      ...BACKEND_API_PREFIXES,
+      ...BACKEND_API_EXACT_PATHS,
+      '/api/cartoon-orders/:orderId',
+      '/api/cartoon-orders/:orderId/statuses',
+      '/api/cartoon-orders/:orderId/admin-notes',
+      '/api/cartoon-orders/:orderId/workflow',
+      '/api/cartoon-orders/:orderId/reject',
+      '/api/cartoon-orders/:orderId/complete',
+      '/api/cartoon-orders/:orderId/photo-diagnostics',
+      '/api/cartoon-orders/:orderId/photos/:photoId',
+      '/api/cartoon-orders/:orderId/notifications/retry',
+    ];
 
-    expect([...BACKEND_API_PREFIXES].sort()).toEqual([...rewriteSources].sort());
+    expect(backendApiPaths.sort()).toEqual([...rewriteSources].sort());
   });
 });

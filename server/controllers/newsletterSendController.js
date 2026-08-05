@@ -6,6 +6,7 @@ import {
   getNewsletterSendStatus,
   buildBlogNewsletterPrefill,
   buildProductNewsletterPrefill,
+  retryNewsletterCampaignFailedDeliveries,
   sendNewsletterTest,
   sendNewsletterToSubscribers,
 } from '../services/newsletterSendService.js';
@@ -27,6 +28,14 @@ const broadcastLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000,
   max: 3,
   message: 'Твърде много опити за изпращане до абонати. Моля, опитайте отново по-късно.',
+  keyGenerator: authenticatedRateLimitKey,
+});
+
+const manualRetryLimiter = createRateLimiter({
+  keyPrefix: 'newsletter-send-manual-retry',
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: 'Твърде много опити за повторно изпращане на бюлетин. Моля, опитайте отново по-късно.',
   keyGenerator: authenticatedRateLimitKey,
 });
 
@@ -92,6 +101,25 @@ router.post('/test', requireAuth, requireFullAdmin, requireTrustedOrigin, testSe
     return sendError(res, error);
   }
 });
+
+router.post(
+  '/campaigns/:campaignId/retry-failed',
+  requireAuth,
+  requireFullAdmin,
+  requireTrustedOrigin,
+  manualRetryLimiter,
+  requireJson,
+  async (req, res) => {
+    try {
+      const result = await retryNewsletterCampaignFailedDeliveries(req.params.campaignId);
+      const { failures, ...safeResult } = result;
+
+      return res.status(200).json(safeResult);
+    } catch (error) {
+      return sendError(res, error);
+    }
+  }
+);
 
 router.post('/', requireAuth, requireFullAdmin, requireTrustedOrigin, broadcastLimiter, requireJson, async (req, res) => {
   try {

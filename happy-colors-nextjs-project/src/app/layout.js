@@ -3,11 +3,21 @@
 import './globals.css';
 import ClientLayout from './ClientLayout';
 import { Roboto } from 'next/font/google';
+import { headers } from 'next/headers';
 import {
   metadataBaseUrl,
   currentSiteUrl,
   shouldIndexSite,
 } from '@/config/siteSeo';
+import {
+  DEFAULT_LOCALE,
+  LOCALE_DETAILS,
+  LOCALE_REQUEST_HEADER,
+  isEnabledPublicLocale,
+  isLocaleRoutingEnabled,
+  normalizeLocale,
+} from '@/i18n/config';
+import { getDictionary } from '@/i18n/getDictionary';
 
 const roboto = Roboto({
   subsets: ['latin', 'cyrillic'],
@@ -53,15 +63,39 @@ const organizationJsonLd = {
   logo: new URL('/logo_64pxH.svg', currentSiteUrl).toString(),
 };
 
-export default function RootLayout({ children }) {
+async function resolveLayoutLocale() {
+  if (!isLocaleRoutingEnabled()) {
+    return DEFAULT_LOCALE;
+  }
+
+  const requestHeaders = await headers();
+  const requestLocale = normalizeLocale(requestHeaders.get(LOCALE_REQUEST_HEADER));
+
+  if (isEnabledPublicLocale(requestLocale)) {
+    return requestLocale;
+  }
+
+  return DEFAULT_LOCALE;
+}
+
+export default async function RootLayout({ children }) {
+  const locale = await resolveLayoutLocale();
+  const dictionary = getDictionary(locale);
+
   return (
-    <html lang="bg">
+    <html lang={LOCALE_DETAILS[locale].htmlLang}>
       <body className={roboto.className}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, '\\u003c') }}
         />
-        <ClientLayout enableAnalytics={shouldIndexSite}>{children}</ClientLayout>
+        <ClientLayout
+          dictionary={dictionary}
+          enableAnalytics={shouldIndexSite}
+          locale={locale}
+        >
+          {children}
+        </ClientLayout>
       </body>
 
     </html>

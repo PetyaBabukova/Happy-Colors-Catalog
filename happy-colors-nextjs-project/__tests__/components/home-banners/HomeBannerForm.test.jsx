@@ -73,6 +73,7 @@ describe('HomeBannerForm', () => {
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
           title: 'Животинки',
+          placement: 'home',
           ctaLabel: 'Виж животинки',
           ctaHref: '/search?q=животинки',
           imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/images/banner.webp',
@@ -82,6 +83,54 @@ describe('HomeBannerForm', () => {
         })
       );
     });
+  });
+
+  it('allows image-only cartoon banner submissions', async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+
+    render(<HomeBannerForm onSubmit={onSubmit} legendText="Създаване на хоум банер" />);
+    fireEvent.change(screen.getByLabelText('Позиция на банера'), { target: { value: 'cartoons' } });
+    fireEvent.change(screen.getByLabelText('Desktop image'), {
+      target: { files: [buildFile()] },
+    });
+
+    await waitFor(() => {
+      expect(uploadSignedFile).toHaveBeenCalledWith({ kind: 'home-banner-image', file: expect.any(File) });
+    });
+
+    expect(screen.queryByLabelText('Активен банер')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Запази' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          placement: 'cartoons',
+          title: '',
+          ctaLabel: '',
+          ctaHref: '',
+          imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/images/banner.webp',
+          isActive: true,
+        })
+      );
+    });
+  });
+
+  it('rejects non-empty external CTA links for cartoon banners', async () => {
+    const onSubmit = vi.fn();
+
+    render(<HomeBannerForm onSubmit={onSubmit} legendText="Създаване на хоум банер" />);
+    fireEvent.change(screen.getByLabelText('Позиция на банера'), { target: { value: 'cartoons' } });
+    fireEvent.change(screen.getByLabelText('CTA линк'), { target: { value: 'https://example.com' } });
+    fireEvent.change(screen.getByLabelText('Desktop image'), {
+      target: { files: [buildFile()] },
+    });
+
+    await waitFor(() => expect(uploadSignedFile).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Запази' }));
+
+    expect(await screen.findByText(/CTA линкът/)).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('uploads a mobile image and submits it with the desktop image', async () => {

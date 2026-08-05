@@ -1,7 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { revalidateProductSurfaces } from '../../../helpers/revalidateProducts.js';
 
 describe('revalidateProductSurfaces', () => {
+  beforeEach(() => {
+    vi.stubEnv('CLIENT_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();

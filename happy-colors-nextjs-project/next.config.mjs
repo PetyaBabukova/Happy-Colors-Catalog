@@ -67,6 +67,58 @@ const nextConfig = {
         destination: `${backendBaseUrl}/contacts/:path*`,
       },
       {
+        source: '/api/cartoon-orders',
+        destination: `${backendBaseUrl}/cartoon-orders`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/statuses',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/statuses`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/admin-notes',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/admin-notes`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/workflow',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/workflow`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/reject',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/reject`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/complete',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/complete`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/photo-diagnostics',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/photo-diagnostics`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/photos/:photoId([A-Za-z0-9_-]{1,80})',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/photos/:photoId`,
+      },
+      {
+        source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/notifications/retry',
+        destination: `${backendBaseUrl}/cartoon-orders/:orderId/notifications/retry`,
+      },
+      {
+        source: '/api/cartoon-orders/purge-old-completed',
+        destination: `${backendBaseUrl}/cartoon-orders/purge-old-completed`,
+      },
+      {
+        source: '/api/cartoon-orders/upload-cleanup/status',
+        destination: `${backendBaseUrl}/cartoon-orders/upload-cleanup/status`,
+      },
+      {
+        source: '/api/cartoon-orders/upload-cleanup/run',
+        destination: `${backendBaseUrl}/cartoon-orders/upload-cleanup/run`,
+      },
+      {
         source: '/api/newsletter/:path*',
         destination: `${backendBaseUrl}/newsletter/:path*`,
       },
@@ -81,6 +133,10 @@ const nextConfig = {
       {
         source: '/api/delivery/:path*',
         destination: `${backendBaseUrl}/delivery/:path*`,
+      },
+      {
+        source: '/api/translations/:path*',
+        destination: `${backendBaseUrl}/translations/:path*`,
       },
     ];
   },

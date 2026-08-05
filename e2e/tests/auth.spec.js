@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import {
+  englishLocaleEnabled,
+  localeRoutesEnabled,
+  pathEndPattern,
+} from './helpers/shop.js';
 
 const ownerEmail = 'owner.e2e@example.com';
 const ownerPassword = process.env.E2E_OWNER_PASSWORD || 'E2ePass123!';
@@ -24,7 +29,12 @@ test.describe('owner session', () => {
     await expect(page.getByText('e2e-owner')).toBeVisible();
 
     await page.goto('/users/logout');
-    await expect(page).toHaveURL(/\/$/);
+    const postLogoutUrlPattern = !localeRoutesEnabled
+      ? pathEndPattern('/')
+      : englishLocaleEnabled
+        ? /\/(?:bg|en)\/?(?:[?#].*)?$/
+        : pathEndPattern('/bg');
+    await expect(page).toHaveURL(postLogoutUrlPattern);
     await expect(page.getByText('e2e-owner')).toHaveCount(0);
 
     const response = await page.request.get('/api/users/me');
@@ -34,13 +44,15 @@ test.describe('owner session', () => {
 
 test.describe('login form', () => {
   test('logs in with the seeded owner credentials @critical @auth', async ({ page }) => {
+    test.skip(!localeRoutesEnabled, 'Localized post-login redirect requires locale routing to be enabled.');
+
     await page.goto('/users/login');
 
     await page.getByLabel('E-mail').fill(ownerEmail);
     await page.getByLabel('Password').fill(ownerPassword);
     await page.getByRole('button', { name: 'Login' }).click();
 
-    await expect(page).toHaveURL(/\/products$/);
+    await expect(page).toHaveURL(/\/bg\/products$/);
     await expect(page.getByText('e2e-owner')).toBeVisible();
 
     const response = await page.request.get('/api/users/me');

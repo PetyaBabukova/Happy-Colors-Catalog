@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sendContactForm } from '../../../src/managers/contactsManager.js';
 
-function jsonResponse({ ok = true, body = {} } = {}) {
+function jsonResponse({ ok = true, status = ok ? 200 : 400, body = {} } = {}) {
   return {
     ok,
+    status,
     json: vi.fn().mockResolvedValue(body),
   };
 }
@@ -37,7 +38,10 @@ describe('contactsManager', () => {
   it('surfaces backend contact errors', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'Invalid email' } }));
 
-    await expect(sendContactForm({ email: 'bad' })).rejects.toThrow('Invalid email');
+    await expect(sendContactForm({ email: 'bad' })).rejects.toMatchObject({
+      message: 'Invalid email',
+      status: 400,
+    });
   });
 
   it('uses a fallback error when the backend body is empty', async () => {

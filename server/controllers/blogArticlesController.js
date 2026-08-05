@@ -10,6 +10,7 @@ import {
   getPublicBlogArticleById,
   getPublicBlogArticles,
 } from '../services/blogArticlesService.js';
+import { getRequestPublicLocale } from '../services/localization/publicProjection.js';
 
 const router = express.Router();
 
@@ -41,7 +42,8 @@ function sendError(res, error, fallbackStatus = 500) {
 
 router.get('/', async (req, res) => {
   try {
-    const articles = await getPublicBlogArticles();
+    const locale = getRequestPublicLocale(req);
+    const articles = await getPublicBlogArticles({ locale });
 
     res.json(articles);
   } catch (error) {
@@ -71,7 +73,8 @@ router.get('/admin/:articleId', requireAuth, requireFullAdmin, async (req, res) 
 
 router.get('/:articleId', async (req, res) => {
   try {
-    const article = await getPublicBlogArticleById(req.params.articleId);
+    const locale = getRequestPublicLocale(req);
+    const article = await getPublicBlogArticleById(req.params.articleId, { locale });
 
     res.json(article);
   } catch (error) {

@@ -63,7 +63,11 @@ describe('/api/revalidate/blog', () => {
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('blog-articles');
     expect(revalidatePath).toHaveBeenCalledWith('/blog');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/blog');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/blog');
     expect(revalidatePath).toHaveBeenCalledWith(`/blog/${articleId}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/bg/blog/${articleId}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/en/blog/${articleId}`);
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
   });
 

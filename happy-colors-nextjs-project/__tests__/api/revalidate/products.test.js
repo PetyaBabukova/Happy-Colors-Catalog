@@ -43,10 +43,20 @@ describe('/api/revalidate/products', () => {
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('products');
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
+    expect(revalidateTag).toHaveBeenCalledWith('cartoon-gallery-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg');
+    expect(revalidatePath).toHaveBeenCalledWith('/en');
+    expect(revalidatePath).toHaveBeenCalledWith('/cartoons');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/cartoons');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/cartoons');
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
     expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/products/product-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products/product-1');
   });
 
   it('accepts server-owned revalidation with the shared secret', async () => {
@@ -63,6 +73,8 @@ describe('/api/revalidate/products', () => {
     expect(response.status).toBe(200);
     expect(requireApiAuth).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/products/product-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products/product-1');
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -84,8 +96,16 @@ describe('/api/revalidate/products', () => {
     expect(response.status).toBe(200);
     expect(revalidateTag).toHaveBeenCalledWith('products');
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
+    expect(revalidateTag).toHaveBeenCalledWith('cartoon-gallery-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg');
+    expect(revalidatePath).toHaveBeenCalledWith('/en');
+    expect(revalidatePath).toHaveBeenCalledWith('/cartoons');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/cartoons');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/cartoons');
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
     expect(revalidatePath).not.toHaveBeenCalledWith('/products/undefined');
   });

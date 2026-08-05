@@ -36,6 +36,8 @@ describe('auth middleware', () => {
   });
 
   it('throws when JWT_SECRET is not configured', () => {
+    vi.stubEnv('JWT_SECRET', '');
+
     expect(() => getJwtSecret()).toThrow();
   });
 

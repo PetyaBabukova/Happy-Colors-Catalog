@@ -5,6 +5,7 @@ import categoryController from './controllers/categoryController.js';
 import searchController from './controllers/searchController.js';
 import contactsController from './controllers/contactsController.js';
 import ordersController from './controllers/ordersController.js';
+import cartoonOrdersController from './controllers/cartoonOrdersController.js';
 import paymentsController from './controllers/paymentsController.js';
 import deliveryController from './controllers/deliveryController.js';
 import homeBannersController from './controllers/homeBannersController.js';
@@ -12,6 +13,7 @@ import blogArticlesController from './controllers/blogArticlesController.js';
 import newsletterController from './controllers/newsletterController.js';
 import newsletterSendController from './controllers/newsletterSendController.js';
 import newsletterSubscribersController from './controllers/newsletterSubscribersController.js';
+import translationsController from './controllers/translationsController.js';
 import { createRateLimiter } from './middlewares/rateLimit.js';
 
 const router = express.Router();
@@ -54,9 +56,11 @@ router.use('/newsletter/send', newsletterSendController);
 router.use('/newsletter/subscribers', newsletterSubscribersController);
 // Newsletter applies endpoint-specific rate limiters in its controller.
 router.use('/newsletter', newsletterController);
+router.use('/translations', translationsController);
 router.use('/categories', categoryController);
 router.use('/search', searchController);
 router.use('/contacts', contactsLimiter, contactsController);
+router.use('/cartoon-orders', cartoonOrdersController);
 router.use('/orders', catalogModeGuard, ordersLimiter, ordersController);
 router.use('/payments', catalogModeGuard, paymentsLimiter, paymentsController);
 router.use('/delivery', catalogModeGuard, deliveryController);

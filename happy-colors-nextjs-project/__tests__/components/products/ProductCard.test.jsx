@@ -52,6 +52,25 @@ describe('ProductCard', () => {
     expect(screen.getByText('Налично')).toBeInTheDocument();
   });
 
+  it('links the card to the product detail page', () => {
+    render(<ProductCard product={product} />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1');
+  });
+
+  it('preserves cartoon service context when requested', () => {
+    render(<ProductCard product={product} serviceContext="cartoons" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1?service=cartoons');
+    expect(screen.queryByText('Налично')).not.toBeInTheDocument();
+  });
+
+  it('ignores unrelated service context values', () => {
+    render(<ProductCard product={product} serviceContext="not-cartoons" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/products/product-1');
+  });
+
   it('builds image and video slides for the slideshow hook', () => {
     render(<ProductCard product={product} />);
 
@@ -89,6 +108,23 @@ describe('ProductCard', () => {
     render(<ProductCard product={{ ...product, availability: 'unavailable' }} />);
 
     expect(screen.queryByText('Налично')).not.toBeInTheDocument();
+  });
+
+  it('marks Bulgarian fallback products as translation pending', () => {
+    render(
+      <ProductCard
+        product={{
+          ...product,
+          title: 'Българско заглавие',
+          contentLocale: 'bg',
+          translationPending: true,
+        }}
+      />,
+      { locale: 'en' }
+    );
+
+    expect(screen.getByText('Translation pending')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Българско заглавие' })).toHaveAttribute('lang', 'bg');
   });
 
   it('renders the active video slide when it is in view', () => {

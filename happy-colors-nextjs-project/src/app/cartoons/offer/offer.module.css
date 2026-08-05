@@ -1,0 +1,377 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 4rem;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+  color: var(--dark-green);
+}
+
+.hero {
+  position: relative;
+  min-height: min(720px, calc(100vh - 5.5rem));
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.heroPicture {
+  position: absolute;
+  inset: 0;
+}
+
+.heroImage {
+  object-fit: cover;
+  object-position: center;
+}
+
+.heroContent {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: min(100%, 58rem);
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+.logo {
+  width: min(100%, 34rem);
+  height: auto;
+  margin-bottom: 1.75rem;
+  mix-blend-mode: multiply;
+}
+
+.kicker {
+  margin: 0 0 0.5rem;
+  color: var(--dark-orange);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero h1,
+.sectionHeader h2,
+.addOnsPanel h2,
+.noteSection h2 {
+  margin: 0;
+  color: var(--dark-green);
+  text-align: left;
+}
+
+.hero h1 {
+  /* max-width: 48rem; */
+  /* font-size: clamp(2.2rem, 6vw, 5.2rem); */
+  /* font-weight: 200; */
+  /* line-height: 1.03; */
+}
+
+.lead {
+  max-width: 46rem;
+  margin: 1rem 0 0;
+  color: var(--dark-green);
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.55;
+}
+
+.heroActions,
+.noteSection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.heroActions {
+  margin-top: 1.5rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.8rem;
+  padding: 0.75rem 1.15rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.primaryButton {
+  border: 1px solid var(--dark-green);
+  background: var(--dark-green);
+  color: var(--lighter-green);
+}
+
+.primaryButton:hover,
+.primaryButton:focus-visible {
+  border-color: var(--dark-orange);
+  background: var(--dark-orange);
+  color: #fff;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(1, 102, 77, 0.32);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--dark-green);
+}
+
+.secondaryButton:hover,
+.secondaryButton:focus-visible {
+  border-color: var(--dark-orange);
+  color: var(--dark-orange);
+}
+
+.priceSection,
+.timelineSection {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.sectionHeader {
+  display: grid;
+  gap: 0.2rem;
+  max-width: 54rem;
+}
+
+.packageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.packageCard,
+.timelineItem {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-height: 100%;
+  padding: 1.25rem;
+  border: 1px solid rgba(1, 102, 77, 0.14);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0.7rem 1.8rem rgba(1, 102, 77, 0.08);
+}
+
+.packageCard span {
+  width: fit-content;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: var(--light-yellow);
+  color: var(--dark-green);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.packageCard h3,
+.timelineItem h3 {
+  margin: 0;
+  color: var(--dark-green);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.packageCard p,
+.timelineItem p,
+.noteSection p {
+  margin: 0;
+}
+
+.price {
+  color: var(--dark-orange);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 200;
+  line-height: 1;
+}
+
+.splitSection {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(18rem, 1.1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.photoPanel {
+  position: relative;
+  min-height: 30rem;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--lightest-green);
+}
+
+.photoPanel img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.addOnsPanel {
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+  border-top: 4px solid var(--orange);
+  border-bottom: 4px solid var(--light-green);
+  background: #fff;
+}
+
+.addOnsList {
+  display: grid;
+  gap: 0;
+}
+
+.addOnRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(1, 102, 77, 0.16);
+}
+
+.addOnRow:first-child {
+  border-top: 1px solid rgba(1, 102, 77, 0.16);
+}
+
+.addOnRow dt,
+.addOnRow dd {
+  margin: 0;
+}
+
+.addOnRow dt {
+  font-weight: 700;
+}
+
+.addOnRow dd {
+  color: var(--dark-orange);
+  font-weight: 800;
+  text-align: right;
+}
+
+.timelineGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.timelineItem {
+  border-left: 4px solid var(--light-green);
+}
+
+.timelineItem:nth-child(2) {
+  border-left-color: var(--orange);
+}
+
+.timelineItem:nth-child(3) {
+  border-left-color: var(--dark-orange);
+}
+
+.timelineTime {
+  color: var(--dark-orange);
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.noteSection {
+  justify-content: space-between;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-top: 1px solid rgba(1, 102, 77, 0.2);
+  border-bottom: 1px solid rgba(1, 102, 77, 0.2);
+}
+
+.noteSection > div {
+  max-width: 52rem;
+}
+
+.noteSection a:not(.primaryButton) {
+  color: var(--dark-green);
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.noteSection a:not(.primaryButton):hover,
+.noteSection a:not(.primaryButton):focus-visible {
+  color: var(--dark-orange);
+}
+
+@media (max-width: 900px) {
+  .page {
+    gap: 3rem;
+  }
+
+  .hero {
+    min-height: 38rem;
+  }
+
+  .packageGrid,
+  .timelineGrid,
+  .splitSection {
+    grid-template-columns: 1fr;
+  }
+
+  .photoPanel {
+    min-height: 20rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero {
+    display: block;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .heroPicture {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+  }
+
+  .heroContent {
+    width: 100%;
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .logo {
+    width: min(100%, 26rem);
+    margin-bottom: 1.2rem;
+  }
+
+  .timelineItem h3 {
+    font-size: 1.05rem;
+  }
+
+  .timelineTime {
+    font-size: 1em;
+  }
+
+  .price {
+    font-size: 1.5em;
+  }
+
+  .heroActions,
+  .primaryButton,
+  .secondaryButton,
+  .noteSection,
+  .noteSection .primaryButton {
+    width: 100%;
+  }
+
+  .addOnRow {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .addOnRow dd {
+    text-align: left;
+  }
+}

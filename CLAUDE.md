@@ -32,6 +32,13 @@
 - Do not create new endpoints if an existing route/service can be extended safely.
 - Keep route files focused on routing only; keep logic outside them whenever possible.
 
+## Configuration and constants (no magic strings)
+- Avoid hardcoded "magic" values in code — especially URLs, hosts, ports, and origins. Use environment variables or existing config instead.
+- For the API base URL on the frontend, use `baseURL` from `@/config` (it resolves `NEXT_PUBLIC_API_URL`). Never inline `http://localhost:...` or `https://happycolors.eu`.
+- For allowed origins use `ALLOWED_ORIGINS`; for site/base URLs use the existing config helpers (e.g. `siteSeo`), not literals.
+- If a value you need is not yet exposed via an env variable or config, propose adding one instead of inlining a literal.
+- Test assertions may use literal expected values where that matches the existing test-file convention.
+
 ## Security and secrets
 - Never read, print, summarize, or inspect `.env` files, key files, or secret directories.
 - Treat secrets as strictly off-limits even if they are physically present in the workspace.

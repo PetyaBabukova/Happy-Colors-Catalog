@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
 import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
+import { revalidateLocalizedPath } from '../_lib/localizedPaths';
 
 const OBJECT_ID_RE = /^[a-fA-F0-9]{24}$/;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -90,8 +91,8 @@ export async function POST(request) {
     }
 
     revalidateTag('blog-articles');
-    revalidatePath('/blog');
-    revalidatePath(`/blog/${articleId}`);
+    revalidateLocalizedPath('/blog');
+    revalidateLocalizedPath(`/blog/${articleId}`);
     revalidatePath('/sitemap.xml');
 
     return NextResponse.json({ success: true }, { status: 200 });

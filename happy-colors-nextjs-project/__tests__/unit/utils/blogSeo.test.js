@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildBlogArticleJsonLd,
   buildBlogMetadata,
   buildBlogSeoDescription,
   buildBlogSeoTitle,
+  shouldRenderBlogArticleJsonLd,
   stringifyJsonLd,
 } from '@/utils/blogSeo';
 
@@ -22,11 +23,37 @@ const article = {
 };
 
 describe('blogSeo', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('prefers explicit SEO title and description with fallbacks', () => {
     expect(buildBlogSeoTitle(article)).toBe('SEO заглавие');
     expect(buildBlogSeoDescription(article)).toBe('SEO описание.');
     expect(buildBlogSeoTitle({ title: 'Fallback title' })).toBe('Fallback title');
     expect(buildBlogSeoDescription({ excerpt: 'Fallback excerpt' })).toBe('Fallback excerpt');
+  });
+
+  it('uses English generic SEO and JSON-LD copy when optional article summaries are empty', () => {
+    const minimalEnglishArticle = {
+      title: 'A handmade story',
+      seoTitle: '',
+      seoDescription: '',
+      excerpt: '',
+      contentText: '',
+    };
+
+    expect(buildBlogSeoTitle({}, 'en')).toBe('Blog');
+    expect(buildBlogSeoDescription(minimalEnglishArticle, 'en')).toBe(
+      'Ideas, stories, and inspiration from Happy Colors.'
+    );
+
+    const metadata = buildBlogMetadata(minimalEnglishArticle, 'article-2', 'en');
+    const jsonLd = buildBlogArticleJsonLd(minimalEnglishArticle, 'article-2', 'en');
+
+    expect(metadata.description).not.toMatch(/[А-Яа-я]/);
+    expect(metadata.openGraph.description).toBe(metadata.description);
+    expect(jsonLd.description).toBe(metadata.description);
   });
 
   it('builds article metadata with canonical, Open Graph, and Twitter image data', () => {
@@ -35,6 +62,10 @@ describe('blogSeo', () => {
     expect(metadata.title).toBe('SEO заглавие');
     expect(metadata.description).toBe('SEO описание.');
     expect(metadata.alternates.canonical).toBe('/blog/article-1');
+    expect(metadata.alternates.languages).toEqual({
+      bg: '/blog/article-1',
+      'x-default': '/blog/article-1',
+    });
     expect(metadata.openGraph.type).toBe('article');
     expect(metadata.openGraph.images).toEqual([
       {
@@ -84,11 +115,89 @@ describe('blogSeo', () => {
 
     expect(metadata.openGraph.images).toEqual([
       {
-        url: 'http://localhost:3000/og/happy-colors-og.png',
+        url: 'http://localhost:3000/lion_banner.webp',
         alt: 'Цветно изображение',
       },
     ]);
-    expect(metadata.twitter.images).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
-    expect(jsonLd.image).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
+    expect(metadata.twitter.images).toEqual(['http://localhost:3000/lion_banner.webp']);
+    expect(jsonLd.image).toEqual(['http://localhost:3000/lion_banner.webp']);
+  });
+  it('adds English article hreflang only for a real English article page', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const metadata = buildBlogMetadata(
+      {
+        ...article,
+        availableLocales: ['bg', 'en'],
+        contentLocale: 'en',
+        translationPending: false,
+      },
+      article._id,
+      'en'
+    );
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/en/blog/article-1',
+      languages: {
+        bg: '/bg/blog/article-1',
+        en: '/en/blog/article-1',
+        'x-default': '/bg/blog/article-1',
+      },
+    });
+    expect(metadata.openGraph.locale).toBe('en_US');
+    expect(metadata.openGraph.alternateLocale).toEqual(['bg_BG']);
+  });
+
+  it('adds reciprocal English hreflang for Bulgarian articles with a valid English alternate', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const metadata = buildBlogMetadata(
+      {
+        ...article,
+        availableLocales: ['bg', 'en'],
+      },
+      article._id,
+      'bg'
+    );
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/blog/article-1',
+      languages: {
+        bg: '/bg/blog/article-1',
+        en: '/en/blog/article-1',
+        'x-default': '/bg/blog/article-1',
+      },
+    });
+    expect(metadata.openGraph.locale).toBe('bg_BG');
+    expect(metadata.openGraph.alternateLocale).toEqual(['en_US']);
+  });
+
+  it('marks a defensive English blog fallback as noindex with a Bulgarian canonical', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const fallbackArticle = {
+      ...article,
+      availableLocales: ['bg'],
+      contentLocale: 'bg',
+      translationPending: true,
+    };
+
+    const metadata = buildBlogMetadata(fallbackArticle, article._id, 'en');
+
+    expect(shouldRenderBlogArticleJsonLd(fallbackArticle, 'en')).toBe(false);
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/blog/article-1',
+      languages: {
+        bg: '/bg/blog/article-1',
+        'x-default': '/bg/blog/article-1',
+      },
+    });
+    expect(metadata.description).toBe(buildBlogSeoDescription(fallbackArticle, 'bg'));
+    expect(metadata.openGraph.description).toBe(metadata.description);
+    expect(metadata.openGraph.locale).toBe('bg_BG');
+    expect(metadata.openGraph).not.toHaveProperty('alternateLocale');
   });
 });

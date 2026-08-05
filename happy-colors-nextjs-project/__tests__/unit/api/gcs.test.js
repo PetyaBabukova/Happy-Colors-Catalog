@@ -37,6 +37,38 @@ describe('api gcs helper', () => {
     );
   });
 
+  it('uses the private cartoon orders bucket before development/test fallback', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', 'happy-private-cartoon-orders');
+    const { getCartoonOrdersBucketName } = await loadGcs();
+
+    expect(getCartoonOrdersBucketName()).toBe('happy-private-cartoon-orders');
+  });
+
+  it('does not fall back to the public bucket for cartoon orders in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', '');
+    const { getCartoonOrdersBucketName } = await loadGcs();
+
+    expect(getCartoonOrdersBucketName()).toBe('');
+  });
+
+  it('allows the public bucket fallback for cartoon orders in test', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('GCS_CARTOON_ORDERS_BUCKET_NAME', '');
+    const { getCartoonOrdersBucketName } = await loadGcs();
+
+    expect(getCartoonOrdersBucketName()).toBe('happy-bucket');
+  });
+
+  it('rejects unsafe cartoon order photo object names', async () => {
+    const { isCartoonOrderPhotoObjectName } = await loadGcs();
+
+    expect(isCartoonOrderPhotoObjectName('cartoon-orders/reference-photos/photo.webp')).toBe(true);
+    expect(isCartoonOrderPhotoObjectName('cartoon-orders/reference-photos/..')).toBe(false);
+    expect(isCartoonOrderPhotoObjectName('cartoon-orders/reference-photos/a\\b.webp')).toBe(false);
+  });
+
   it('resolves upload extensions from file names before MIME defaults', async () => {
     const { resolveUploadExtension } = await loadGcs();
 

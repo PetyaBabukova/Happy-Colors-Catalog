@@ -5,22 +5,30 @@ import {
   getNewsletterSubscribeToken,
   subscribeToNewsletter,
 } from '@/managers/newsletterManager';
+import { LOCALE_DETAILS, SUPPORTED_LOCALES } from '@/i18n/config';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
+import useTranslations from '@/i18n/useTranslations';
 import styles from './NewsletterSubscribeForm.module.css';
 
-const initialFormState = {
-  email: '',
-  consent: false,
-  website: '',
-};
-
 const SUBSCRIBE_TOKEN_RETRY_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 2100;
+
+function createInitialFormState(locale) {
+  return {
+    email: '',
+    consent: false,
+    website: '',
+    locale,
+  };
+}
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function NewsletterSubscribeForm() {
-  const [formValues, setFormValues] = useState(initialFormState);
+  const { locale } = useLocaleNavigation();
+  const { t } = useTranslations('newsletter');
+  const [formValues, setFormValues] = useState(() => createInitialFormState(locale));
   const [formToken, setFormToken] = useState('');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
@@ -40,6 +48,19 @@ export default function NewsletterSubscribeForm() {
     });
   }, [refreshFormToken]);
 
+  useEffect(() => {
+    setFormValues((current) => {
+      if (current.locale) {
+        return current;
+      }
+
+      return {
+        ...current,
+        locale,
+      };
+    });
+  }, [locale]);
+
   function updateField(name, value) {
     setFormValues((current) => ({
       ...current,
@@ -53,13 +74,13 @@ export default function NewsletterSubscribeForm() {
     setMessageType('');
 
     if (!formValues.email.trim()) {
-      setMessage('Моля, въведете email адрес.');
+      setMessage(t('emailRequired'));
       setMessageType('error');
       return;
     }
 
     if (!formValues.consent) {
-      setMessage('Моля, потвърдете съгласието си за получаване на новини.');
+      setMessage(t('consentRequired'));
       setMessageType('error');
       return;
     }
@@ -72,6 +93,7 @@ export default function NewsletterSubscribeForm() {
         consent: formValues.consent,
         website: formValues.website,
         formToken: token,
+        locale: formValues.locale || locale,
       });
     }
 
@@ -94,14 +116,14 @@ export default function NewsletterSubscribeForm() {
         }
       }
 
-      setFormValues(initialFormState);
-      setMessage(result?.message || 'Благодарим ви. Ако е необходимо потвърждение, ще получите имейл с линк за абонамента.');
+      setFormValues(createInitialFormState(formValues.locale || locale));
+      setMessage(result?.message || t('subscribeSuccess'));
       setMessageType('success');
       refreshFormToken().catch(() => {
         setFormToken('');
       });
     } catch (error) {
-      setMessage(error?.message || 'Не успяхте да се абонирате. Моля опитайте по-късно.');
+      setMessage(error?.message || t('subscribeError'));
       setMessageType('error');
     } finally {
       setIsSubmitting(false);
@@ -111,8 +133,26 @@ export default function NewsletterSubscribeForm() {
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
       <div className={styles.copy}>
-        <h2 className={styles.title}>Получавай новини от Happy Colors</h2>
+        <h2 className={styles.title}>{t('title')}</h2>
       </div>
+
+      <fieldset className={styles.localeFieldset}>
+        <legend className={styles.localeLegend}>{t('languageLabel')}</legend>
+        <div className={styles.localeOptions}>
+          {SUPPORTED_LOCALES.map((optionLocale) => (
+            <label key={optionLocale} className={styles.localeOption}>
+              <input
+                type="radio"
+                name="newsletter-locale"
+                value={optionLocale}
+                checked={formValues.locale === optionLocale}
+                onChange={(event) => updateField('locale', event.target.value)}
+              />
+              <span>{LOCALE_DETAILS[optionLocale].label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <div className={styles.submitRow}>
         <input
@@ -127,7 +167,7 @@ export default function NewsletterSubscribeForm() {
           className={styles.emailInput}
         />
         <button className={styles.submitButton} type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Изпращане...' : 'Абонирай се'}
+          {isSubmitting ? t('submitting') : t('subscribe')}
         </button>
       </div>
 
@@ -147,7 +187,7 @@ export default function NewsletterSubscribeForm() {
           checked={formValues.consent}
           onChange={(event) => updateField('consent', event.target.checked)}
         />
-        <span>Съгласен съм да получавам новини от "Happy Colors"</span>
+        <span>{t('consentLabel')}</span>
       </label>
 
       {message ? (

@@ -1,8 +1,10 @@
 import path from 'path';
 
 import {
+  ALLOWED_CARTOON_ORDER_PHOTO_MIME_TYPES,
   ALLOWED_IMAGE_UPLOAD_MIME_TYPES,
   ALLOWED_VIDEO_MIME_TYPES,
+  MAX_CARTOON_ORDER_PHOTO_SIZE_BYTES,
   MAX_IMAGE_UPLOAD_SIZE_BYTES,
   MAX_VIDEO_UPLOAD_SIZE_BYTES,
 } from '@/config/productLimits';
@@ -102,11 +104,31 @@ function getNormalizedExtension(filename) {
 }
 
 export function validateImageUploadFile(file, buffer) {
+  return validateImageUploadFileWithOptions(file, buffer, {
+    allowedMimeTypes: ALLOWED_IMAGE_UPLOAD_MIME_TYPES,
+    maxSizeBytes: MAX_IMAGE_UPLOAD_SIZE_BYTES,
+    maxSizeLabel: '5 MB',
+  });
+}
+
+export function validateCartoonOrderPhotoFile(file, buffer) {
+  return validateImageUploadFileWithOptions(file, buffer, {
+    allowedMimeTypes: ALLOWED_CARTOON_ORDER_PHOTO_MIME_TYPES,
+    maxSizeBytes: MAX_CARTOON_ORDER_PHOTO_SIZE_BYTES,
+    maxSizeLabel: '3 MB',
+  });
+}
+
+function validateImageUploadFileWithOptions(
+  file,
+  buffer,
+  { allowedMimeTypes, maxSizeBytes, maxSizeLabel }
+) {
   if (!file || typeof file === 'string') {
     return { ok: false, status: 400, message: 'Не е получен файл за качване.' };
   }
 
-  if (!ALLOWED_IMAGE_UPLOAD_MIME_TYPES.includes(file.type)) {
+  if (!allowedMimeTypes.includes(file.type)) {
     return {
       ok: false,
       status: 400,
@@ -115,13 +137,13 @@ export function validateImageUploadFile(file, buffer) {
   }
 
   if (
-    file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES ||
-    buffer.length > MAX_IMAGE_UPLOAD_SIZE_BYTES
+    file.size > maxSizeBytes ||
+    buffer.length > maxSizeBytes
   ) {
     return {
       ok: false,
       status: 400,
-      message: 'Изображението е твърде голямо. Максимален размер: 5 MB.',
+      message: `Изображението е твърде голямо. Максимален размер: ${maxSizeLabel}.`,
     };
   }
 

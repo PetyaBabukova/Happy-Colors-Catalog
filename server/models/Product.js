@@ -5,6 +5,7 @@ import {
   PRODUCT_REVIEW_STATUS_VALUES,
   PRODUCT_REVIEW_STATUSES,
 } from '../utils/productPublication.js';
+import { createTranslationMapSchema } from './localizationSchemas.js';
 
 const productVideoSchema = new mongoose.Schema(
   {
@@ -76,6 +77,26 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: [true, "Description is required!"],
     },
+    sourceRevision: {
+      type: Number,
+      default: 1,
+      min: 1,
+      required: true,
+    },
+    translations: createTranslationMapSchema({
+      title: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 160,
+      },
+      description: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 10000,
+      },
+    }),
     price: {
       type: Number,
       required: [true, "Price is required!"],
@@ -111,6 +132,16 @@ const productSchema = new mongoose.Schema(
     homepageFeaturedOrder: {
       type: Number,
       default: 0,
+    },
+    isInCatalog: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isCartoonGallery: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     feedback: [
       {

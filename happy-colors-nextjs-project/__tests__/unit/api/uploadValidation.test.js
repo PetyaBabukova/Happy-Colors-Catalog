@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  validateCartoonOrderPhotoFile,
   validateImageUploadFile,
   validateVideoUploadFile,
 } from '../../../src/app/api/_lib/uploadValidation.js';
@@ -27,6 +28,30 @@ describe('uploadValidation', () => {
       ok: true,
       mimeType: 'image/png',
     });
+  });
+
+  it('uses the stricter 3 MB cartoon order photo limit without changing normal image uploads', () => {
+    const oversizedCartoonPhoto = Buffer.concat([
+      pngBuffer(),
+      Buffer.alloc(3 * 1024 * 1024),
+    ]);
+    const normalImageUnder5Mb = Buffer.concat([
+      pngBuffer(),
+      Buffer.alloc(4 * 1024 * 1024),
+    ]);
+
+    expect(
+      validateCartoonOrderPhotoFile(
+        { type: 'image/png', size: oversizedCartoonPhoto.length, name: 'paint.png' },
+        oversizedCartoonPhoto
+      )
+    ).toMatchObject({ ok: false, status: 400, message: expect.stringContaining('3 MB') });
+    expect(
+      validateImageUploadFile(
+        { type: 'image/png', size: normalImageUnder5Mb.length, name: 'paint.png' },
+        normalImageUnder5Mb
+      )
+    ).toEqual({ ok: true, mimeType: 'image/png' });
   });
 
   it('rejects image MIME, signature, and extension mismatches', () => {

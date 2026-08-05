@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { extractObjectNameFromGcsUrl, getBucketName } from '../../../helpers/gcsImageHelper.js';
+import {
+  deleteGcsObjectByName,
+  extractObjectNameFromGcsUrl,
+  getCartoonOrdersBucketName,
+  getBucketName,
+} from '../../../helpers/gcsImageHelper.js';
 
 describe('gcsImageHelper', () => {
   beforeEach(() => {
@@ -9,10 +14,30 @@ describe('gcsImageHelper', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     delete process.env.GCS_BUCKET_NAME;
+    delete process.env.GCS_CARTOON_ORDERS_BUCKET_NAME;
+    delete process.env.NODE_ENV;
   });
 
   it('reads the bucket name from environment', () => {
     expect(getBucketName()).toBe('happy-bucket');
+  });
+
+  it('uses a private cartoon-orders bucket when configured', () => {
+    process.env.GCS_CARTOON_ORDERS_BUCKET_NAME = 'happy-private-cartoon-orders';
+
+    expect(getCartoonOrdersBucketName()).toBe('happy-private-cartoon-orders');
+  });
+
+  it('does not fall back to the public bucket for cartoon orders in production', () => {
+    process.env.NODE_ENV = 'production';
+
+    expect(getCartoonOrdersBucketName()).toBe('');
+  });
+
+  it('allows public-bucket cartoon fallback outside production for local tests', () => {
+    process.env.NODE_ENV = 'test';
+
+    expect(getCartoonOrdersBucketName()).toBe('happy-bucket');
   });
 
   it('extracts object names from valid GCS URLs', () => {
@@ -62,5 +87,19 @@ describe('gcsImageHelper', () => {
         'https://storage.googleapis.com/happy-bucket/products/images/demo.webp'
       )
     ).toBeNull();
+  });
+
+  it('rejects unsafe object-name deletes before reaching storage configuration', async () => {
+    delete process.env.GCS_BUCKET_NAME;
+
+    await expect(deleteGcsObjectByName('products/images/demo.webp')).rejects.toThrow(
+      'Invalid cartoon order photo object name.'
+    );
+    await expect(
+      deleteGcsObjectByName('cartoon-orders/reference-photos/../secret.webp')
+    ).rejects.toThrow('Invalid cartoon order photo object name.');
+    await expect(
+      deleteGcsObjectByName('cartoon-orders/reference-photos/folder\\secret.webp')
+    ).rejects.toThrow('Invalid cartoon order photo object name.');
   });
 });

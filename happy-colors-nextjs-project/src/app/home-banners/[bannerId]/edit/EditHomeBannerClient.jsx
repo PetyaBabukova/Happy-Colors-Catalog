@@ -63,7 +63,7 @@ export default function EditHomeBannerClient({ params }) {
   return (
     <HomeBannerForm
       initialValues={banner}
-      onSubmit={(values) => editHomeBanner(bannerId, values)}
+      onSubmit={(values) => editHomeBanner(bannerId, values, { previousPlacement: banner?.placement })}
       legendText="Редактиране на хоум банер"
       successMessage="Хоум банерът беше редактиран успешно."
     />

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
+import useTranslations from '@/i18n/useTranslations';
 import { confirmNewsletterSubscription } from '@/managers/newsletterManager';
 import styles from './newsletterConfirm.module.css';
 
@@ -17,6 +19,8 @@ function readTokenFromHash() {
 
 export default function NewsletterConfirmClient() {
   const router = useRouter();
+  const { publicHref } = useLocaleNavigation();
+  const { t } = useTranslations('newsletter.confirmPage');
   const [token, setToken] = useState('');
   const [hasReadHash, setHasReadHash] = useState(false);
   const [message, setMessage] = useState('');
@@ -44,17 +48,14 @@ export default function NewsletterConfirmClient() {
     setMessageType('');
 
     try {
-      const result = await confirmNewsletterSubscription(token);
-      setMessage(result?.message || 'Абонаментът ви е потвърден успешно.');
+      await confirmNewsletterSubscription(token);
+      setMessage(t('success'));
       setMessageType('success');
       window.setTimeout(() => {
-        router.replace('/products');
+        router.replace(publicHref('/products'));
       }, SUCCESS_REDIRECT_DELAY_MS);
-    } catch (error) {
-      setMessage(
-        error?.message ||
-          'Линкът за потвърждение е невалиден или изтекъл. Моля, изпратете формата за абонамент отново.'
-      );
+    } catch {
+      setMessage(t('error'));
       setMessageType('error');
     } finally {
       setIsSubmitting(false);
@@ -67,14 +68,12 @@ export default function NewsletterConfirmClient() {
     <main className={styles.page}>
       <section className={styles.panel} aria-labelledby="newsletter-confirm-title">
         <h1 id="newsletter-confirm-title" className={styles.title}>
-          Потвърждение на абонамент
+          {t('title')}
         </h1>
 
         {hasReadHash && hasToken ? (
           <>
-            <p className={styles.copy}>
-              Потвърдете абонамента си за новини от Happy Colors.
-            </p>
+            <p className={styles.copy}>{t('copy')}</p>
             <div className={styles.actions}>
               <button
                 className={styles.primaryButton}
@@ -82,18 +81,18 @@ export default function NewsletterConfirmClient() {
                 onClick={handleConfirm}
                 disabled={isSubmitting || messageType === 'success'}
               >
-                {isSubmitting ? 'Потвърждаване...' : 'Потвърди абонамента'}
+                {isSubmitting ? t('submitting') : t('submit')}
               </button>
-              <Link className={styles.secondaryLink} href="/">
-                Към началната страница
+              <Link className={styles.secondaryLink} href={publicHref('/')}>
+                {t('home')}
               </Link>
             </div>
           </>
         ) : (
           <>
-            <p className={styles.copy}>Линкът за потвърждение е невалиден или непълен.</p>
-            <Link className={styles.secondaryLink} href="/">
-              Към началната страница
+            <p className={styles.copy}>{t('missingToken')}</p>
+            <Link className={styles.secondaryLink} href={publicHref('/')}>
+              {t('home')}
             </Link>
           </>
         )}

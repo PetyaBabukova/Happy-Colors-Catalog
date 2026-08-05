@@ -7,6 +7,7 @@ import {
   extractObjectNameFromGcsUrl,
   getBucketName,
 } from '../helpers/gcsImageHelper.js';
+import { projectPublicHomeBanner } from './localization/publicProjection.js';
 
 const ALLOWED_HOME_BANNER_FIELDS = new Set([
   'title',
@@ -17,7 +18,9 @@ const ALLOWED_HOME_BANNER_FIELDS = new Set([
   'mobileImageUrl',
   'sortOrder',
   'isActive',
+  'placement',
 ]);
+const HOME_BANNER_PLACEMENTS = new Set(['home', 'cartoons']);
 const HOME_BANNER_FIELD_LIMITS = {
   title: 120,
   description: 600,
@@ -173,6 +176,31 @@ function normalizeSortOrder(value) {
   return sortOrder;
 }
 
+export function normalizeHomeBannerPlacement(
+  value,
+  { allowLegacyBlank = false, defaultOnUndefined = true } = {}
+) {
+  if (typeof value === 'undefined') {
+    if (defaultOnUndefined) {
+      return 'home';
+    }
+
+    throw createError('Invalid banner placement.');
+  }
+
+  const placement = String(value ?? '').trim().toLowerCase();
+
+  if (!placement && allowLegacyBlank) {
+    return 'home';
+  }
+
+  if (!HOME_BANNER_PLACEMENTS.has(placement)) {
+    throw createError('Invalid banner placement.');
+  }
+
+  return placement;
+}
+
 function validateTextLength(fieldName, value, maxLength) {
   if (String(value || '').length > maxLength) {
     throw createError(`${fieldName} cannot be longer than ${maxLength} characters.`);
@@ -183,6 +211,22 @@ function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source || {}, key);
 }
 
+function hasChangedField(target, updates, field) {
+  if (!hasOwn(updates, field)) {
+    return false;
+  }
+
+  return String(target?.[field] ?? '').trim() !== String(updates[field] ?? '').trim();
+}
+
+function hasHomeBannerSourceCopyChange(target, updates = {}) {
+  return (
+    hasChangedField(target, updates, 'title') ||
+    hasChangedField(target, updates, 'description') ||
+    hasChangedField(target, updates, 'ctaLabel')
+  );
+}
+
 function normalizeHomeBannerResponse(banner) {
   if (!banner) {
     return banner;
@@ -190,23 +234,43 @@ function normalizeHomeBannerResponse(banner) {
 
   return {
     ...banner,
+    placement: normalizeHomeBannerPlacement(banner.placement, { allowLegacyBlank: true }),
     mobileImageUrl: String(banner.mobileImageUrl || ''),
   };
 }
 
-function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
+function normalizeHomeBannerFields(data = {}, { currentBanner = null, requireAll = false } = {}) {
   const sanitized = pickAllowedHomeBannerFields(data);
   const normalized = {};
+  const hasPlacement = hasOwn(sanitized, 'placement');
+  const currentPlacement = hasPlacement
+    ? null
+    : normalizeHomeBannerPlacement(currentBanner?.placement, { allowLegacyBlank: true });
+  const placement = hasPlacement
+    ? normalizeHomeBannerPlacement(sanitized.placement)
+    : requireAll
+      ? 'home'
+      : currentPlacement;
+  const isHomePlacement = placement === 'home';
+  const isCartoonPlacement = placement === 'cartoons';
 
-  if (requireAll || hasOwn(sanitized, 'title')) {
-    const title = String(sanitized.title || '').trim();
+  if (requireAll || hasPlacement) {
+    normalized.placement = placement;
+  }
 
-    if (!title) {
+  if (requireAll || hasOwn(sanitized, 'title') || (hasPlacement && isHomePlacement)) {
+    const title = String(
+      hasOwn(sanitized, 'title') ? sanitized.title : currentBanner?.title || ''
+    ).trim();
+
+    if (!title && isHomePlacement) {
       throw createError('Title is required.');
     }
 
     validateTextLength('Title', title, HOME_BANNER_FIELD_LIMITS.title);
-    normalized.title = title;
+    if (requireAll || hasOwn(sanitized, 'title')) {
+      normalized.title = title;
+    }
   }
 
   if (hasOwn(sanitized, 'description')) {
@@ -218,26 +282,40 @@ function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
     normalized.description = '';
   }
 
-  if (requireAll || hasOwn(sanitized, 'ctaLabel')) {
-    const ctaLabel = String(sanitized.ctaLabel || '').trim();
+  if (requireAll || hasOwn(sanitized, 'ctaLabel') || (hasPlacement && isHomePlacement)) {
+    const ctaLabel = String(
+      hasOwn(sanitized, 'ctaLabel') ? sanitized.ctaLabel : currentBanner?.ctaLabel || ''
+    ).trim();
 
-    if (!ctaLabel) {
+    if (!ctaLabel && isHomePlacement) {
       throw createError('CTA label is required.');
     }
 
     validateTextLength('CTA label', ctaLabel, HOME_BANNER_FIELD_LIMITS.ctaLabel);
-    normalized.ctaLabel = ctaLabel;
+    if (requireAll || hasOwn(sanitized, 'ctaLabel')) {
+      normalized.ctaLabel = ctaLabel;
+    }
   }
 
-  if (requireAll || hasOwn(sanitized, 'ctaHref')) {
-    const ctaHref = validateInternalCtaHref(sanitized.ctaHref);
+  if (requireAll || hasOwn(sanitized, 'ctaHref') || (hasPlacement && isHomePlacement)) {
+    const rawCtaHref = hasOwn(sanitized, 'ctaHref')
+      ? sanitized.ctaHref
+      : currentBanner?.ctaHref || '';
+    const rawCtaHrefValue = String(rawCtaHref || '').trim();
+    const ctaHref = isHomePlacement || rawCtaHrefValue
+      ? validateInternalCtaHref(rawCtaHref)
+      : '';
 
     validateTextLength('CTA link', ctaHref, HOME_BANNER_FIELD_LIMITS.ctaHref);
-    normalized.ctaHref = ctaHref;
+    if (requireAll || hasOwn(sanitized, 'ctaHref')) {
+      normalized.ctaHref = ctaHref;
+    }
   }
 
-  if (requireAll || hasOwn(sanitized, 'imageUrl')) {
-    normalized.imageUrl = validateHomeBannerImageUrl(sanitized.imageUrl);
+  if (requireAll || hasOwn(sanitized, 'imageUrl') || (hasPlacement && !currentBanner?.imageUrl)) {
+    normalized.imageUrl = validateHomeBannerImageUrl(
+      hasOwn(sanitized, 'imageUrl') ? sanitized.imageUrl : currentBanner?.imageUrl
+    );
   }
 
   if (requireAll || hasOwn(sanitized, 'mobileImageUrl')) {
@@ -253,6 +331,10 @@ function normalizeHomeBannerFields(data = {}, { requireAll = false } = {}) {
   if (hasOwn(sanitized, 'isActive')) {
     normalized.isActive = normalizeBoolean(sanitized.isActive);
   } else if (requireAll) {
+    normalized.isActive = true;
+  }
+
+  if (isCartoonPlacement) {
     normalized.isActive = true;
   }
 
@@ -305,10 +387,34 @@ async function deleteAssetIfUnreferenced(assetUrl, options = {}) {
   }
 }
 
-export async function getActiveHomeBanners() {
-  const banners = await HomeBanner.find({ isActive: true }).sort({ sortOrder: 1, createdAt: 1 }).lean();
+function buildActiveBannersQuery(placement) {
+  if (placement === 'home') {
+    return {
+      isActive: true,
+      $or: [
+        { placement: 'home' },
+        { placement: { $exists: false } },
+        { placement: null },
+        { placement: '' },
+      ],
+    };
+  }
 
-  return banners.map(normalizeHomeBannerResponse);
+  return {
+    isActive: true,
+    placement,
+  };
+}
+
+export async function getActiveHomeBanners({ placement = 'home', locale = 'bg' } = {}) {
+  const normalizedPlacement = normalizeHomeBannerPlacement(placement);
+  const banners = await HomeBanner.find(buildActiveBannersQuery(normalizedPlacement))
+    .sort({ sortOrder: 1, createdAt: 1 })
+    .lean();
+
+  return banners
+    .map((banner) => projectPublicHomeBanner(normalizeHomeBannerResponse(banner), locale))
+    .filter(Boolean);
 }
 
 export async function getHomeBannerById(bannerId) {
@@ -351,7 +457,15 @@ export async function editHomeBanner(bannerId, data, userId) {
   }
 
   const previousUrls = new Set([banner.imageUrl, banner.mobileImageUrl].filter(Boolean));
-  const nextData = normalizeHomeBannerFields(data, { requireAll: false });
+  const nextData = normalizeHomeBannerFields(data, {
+    currentBanner: banner,
+    requireAll: false,
+  });
+  const hasSourceCopyChange = hasHomeBannerSourceCopyChange(banner, nextData);
+
+  if (hasSourceCopyChange) {
+    banner.sourceRevision = (Number(banner.sourceRevision) || 1) + 1;
+  }
 
   for (const [key, value] of Object.entries(nextData)) {
     banner[key] = value;

@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { addSeededProductToCart, catalogMode } from './helpers/shop.js';
+import {
+  addSeededProductToCart,
+  catalogMode,
+  defaultCatalogPath,
+  localeRoutesEnabled,
+  pathEndPattern,
+} from './helpers/shop.js';
 
 async function openCheckoutWithSeededProduct(page) {
   await addSeededProductToCart(page);
@@ -40,6 +46,17 @@ async function fillCheckoutCustomerDetails(page, overrides = {}) {
   await page.locator('#email').fill(overrides.email ?? 'checkout.e2e@example.com');
   await page.locator('#city').fill(overrides.city ?? 'Sofia');
 }
+
+test('checkout redirects safely in catalog mode @smoke @checkout @catalog-mode', async ({ page }) => {
+  test.skip(!catalogMode, 'Checkout redirect is catalog-mode specific.');
+  test.skip(!localeRoutesEnabled, 'Catalog-mode localized redirect requires locale routing to be enabled.');
+
+  await page.goto('/checkout');
+
+  await expect(page.locator('body')).not.toContainText('Application error');
+  await expect(page).toHaveURL(pathEndPattern(defaultCatalogPath));
+  await expect(page.getByText('E2E Smoke Product')).toBeVisible();
+});
 
 test.describe('checkout regression', () => {
   test.skip(catalogMode, 'Checkout is disabled in catalog mode.');

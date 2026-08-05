@@ -1,6 +1,13 @@
-const DEFAULT_CTA_LABEL = 'Виж повече';
-const TEST_UNSUBSCRIBE_NOTE =
-  'Това е тестов имейл. Реалните имейли до абонати съдържат индивидуален линк за отписване.';
+const DEFAULT_LOCALE = 'bg';
+const SUPPORTED_LOCALES = new Set(['bg', 'en']);
+const DEFAULT_CTA_LABELS = {
+  bg: 'Виж повече',
+  en: 'View more',
+};
+const TEST_UNSUBSCRIBE_NOTES = {
+  bg: 'Това е тестов имейл. Реалните имейли до абонати съдържат индивидуални линкове за отписване и езикови настройки.',
+  en: 'This is a test email. Real subscriber emails include individual unsubscribe and language-preference links.',
+};
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -13,6 +20,12 @@ function escapeHtml(value) {
 
 function normalizeText(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeLocale(locale) {
+  const normalizedLocale = normalizeText(locale || DEFAULT_LOCALE).toLowerCase();
+
+  return SUPPORTED_LOCALES.has(normalizedLocale) ? normalizedLocale : DEFAULT_LOCALE;
 }
 
 function buildHeaders({ unsubscribeUrl, listUnsubscribeUrl, isTest }) {
@@ -28,25 +41,50 @@ function buildHeaders({ unsubscribeUrl, listUnsubscribeUrl, isTest }) {
   };
 }
 
-function buildFooterHtml({ unsubscribeUrl, isTest }) {
+function buildFooterHtml({ unsubscribeUrl, preferencesUrl, isTest, locale }) {
   if (isTest) {
-    return `<p style="margin:0;color:#666;font-size:13px;line-height:1.5;">${escapeHtml(TEST_UNSUBSCRIBE_NOTE)}</p>`;
+    return `<p style="margin:0;color:#666;font-size:13px;line-height:1.5;">${escapeHtml(TEST_UNSUBSCRIBE_NOTES[locale])}</p>`;
+  }
+
+  if (locale === 'en') {
+    return [
+      '<p style="margin:0;color:#666;font-size:13px;line-height:1.5;">',
+      'You can unsubscribe at any time using ',
+      `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#2f6f4e;">this link</a>.`,
+      '<br>',
+      'You can change your newsletter language ',
+      `<a href="${escapeHtml(preferencesUrl)}" style="color:#2f6f4e;">here</a>.`,
+      '</p>',
+    ].join('');
   }
 
   return [
     '<p style="margin:0;color:#666;font-size:13px;line-height:1.5;">',
     'Можете да се отпишете по всяко време от ',
     `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#2f6f4e;">този линк</a>.`,
+    '<br>',
+    'Можете да смените езика на бюлетина ',
+    `<a href="${escapeHtml(preferencesUrl)}" style="color:#2f6f4e;">тук</a>.`,
     '</p>',
   ].join('');
 }
 
-function buildFooterText({ unsubscribeUrl, isTest }) {
+function buildFooterText({ unsubscribeUrl, preferencesUrl, isTest, locale }) {
   if (isTest) {
-    return TEST_UNSUBSCRIBE_NOTE;
+    return TEST_UNSUBSCRIBE_NOTES[locale];
   }
 
-  return `Можете да се отпишете по всяко време от този линк: ${unsubscribeUrl}`;
+  if (locale === 'en') {
+    return [
+      `You can unsubscribe at any time using this link: ${unsubscribeUrl}`,
+      `You can change your newsletter language here: ${preferencesUrl}`,
+    ].join('\n');
+  }
+
+  return [
+    `Можете да се отпишете по всяко време от този линк: ${unsubscribeUrl}`,
+    `Можете да смените езика на бюлетина тук: ${preferencesUrl}`,
+  ].join('\n');
 }
 
 export function buildNewsletterEmailTemplate({
@@ -56,20 +94,28 @@ export function buildNewsletterEmailTemplate({
   contentText,
   imageUrl,
   ctaUrl,
-  ctaLabel = DEFAULT_CTA_LABEL,
+  ctaLabel,
   unsubscribeUrl,
   listUnsubscribeUrl,
+  preferencesUrl,
+  locale = DEFAULT_LOCALE,
   isTest = false,
 }) {
+  const safeLocale = normalizeLocale(locale);
   const safeSubject = normalizeText(subject || title);
   const safeTitle = normalizeText(title || subject);
   const safeContentText = normalizeText(contentText);
-  const safeCtaLabel = normalizeText(ctaLabel) || DEFAULT_CTA_LABEL;
+  const safeCtaLabel = normalizeText(ctaLabel) || DEFAULT_CTA_LABELS[safeLocale];
   const safeContentHtml = String(contentHtml || '').trim();
   const safeUnsubscribeUrl = normalizeText(unsubscribeUrl);
+  const safePreferencesUrl = normalizeText(preferencesUrl);
 
   if (!isTest && !safeUnsubscribeUrl) {
     throw new Error('Newsletter unsubscribe URL is required for subscriber emails.');
+  }
+
+  if (!isTest && !safePreferencesUrl) {
+    throw new Error('Newsletter preferences URL is required for subscriber emails.');
   }
 
   const imageBlock = imageUrl
@@ -94,7 +140,7 @@ export function buildNewsletterEmailTemplate({
 
   const html = [
     '<!doctype html>',
-    '<html lang="bg">',
+    `<html lang="${safeLocale}">`,
     '<head>',
     '<meta charset="UTF-8">',
     `<title>${escapeHtml(safeSubject)}</title>`,
@@ -108,7 +154,12 @@ export function buildNewsletterEmailTemplate({
     imageBlock,
     `<tr><td style="padding:0 28px 8px;font-size:16px;line-height:1.6;">${safeContentHtml}</td></tr>`,
     ctaBlock,
-    `<tr><td style="padding:20px 28px 28px;border-top:1px solid #eee;">${buildFooterHtml({ unsubscribeUrl: safeUnsubscribeUrl, isTest })}</td></tr>`,
+    `<tr><td style="padding:20px 28px 28px;border-top:1px solid #eee;">${buildFooterHtml({
+      unsubscribeUrl: safeUnsubscribeUrl,
+      preferencesUrl: safePreferencesUrl,
+      isTest,
+      locale: safeLocale,
+    })}</td></tr>`,
     '</table>',
     '</td>',
     '</tr>',
@@ -124,7 +175,12 @@ export function buildNewsletterEmailTemplate({
     '',
     ctaUrl ? `${safeCtaLabel}: ${ctaUrl}` : '',
     '',
-    buildFooterText({ unsubscribeUrl: safeUnsubscribeUrl, isTest }),
+    buildFooterText({
+      unsubscribeUrl: safeUnsubscribeUrl,
+      preferencesUrl: safePreferencesUrl,
+      isTest,
+      locale: safeLocale,
+    }),
   ].filter((part) => part !== '');
 
   return {

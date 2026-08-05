@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidateTag } from 'next/cache';
 
 import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
+import { revalidateLocalizedPath } from '../_lib/localizedPaths';
 
 export async function POST(request) {
   try {
@@ -12,7 +13,7 @@ export async function POST(request) {
     }
 
     revalidateTag('home-banners');
-    revalidatePath('/');
+    revalidateLocalizedPath('/');
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

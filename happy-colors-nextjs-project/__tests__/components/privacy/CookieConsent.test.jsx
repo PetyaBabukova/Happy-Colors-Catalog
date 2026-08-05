@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   COOKIE_CONSENT_NAME,
   COOKIE_CONSENT_VERSION,
   readConsentCookie,
 } from '@/config/cookieConsent';
+import I18nProvider from '@/i18n/I18nProvider';
+import { getDictionary } from '@/i18n/getDictionary';
 import { CookieConsentProvider } from '@/components/privacy/CookieConsentContext';
 import CookieConsentBanner from '@/components/privacy/CookieConsentBanner';
 import CookieFooterLink from '@/components/privacy/CookieFooterLink';
@@ -19,12 +21,14 @@ function setConsentCookie(value) {
   )}; Path=/`;
 }
 
-function renderConsentUi() {
+function renderConsentUi(locale = 'bg') {
   return render(
-    <CookieConsentProvider>
-      <CookieFooterLink />
-      <CookieConsentBanner />
-    </CookieConsentProvider>
+    <I18nProvider locale={locale} dictionary={getDictionary(locale)}>
+      <CookieConsentProvider>
+        <CookieFooterLink />
+        <CookieConsentBanner />
+      </CookieConsentProvider>
+    </I18nProvider>
   );
 }
 
@@ -42,6 +46,30 @@ describe('Cookie consent UI', () => {
     expect(screen.getByRole('button', { name: 'Приемам всички' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Само необходими' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Настройки' })).toBeInTheDocument();
+  });
+
+  it('renders the cookie banner and settings in English without resetting consent state', async () => {
+    renderConsentUi('en');
+
+    expect(await screen.findByLabelText('Cookie notice')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept all' })).toBeInTheDocument();
+    expect(screen.queryByText('Приемам всички')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Cookie settings' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Analytics/i)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Necessary only' }));
+
+    await waitFor(() => {
+      expect(readConsentCookie(document.cookie)).toMatchObject({
+        necessary: true,
+        analytics: false,
+        marketing: false,
+      });
+    });
   });
 
   it('accepts all optional categories and hides the banner', async () => {

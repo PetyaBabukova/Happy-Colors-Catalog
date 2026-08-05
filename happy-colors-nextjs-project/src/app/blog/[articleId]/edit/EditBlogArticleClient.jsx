@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MessageBox from '@/components/ui/MessageBox';
@@ -65,6 +66,11 @@ export default function EditBlogArticleClient({ articleId }) {
       }}
       submitLabel="Запази"
       cancelHref={`/blog/${articleId}`}
+      headerActions={(
+        <Link href={`/translations?entityType=blogArticle&entityId=${encodeURIComponent(articleId)}`}>
+          EN превод
+        </Link>
+      )}
     />
   );
 }

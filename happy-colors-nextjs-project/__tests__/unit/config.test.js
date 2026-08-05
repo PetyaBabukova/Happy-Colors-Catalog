@@ -83,4 +83,80 @@ describe('config baseURL', () => {
       ])
     );
   });
+
+  it('proxies cartoon order backend routes without overriding local cartoon upload API routes', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.happycolors.eu');
+
+    const { default: nextConfig } = await import('../../next.config.mjs');
+    const rewrites = await nextConfig.rewrites();
+
+    expect(rewrites).toEqual(
+      expect.arrayContaining([
+        {
+          source: '/api/cartoon-orders',
+          destination: 'https://api.happycolors.eu/cartoon-orders',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/statuses',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/statuses',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/admin-notes',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/admin-notes',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/workflow',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/workflow',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/reject',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/reject',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/complete',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/complete',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/photo-diagnostics',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/photo-diagnostics',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/photos/:photoId([A-Za-z0-9_-]{1,80})',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/photos/:photoId',
+        },
+        {
+          source: '/api/cartoon-orders/:orderId([a-fA-F0-9]{24})/notifications/retry',
+          destination: 'https://api.happycolors.eu/cartoon-orders/:orderId/notifications/retry',
+        },
+        {
+          source: '/api/cartoon-orders/purge-old-completed',
+          destination: 'https://api.happycolors.eu/cartoon-orders/purge-old-completed',
+        },
+      ])
+    );
+    expect(rewrites).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: '/api/cartoon-orders/upload-session',
+        }),
+        expect.objectContaining({
+          source: '/api/cartoon-orders/uploads',
+        }),
+        expect.objectContaining({
+          source: '/api/cartoon-orders/uploads/cleanup',
+        }),
+      ])
+    );
+    expect(rewrites).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: '/api/cartoon-orders/:path*',
+        }),
+      ])
+    );
+  });
 });

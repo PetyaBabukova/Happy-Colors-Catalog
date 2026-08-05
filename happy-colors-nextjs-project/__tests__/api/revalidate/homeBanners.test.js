@@ -38,6 +38,8 @@ describe('/api/revalidate/home-banners', () => {
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('home-banners');
     expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg');
+    expect(revalidatePath).toHaveBeenCalledWith('/en');
   });
 
   it('rejects unauthenticated requests', async () => {

@@ -15,23 +15,13 @@ import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import MessageBox from '@/components/ui/MessageBox';
 import { approveAdminProduct, rejectAdminProduct } from '@/managers/usersAdminManager';
+import TranslationDecisionModal from '@/components/translations/TranslationDecisionModal';
+import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
+import { isCartoonsServiceContext } from '@/config/cartoonsFeature';
+import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
+import useTranslations from '@/i18n/useTranslations';
 import styles from './details.module.css';
-
-const deliveryContent = `
-Начини на доставка:
-• офис на Еконт или Спиди
-• автомат на Еконт или Спиди
-• автомат на Box Now
-Към момента не предлагаме доставка до личен адрес.
-Цена на доставката:
-За поръчки на стойност над 50 евро доставката е безплатна.
-За поръчки под тази стойност цената на доставката е за сметка на клиента и се определя според тарифите на куриерската фирма.
-Срок за изпращане:
-Наличните продукти се изпращат в рамките на до 1 работен ден.
-Срокът за получаване зависи от куриерската фирма и локацията на получателя.
-Неналични продукти:
-Ако продуктът не е наличен, можете да изпратите запитване чрез контактната форма на сайта.
-`;
 
 function warnAutoplay(message, details = {}) {
 	if (process.env.NODE_ENV !== 'development') {
@@ -69,12 +59,17 @@ function buildMediaSlides(imageUrls, videos) {
 // 	);
 // }
 
-export default function ProductDetails({ product }) {
+export default function ProductDetails({ product, serviceContext = '' }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
+	const { publicHref } = useLocaleNavigation();
+	const { t } = useTranslations();
 	const isFullAdmin = user?.role === 'full_admin';
+	const isCartoonServiceContext = isCartoonsServiceContext(serviceContext);
 	const canEdit = isFullAdmin || isOwner(product, user);
 	const isPendingReview = product?.publicationStatus === 'pending_review' || product?.reviewStatus === 'pending_review';
+	const isTranslationPending = product?.translationPending && product?.contentLocale === 'bg';
+	const productLanguage = isTranslationPending ? 'bg' : undefined;
 	const router = useRouter();
 	const gestureRef = useRef(null);
 	const videoRefs = useRef(new Map());
@@ -98,6 +93,9 @@ export default function ProductDetails({ product }) {
 	const [updatedReviewNotice, setUpdatedReviewNotice] = useState(false);
 	const [reviewActionLoading, setReviewActionLoading] = useState('');
 	const [reviewActionError, setReviewActionError] = useState('');
+	const [translationDecision, setTranslationDecision] = useState(null);
+	const [translationDecisionLoading, setTranslationDecisionLoading] = useState('');
+	const [translationDecisionError, setTranslationDecisionError] = useState('');
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragOffset, setDragOffset] = useState(0);
 	const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -214,10 +212,12 @@ export default function ProductDetails({ product }) {
 	}, [activeSlide?.key, activeSlide?.type, prefersReducedMotion]);
 
 	const isAvailable = product?.availability !== 'unavailable';
+	const shouldUseInquiryAction = isCartoonServiceContext || isCatalogMode || !isAvailable;
 
 	const availabilityLabel = isAvailable
-		? 'Продуктът е наличен'
-		: 'Продуктът не е наличен';
+		? t('products.availableCatalog')
+		: t('products.unavailableCatalog');
+	const cartoonAvailabilityLabel = t('products.cartoonAvailability');
 
 	const handleAddToCart = () => {
 		addToCart({
@@ -229,7 +229,7 @@ export default function ProductDetails({ product }) {
 				: imageUrls[0] || videos[0]?.posterUrl || product.imageUrl || '',
 		});
 
-		router.push('/cart');
+		router.push(publicHref('/cart'));
 	};
 
 	const tryAutoplayVideo = (slideKey) => {
@@ -297,28 +297,74 @@ export default function ProductDetails({ product }) {
 	};
 
 	const handleInquiry = () => {
-		router.push(`/contacts?productId=${product._id}`);
+		if (isCartoonServiceContext) {
+			router.push(publicHref(buildCartoonServiceContactHref({ productId: product._id })));
+			return;
+		}
+
+		router.push(publicHref(`/contacts?productId=${product._id}`));
 	};
 
 	const handleApproveProduct = async () => {
 		setReviewActionLoading('approve');
 		setReviewActionError('');
+		setTranslationDecisionError('');
 
 		try {
-			await approveAdminProduct(product._id);
+			const updated = await approveAdminProduct(product._id);
+			if (updated?.englishTranslationDecision) {
+				setTranslationDecision({
+					...updated.englishTranslationDecision,
+					entityType: 'product',
+					entityId: product._id,
+				});
+				return;
+			}
 			router.refresh();
 		} catch (error) {
-			setReviewActionError(error.message || 'Неуспешно одобряване на продукта.');
+			setReviewActionError(error.message || t('products.approveError'));
 		} finally {
 			setReviewActionLoading('');
 		}
 	};
 
+	const handleTranslationDecision = async (action) => {
+		if (!translationDecision) {
+			return;
+		}
+
+		setTranslationDecisionLoading(action);
+		setTranslationDecisionError('');
+
+		const payload = {
+			entityType: translationDecision.entityType,
+			entityId: translationDecision.entityId,
+			locale: translationDecision.locale,
+			expectedSourceRevision: translationDecision.sourceRevision,
+			expectedTranslationRevision: translationDecision.translationRevision || 0,
+		};
+
+		try {
+			if (action === 'yes') {
+				await generateTranslation(payload);
+			} else {
+				await acceptCurrentTranslation(payload);
+			}
+
+			setTranslationDecision(null);
+			router.refresh();
+		} catch (error) {
+			setTranslationDecisionError(error.message || 'English translation decision was not saved.');
+		} finally {
+			setTranslationDecisionLoading('');
+		}
+	};
+
 	const handleRejectProduct = async () => {
-		const reviewNote = window.prompt('Причина за отказа:');
+		const reviewNote = window.prompt(t('products.rejectPrompt'));
 
 		if (!reviewNote || reviewNote.trim() === '') {
-			setReviewActionError('Моля въведете причина за отказа.');
+			setReviewActionError(t('products.rejectRequired'));
 			return;
 		}
 
@@ -329,7 +375,7 @@ export default function ProductDetails({ product }) {
 			await rejectAdminProduct(product._id, reviewNote);
 			router.refresh();
 		} catch (error) {
-			setReviewActionError(error.message || 'Неуспешен отказ на продукта.');
+			setReviewActionError(error.message || t('products.rejectError'));
 		} finally {
 			setReviewActionLoading('');
 		}
@@ -382,35 +428,50 @@ export default function ProductDetails({ product }) {
 
 	return (
 		<section className={styles.productDetails}>
+			<TranslationDecisionModal
+				decision={translationDecision}
+				entityLabel="product"
+				busyAction={translationDecisionLoading}
+				error={translationDecisionError}
+				onYes={() => handleTranslationDecision('yes')}
+				onNo={() => handleTranslationDecision('no')}
+				onDismiss={() => {
+					setTranslationDecision(null);
+					router.refresh();
+				}}
+			/>
 			<div className={styles.productDescriptionContainer}>
 				{createdReviewNotice && (
 					<MessageBox
 						type="success"
-						message="Продуктът ви е успешно създаден. Ще бъде публикуван след одобрение от администратор."
+						message={t('products.createdReviewNotice')}
 					/>
 				)}
 				{updatedReviewNotice && (
 					<MessageBox
 						type="success"
-						message="Промените са запазени и ще бъдат публикувани след одобрение от администратор."
+						message={t('products.updatedReviewNotice')}
 					/>
 				)}
 				{product.publicationStatus === 'pending_review' && !createdReviewNotice && (
 					<MessageBox
 						type="success"
-						message="Този продукт очаква одобрение от администратор."
+						message={t('products.pendingReviewNotice')}
 					/>
 				)}
 				{isPendingReview && isFullAdmin && (
 					<MessageBox
 						type="success"
-						message="Този продукт чака одобрение. Прегледайте публикацията и изберете действие."
+						message={t('products.adminReviewNotice')}
 					/>
 				)}
 				{reviewActionError && (
 					<MessageBox type="error" message={reviewActionError} />
 				)}
-				<h1>{product.title}</h1>
+				{isTranslationPending && (
+					<MessageBox type="success" message={t('products.translationPending')} />
+				)}
+				<h1 lang={productLanguage}>{product.title}</h1>
 
 				{/* TODO: Рейтинг звездички — ще се активират при имплементация на ревю система
 				<div className={styles.reviewContainer}>
@@ -435,7 +496,7 @@ export default function ProductDetails({ product }) {
 								setActiveTab('description');
 							}}
 						>
-							описание
+							{t('products.descriptionTab')}
 						</a>
 					</li>
 
@@ -452,7 +513,7 @@ export default function ProductDetails({ product }) {
 									setActiveTab('delivery');
 								}}
 							>
-								доставка и плащане
+								{t('products.deliveryTab')}
 							</a>
 						</li>
 					)}
@@ -460,57 +521,73 @@ export default function ProductDetails({ product }) {
 
 				<div className={styles.productDescriptionBody}>
 					{activeTab === 'description' && (
-						<p>{product.description}</p>
+						<p lang={productLanguage}>{product.description}</p>
 					)}
 
 					{!isCatalogMode && activeTab === 'delivery' && (
-						<p style={{ whiteSpace: 'pre-line' }}>{deliveryContent}</p>
+						<p style={{ whiteSpace: 'pre-line' }}>{t('products.deliveryContent')}</p>
 					)}
 				</div>
 
 				{activeTab === 'description' && (
 					<>
 						<p className={isAvailable ? styles.available : styles.unavailable}>
-							<b>Наличност:</b> {availabilityLabel}
+							<b>{t('products.availabilityLabel')}</b> {isCartoonServiceContext ? cartoonAvailabilityLabel : availabilityLabel}
 						</p>
 
-						{isCatalogMode ? (
-							<p>Цена {product.price} €. За наличност и уточнения, моля изпратете запитване.</p>
+						{isCartoonServiceContext ? (
+							<p className={styles.cartoonPriceNote}>
+								{t('products.cartoonPriceIntro', { price: product.price })}
+								<br />
+								{t('products.cartoonPriceDetails')}{' '}
+								<Link href={publicHref('/cartoons/offer')} className={styles.cartoonOfferLink}>
+									{t('products.cartoonOfferLink')}
+									<span aria-hidden="true" className={styles.cartoonOfferArrows}>
+										<span>›</span>
+										<span>›</span>
+										<span>›</span>
+									</span>
+								</Link>
+							</p>
+						) : isCatalogMode ? (
+							<p>{t('products.priceInquiry', { price: product.price })}</p>
 						) : (
-							<p>Цена {product.price} €</p>
+							<p>{t('products.price', { price: product.price })}</p>
 						)}
 
 						<div className={styles.actionButtonsContainer}>
-							{isCatalogMode ? (
+							{shouldUseInquiryAction ? (
 								<button onClick={handleInquiry} className={styles.actionBtn}>
-									Попитай
+									{t('catalogMode.inquiryCta')}
 								</button>
-							) : isAvailable ? (
+							) : (
 								<button
 									onClick={handleAddToCart}
 									className={styles.actionBtn}
 									data-testid="add-to-cart-button"
 								>
-									Добави в количката
-								</button>
-							) : (
-								<button
-									onClick={handleInquiry}
-									className={styles.actionBtn}
-								>
-									Попитай
+									{t('products.addToCart')}
 								</button>
 							)}
 
 							{canEdit && (
 								<div className={styles.ownerActions}>
 									<Link href={`/products/${product._id}/edit`} className={styles.actionBtn}>
-										Редактирай
+										{t('products.edit')}
 									</Link>
 									<Link href={`/products/${product._id}/delete`} className={styles.actionBtn}>
-										Изтрий
+										{t('products.delete')}
 									</Link>
 								</div>
+							)}
+
+							{isFullAdmin && (
+								<Link
+									href={`/translations?entityType=product&entityId=${encodeURIComponent(product._id)}`}
+									className={styles.actionBtn}
+								>
+									EN превод
+								</Link>
 							)}
 
 							{isFullAdmin && isPendingReview && (
@@ -521,7 +598,7 @@ export default function ProductDetails({ product }) {
 										className={styles.actionBtn}
 										disabled={reviewActionLoading !== ''}
 									>
-										{reviewActionLoading === 'approve' ? 'Одобряване...' : 'Одобри'}
+										{reviewActionLoading === 'approve' ? t('products.approving') : t('products.approve')}
 									</button>
 									<button
 										type="button"
@@ -529,7 +606,7 @@ export default function ProductDetails({ product }) {
 										className={styles.actionBtn}
 										disabled={reviewActionLoading !== ''}
 									>
-										{reviewActionLoading === 'reject' ? 'Отказ...' : 'Откажи'}
+										{reviewActionLoading === 'reject' ? t('products.rejecting') : t('products.reject')}
 									</button>
 								</div>
 							)}
@@ -539,7 +616,7 @@ export default function ProductDetails({ product }) {
 									href={`/newsletter/send?source=product&id=${product._id}`}
 									className={`${styles.actionBtn} ${styles.newsletterActionBtn}`}
 								>
-									Изпрати до абонати
+									{t('products.sendNewsletter')}
 								</Link>
 							)}
 						</div>
@@ -560,7 +637,7 @@ export default function ProductDetails({ product }) {
 						<button
 							type="button"
 							onClick={showPrev}
-							aria-label="Предишно изображение"
+							aria-label={t('products.previousImage')}
 							className={`${styles.imageNavBtn} ${styles.imageNavBtnLeft}`}
 						>
 							‹
@@ -609,14 +686,14 @@ export default function ProductDetails({ product }) {
 														className={`${styles.productMainVideo} ${styles.productVideoElement}`}
 														onLoadedData={() => tryAutoplayVideo(slide.key)}
 														onEnded={handleVideoEnded}
-														aria-label={`${product.title} видео`}
+														aria-label={t('products.videoLabel', { title: product.title })}
 													>
-														Вашият браузър не поддържа видео. Можете да разгледате снимките на продукта.
+														{t('products.videoUnsupported')}
 													</video>
 												) : (
 													<Image
 														src={slide.posterUrl}
-														alt={`${product.title} видео`}
+														alt={t('products.videoLabel', { title: product.title })}
 														width={1600}
 														height={1600}
 														sizes="(max-width: 768px) 90vw, (max-width: 1200px) 50vw, 40vw"
@@ -624,7 +701,7 @@ export default function ProductDetails({ product }) {
 														loading="lazy"
 													/>
 												)}
-												<span className={styles.videoBadge}>Видео</span>
+												<span className={styles.videoBadge}>{t('products.videoBadge')}</span>
 											</>
 										) : (
 											<Image
@@ -648,7 +725,7 @@ export default function ProductDetails({ product }) {
 						<button
 							type="button"
 							onClick={showNext}
-							aria-label="Следващо изображение"
+							aria-label={t('products.nextImage')}
 							className={`${styles.imageNavBtn} ${styles.imageNavBtnRight}`}
 						>
 							›

@@ -1,6 +1,7 @@
 import NewsletterSubscribeForm from '@/components/newsletter/NewsletterSubscribeForm';
 import CookieFooterLink from '@/components/privacy/CookieFooterLink';
 import privacyStyles from '@/components/privacy/CookieConsent.module.css';
+import useTranslations from '@/i18n/useTranslations';
 import styles from './Footer.module.css';
 
 function FacebookIcon() {
@@ -33,24 +34,26 @@ function InstagramIcon() {
   );
 }
 
-const socialLinks = [
-  {
-    href: 'https://www.facebook.com/happycolors.studio',
-    label: 'Happy Colors във Facebook',
-    Icon: FacebookIcon,
-  },
-  {
-    href: 'https://www.instagram.com/happycolors.crochet/',
-    label: 'Happy Colors в Instagram',
-    Icon: InstagramIcon,
-  },
-];
-
 export default function Footer() {
+  const { t } = useTranslations('footer');
+  const year = new Date().getFullYear();
+  const socialLinks = [
+    {
+      href: 'https://www.facebook.com/happycolors.studio',
+      label: t('facebookLabel'),
+      Icon: FacebookIcon,
+    },
+    {
+      href: 'https://www.instagram.com/happycolors.crochet/',
+      label: t('instagramLabel'),
+      Icon: InstagramIcon,
+    },
+  ];
+
   return (
     <footer className={styles.footer}>
       <div className={privacyStyles.footerLeftBlock}>
-        <p>© 2026 Happy Colors. Всички права запазени.</p>
+        <p>{t('copyright', { year })}</p>
         <CookieFooterLink />
       </div>
 
@@ -58,8 +61,8 @@ export default function Footer() {
 
       <div className={styles.footerRight}>
         <div className={styles.socialBlock}>
-          <p className={styles.socialHeading}>Последвайте ни:</p>
-          <nav className={styles.socialLinks} aria-label="Социални профили">
+          <p className={styles.socialHeading}>{t('socialHeading')}</p>
+          <nav className={styles.socialLinks} aria-label={t('socialNavLabel')}>
             {socialLinks.map(({ href, label, Icon }) => (
               <a
                 key={href}
@@ -82,7 +85,7 @@ export default function Footer() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Онлайн каталог от <b>webcreativeteam.com</b>
+            {t('creditPrefix')} <b>webcreativeteam.com</b>
           </a>
         </p>
       </div>

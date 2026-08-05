@@ -71,6 +71,7 @@ export function buildProduct({ category, owner, ...overrides } = {}) {
     owner: owner?._id || owner,
     availability: 'available',
     publicationStatus: PRODUCT_PUBLICATION_STATUSES.PUBLISHED,
+    isInCatalog: true,
     ...overrides,
   };
 }

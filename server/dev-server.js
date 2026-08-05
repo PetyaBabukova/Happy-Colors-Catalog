@@ -5,9 +5,14 @@ import { fileURLToPath } from 'url';
 
 import mongoose from './mongoose.js';
 import { createExpressApp } from './server.js';
+import { scheduleOpenNewsletterCampaignProcessing } from './services/newsletterSendService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'development';
+}
 
 const envCandidates = [
   path.resolve(__dirname, '.env'),
@@ -44,6 +49,12 @@ try {
 }
 
 const app = createExpressApp();
+
+scheduleOpenNewsletterCampaignProcessing().catch((error) => {
+  console.error('Newsletter campaign resume scheduling failed:', {
+    message: error?.message || 'Unknown newsletter campaign resume error',
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Server listening on port ${PORT}`);

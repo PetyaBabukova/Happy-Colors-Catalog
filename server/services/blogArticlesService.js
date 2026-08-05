@@ -4,6 +4,7 @@ import BlogArticle from '../models/BlogArticle.js';
 import HomeBanner from '../models/HomeBanner.js';
 import Product from '../models/Product.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
+import { projectPublicBlogArticle } from './localization/publicProjection.js';
 
 const CREATE_FIELDS = new Set([
   'title',
@@ -45,6 +46,8 @@ const PUBLIC_LIST_PROJECTION = {
   publishedAt: 1,
   createdAt: 1,
   updatedAt: 1,
+  sourceRevision: 1,
+  translations: 1,
 };
 const PUBLIC_DETAIL_PROJECTION = {
   title: 1,
@@ -59,6 +62,8 @@ const PUBLIC_DETAIL_PROJECTION = {
   publishedAt: 1,
   createdAt: 1,
   updatedAt: 1,
+  sourceRevision: 1,
+  translations: 1,
 };
 const ALLOWED_NODE_TYPES = new Set([
   'doc',
@@ -97,6 +102,24 @@ function assertValidArticleId(articleId) {
 
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source || {}, key);
+}
+
+function hasChangedField(target, updates, field) {
+  if (!hasOwn(updates, field)) {
+    return false;
+  }
+
+  return String(target?.[field] ?? '').trim() !== String(updates[field] ?? '').trim();
+}
+
+function hasBlogArticleSourceCopyChange(target, updates = {}) {
+  return (
+    hasChangedField(target, updates, 'title') ||
+    hasChangedField(target, updates, 'contentHtml') ||
+    hasChangedField(target, updates, 'heroImageAlt') ||
+    hasChangedField(target, updates, 'seoTitle') ||
+    hasChangedField(target, updates, 'seoDescription')
+  );
 }
 
 function pickFields(source = {}, fields) {
@@ -632,11 +655,15 @@ function ensurePublishedState(article) {
   }
 }
 
-export async function getPublicBlogArticles() {
-  return BlogArticle.find({ archivedAt: null })
+export async function getPublicBlogArticles({ locale = 'bg' } = {}) {
+  const articles = await BlogArticle.find({ archivedAt: null })
     .select(PUBLIC_LIST_PROJECTION)
     .sort({ publishedAt: -1, createdAt: -1 })
     .lean();
+
+  return articles
+    .map((article) => projectPublicBlogArticle(article, locale, { includeContent: false }))
+    .filter(Boolean);
 }
 
 export async function getAdminBlogArticles(userId) {
@@ -647,7 +674,7 @@ export async function getAdminBlogArticles(userId) {
   return BlogArticle.find().sort({ updatedAt: -1 }).lean();
 }
 
-export async function getPublicBlogArticleById(articleId) {
+export async function getPublicBlogArticleById(articleId, { locale = 'bg' } = {}) {
   assertValidArticleId(articleId);
 
   const article = await BlogArticle.findOne({
@@ -661,7 +688,13 @@ export async function getPublicBlogArticleById(articleId) {
     throw createError('Blog article was not found.', 404);
   }
 
-  return article;
+  const projectedArticle = projectPublicBlogArticle(article, locale);
+
+  if (!projectedArticle) {
+    throw createError('Blog article was not found.', 404);
+  }
+
+  return projectedArticle;
 }
 
 export async function getAdminBlogArticleById(articleId, userId) {
@@ -705,8 +738,13 @@ export async function editBlogArticle(articleId, data, userId) {
   const previousThumbnailImageUrl = article.thumbnailImageUrl;
   const picked = pickFields(data, EDIT_FIELDS);
   const nextData = normalizeArticleFields(picked, { requireAll: false });
+  const hasSourceCopyChange = hasBlogArticleSourceCopyChange(article, nextData);
 
   ensurePublishedState(article);
+
+  if (hasSourceCopyChange) {
+    article.sourceRevision = (Number(article.sourceRevision) || 1) + 1;
+  }
 
   for (const [key, value] of Object.entries(nextData)) {
     article[key] = value;

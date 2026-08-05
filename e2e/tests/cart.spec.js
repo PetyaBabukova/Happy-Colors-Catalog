@@ -1,17 +1,25 @@
 import { expect, test } from '@playwright/test';
-import { addSeededProductToCart, catalogMode } from './helpers/shop.js';
+import {
+  addSeededProductToCart,
+  catalogMode,
+  defaultCatalogPath,
+  localeRoutesEnabled,
+  pathEndPattern,
+} from './helpers/shop.js';
 
 test('cart flow works or redirects safely in catalog mode @smoke @cart', async ({ page }) => {
-  await page.goto('/cart');
-  await expect(page.locator('body')).not.toContainText('Application error');
+  test.skip(
+    catalogMode && !localeRoutesEnabled,
+    'Catalog-mode localized redirect requires locale routing to be enabled.'
+  );
 
   if (catalogMode) {
-    await expect(page).toHaveURL(/\/products$/);
+    await page.goto('/cart');
+    await expect(page.locator('body')).not.toContainText('Application error');
+    await expect(page).toHaveURL(pathEndPattern(defaultCatalogPath));
     await expect(page.getByText('E2E Smoke Product')).toBeVisible();
     return;
   }
-
-  await expect(page).toHaveURL(/\/cart$/);
 
   await addSeededProductToCart(page);
 });

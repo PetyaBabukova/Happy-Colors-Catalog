@@ -1,33 +1,31 @@
 'use client';
 
-import {
-  COOKIE_POLICY_SECONDARY,
-  COOKIE_POLICY_SUMMARY,
-} from '@/config/cookieConsent';
+import useTranslations from '@/i18n/useTranslations';
 import { useCookieConsent } from './CookieConsentContext';
 import CookieSettingsModal from './CookieSettingsModal';
 import styles from './CookieConsent.module.css';
 
 export default function CookieConsentBanner() {
+  const { t } = useTranslations('privacy');
   const { showBanner, acceptAll, acceptNecessaryOnly, openSettings } = useCookieConsent();
 
   return (
     <>
       {showBanner && (
-        <aside className={styles.banner} aria-label="Известие за бисквитки">
+        <aside className={styles.banner} aria-label={t('bannerAriaLabel')}>
           <div className={styles.bannerText}>
-            <p>{COOKIE_POLICY_SUMMARY}</p>
-            <p>{COOKIE_POLICY_SECONDARY}</p>
+            <p>{t('summary')}</p>
+            <p>{t('secondary')}</p>
           </div>
           <div className={styles.bannerActions}>
             <button type="button" className={styles.button} onClick={acceptAll}>
-              Приемам всички
+              {t('acceptAll')}
             </button>
             <button type="button" className={styles.secondaryButton} onClick={acceptNecessaryOnly}>
-              Само необходими
+              {t('necessaryOnly')}
             </button>
             <button type="button" className={styles.secondaryButton} onClick={openSettings}>
-              Настройки
+              {t('settings')}
             </button>
           </div>
         </aside>

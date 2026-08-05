@@ -1,16 +1,30 @@
-import dotenv from 'dotenv';
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import { loadTestEnv } from '../scripts/loadTestEnv.js';
+import { buildE2eServerEnv, getE2eRuntimeSettings } from './runtime-env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
-dotenv.config({ path: path.resolve(repoRoot, '.env.test') });
+loadTestEnv();
 
-const port = Number(process.env.PORT || 3100);
-const baseURL = process.env.E2E_BASE_URL || `http://127.0.0.1:${port}`;
+const settings = getE2eRuntimeSettings(process.env);
+
+Object.assign(process.env, buildE2eServerEnv(process.env, settings));
+
+const webServer = process.env.E2E_MANAGED_SERVER === 'true'
+  ? undefined
+  : {
+      command: 'node server.js',
+      cwd: repoRoot,
+      url: settings.baseURL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: buildE2eServerEnv(process.env, settings),
+    };
 
 export default defineConfig({
   testDir: './tests',
@@ -24,7 +38,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL,
+    baseURL: settings.baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -35,24 +49,5 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev',
-    cwd: repoRoot,
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 120_000,
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      PORT: String(port),
-      CATALOG_MODE: process.env.CATALOG_MODE || 'false',
-      NEXT_PUBLIC_CATALOG_MODE:
-        process.env.NEXT_PUBLIC_CATALOG_MODE || process.env.CATALOG_MODE || 'false',
-      NEXT_PUBLIC_SITE_URL: baseURL,
-      RENDER_EXTERNAL_URL: baseURL,
-      CLIENT_URL: baseURL,
-      ALLOWED_ORIGINS: baseURL,
-      DISABLE_EMAIL_DELIVERY: 'true',
-    },
-  },
+  webServer,
 });

@@ -4,6 +4,7 @@ import {
   archiveProduct,
   createProduct,
   getAllProducts,
+  getCartoonGalleryProducts,
   getManagedProductById,
   getMyProducts,
   getHomepageFeaturedProducts,
@@ -26,25 +27,38 @@ import {
   requireFullAdmin,
 } from '../middlewares/auth.js';
 import { requireTrustedOrigin } from '../middlewares/trustedOrigin.js';
+import { getRequestPublicLocale } from '../services/localization/publicProjection.js';
 
 const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
     const category = req.query.category;
-    const products = await getAllProducts(category);
+    const locale = getRequestPublicLocale(req);
+    const products = await getAllProducts(category, { locale });
     res.json(products);
   } catch (error) {
-    res.status(500).json({ message: 'Грешка при зареждане на продуктите' });
+    res.status(error.statusCode || 500).json({ message: 'Грешка при зареждане на продуктите' });
   }
 });
 
 router.get('/homepage-featured', async (req, res) => {
   try {
-    const products = await getHomepageFeaturedProducts();
+    const locale = getRequestPublicLocale(req);
+    const products = await getHomepageFeaturedProducts({ locale });
     res.json(products);
   } catch (error) {
-    res.status(500).json({ message: 'Грешка при зареждане на продуктите за началната страница.' });
+    res.status(error.statusCode || 500).json({ message: 'Грешка при зареждане на продуктите за началната страница.' });
+  }
+});
+
+router.get('/cartoon-gallery', async (req, res) => {
+  try {
+    const locale = getRequestPublicLocale(req);
+    const products = await getCartoonGalleryProducts({ locale });
+    res.json(products);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: 'Грешка при зареждане на шарж галерията.' });
   }
 });
 
@@ -96,7 +110,8 @@ router.get('/review-queue', requireAuth, requireFullAdmin, async (req, res) => {
 router.get('/:productId', async (req, res) => {
   try {
     const viewer = await loadOptionalAuthenticatedUserFromRequest(req);
-    const product = await getProductById(req.params.productId, viewer);
+    const locale = getRequestPublicLocale(req);
+    const product = await getProductById(req.params.productId, viewer, { locale });
 
     if (!product) {
       return res.status(404).json({ message: 'Продуктът не беше намерен' });
