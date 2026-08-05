@@ -216,9 +216,12 @@ describe('Header', () => {
     );
 
     const englishLocaleLink = screen.getByRole('link', { name: /^EN/ });
+    const localeSelector = englishLocaleLink.closest('details');
+    localeSelector.open = true;
     englishLocaleLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
     fireEvent.click(englishLocaleLink);
     expect(document.cookie).toContain(`${LOCALE_COOKIE_NAME}=en`);
+    expect(localeSelector.open).toBe(false);
   });
 
   it('does not render the locale switcher until two public locales are enabled', () => {

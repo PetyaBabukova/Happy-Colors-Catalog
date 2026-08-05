@@ -13,7 +13,7 @@ import { localizePath } from '@/i18n/routing';
 const PROD_SITE_URL = 'https://happycolors.eu';
 const LOCAL_URL = 'http://localhost:3000';
 const RENDER_PREVIEW_BRANCH = 'single-deploy-refactor';
-export const SITE_OG_IMAGE_PATH = '/og/happy-colors-og.png';
+export const SITE_OG_IMAGE_PATH = '/lion_banner.webp';
 
 function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '');

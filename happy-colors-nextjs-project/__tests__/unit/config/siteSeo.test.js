@@ -16,7 +16,7 @@ describe('siteSeo', () => {
 
     const siteSeo = await import('../../../src/config/siteSeo.js');
 
-    expect(siteSeo.SITE_OG_IMAGE_PATH).toBe('/og/happy-colors-og.png');
+    expect(siteSeo.SITE_OG_IMAGE_PATH).toBe('/lion_banner.webp');
     expect(siteSeo.SITE_ENV).toBe('production');
     expect(siteSeo.currentSiteUrl).toBe('https://happycolors.eu');
     expect(siteSeo.shouldIndexSite).toBe(true);
@@ -45,7 +45,7 @@ describe('siteSeo', () => {
         locale: 'bg_BG',
         images: [
           {
-            url: '/og/happy-colors-og.png',
+            url: '/lion_banner.webp',
             alt: 'Shop',
           },
         ],
@@ -54,7 +54,7 @@ describe('siteSeo', () => {
         card: 'summary_large_image',
         title: 'Shop',
         description: 'Products',
-        images: ['/og/happy-colors-og.png'],
+        images: ['/lion_banner.webp'],
       },
     });
   });
@@ -95,7 +95,7 @@ describe('siteSeo', () => {
         alternateLocale: ['bg_BG'],
         images: [
           {
-            url: '/og/happy-colors-og.png',
+            url: '/lion_banner.webp',
             alt: 'Colorful products',
           },
         ],

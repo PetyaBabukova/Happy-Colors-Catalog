@@ -115,12 +115,12 @@ describe('blogSeo', () => {
 
     expect(metadata.openGraph.images).toEqual([
       {
-        url: 'http://localhost:3000/og/happy-colors-og.png',
+        url: 'http://localhost:3000/lion_banner.webp',
         alt: 'Цветно изображение',
       },
     ]);
-    expect(metadata.twitter.images).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
-    expect(jsonLd.image).toEqual(['http://localhost:3000/og/happy-colors-og.png']);
+    expect(metadata.twitter.images).toEqual(['http://localhost:3000/lion_banner.webp']);
+    expect(jsonLd.image).toEqual(['http://localhost:3000/lion_banner.webp']);
   });
   it('adds English article hreflang only for a real English article page', () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
