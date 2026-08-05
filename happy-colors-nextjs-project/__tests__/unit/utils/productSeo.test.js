@@ -194,12 +194,12 @@ describe('productSeo', () => {
     expect(metadata.openGraph.type).toBe('website');
     expect(metadata.openGraph.images).toEqual([
       {
-        url: 'http://test.local/og/happy-colors-og.png',
+        url: 'http://test.local/lion_banner.webp',
         alt: 'No Media Product',
       },
     ]);
     expect(metadata.openGraph).not.toHaveProperty('videos');
-    expect(metadata.twitter.images).toEqual(['http://test.local/og/happy-colors-og.png']);
+    expect(metadata.twitter.images).toEqual(['http://test.local/lion_banner.webp']);
   });
 
   it('marks English fallback product metadata as noindex with a Bulgarian canonical', async () => {

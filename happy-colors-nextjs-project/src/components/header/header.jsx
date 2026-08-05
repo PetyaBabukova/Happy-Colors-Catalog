@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -53,6 +53,7 @@ function FlagIcon({ locale }) {
 }
 
 function LanguageSelector({ onNavigate }) {
+  const selectorRef = useRef(null);
   const pathname = usePathname() || '/';
   const searchParams = useSearchParams();
   const search = searchParams.toString();
@@ -70,9 +71,16 @@ function LanguageSelector({ onNavigate }) {
   }
 
   const currentHref = `${pathname}${search ? `?${search}` : ''}`;
+  const handleLocaleSelect = (enabledLocale) => {
+    persistLocalePreference(enabledLocale);
+    if (selectorRef.current) {
+      selectorRef.current.open = false;
+    }
+    onNavigate();
+  };
 
   return (
-    <details className={styles.localeSelector}>
+    <details ref={selectorRef} className={styles.localeSelector}>
       <summary aria-label={t('languageTrigger', { languageCode: locale.toUpperCase() })}>
         <FlagIcon locale={locale} />
         <span>{locale.toUpperCase()}</span>
@@ -84,8 +92,7 @@ function LanguageSelector({ onNavigate }) {
               href={switchLocaleHref(currentHref, enabledLocale)}
               aria-current={enabledLocale === locale ? 'true' : undefined}
               onClick={() => {
-                persistLocalePreference(enabledLocale);
-                onNavigate();
+                handleLocaleSelect(enabledLocale);
               }}
             >
               <FlagIcon locale={enabledLocale} />
