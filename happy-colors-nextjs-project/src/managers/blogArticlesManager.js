@@ -1,5 +1,6 @@
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
+import { buildApiUrl, getPublicServerFetchOptions } from './requestUtils';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -24,20 +25,6 @@ function pickFields(values = {}, fields) {
 
     return payload;
   }, {});
-}
-
-function buildUrl(path, params = {}) {
-  const searchParams = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      searchParams.set(key, String(value));
-    }
-  }
-
-  const query = searchParams.toString();
-
-  return `${baseURL}${path}${query ? `?${query}` : ''}`;
 }
 
 async function readOrThrow(res, fallbackMessage) {
@@ -69,9 +56,10 @@ export async function invalidateBlogCaches(articleId) {
 }
 
 export async function getBlogArticles({ locale } = {}) {
-  const res = await fetch(buildUrl('/blog-articles', { locale }), {
-    cache: 'no-store',
-  });
+  const res = await fetch(
+    buildApiUrl(baseURL, '/blog-articles', { locale }),
+    getPublicServerFetchOptions({ tags: ['blog-articles'] })
+  );
   const data = await readOrThrow(res, 'Неуспешно зареждане на блог статиите.');
 
   if (!Array.isArray(data)) {
@@ -82,7 +70,7 @@ export async function getBlogArticles({ locale } = {}) {
 }
 
 export async function getBlogArticleById(articleId, { locale } = {}) {
-  const res = await fetch(buildUrl(`/blog-articles/${articleId}`, { locale }), {
+  const res = await fetch(buildApiUrl(baseURL, `/blog-articles/${articleId}`, { locale }), {
     cache: 'no-store',
   });
 

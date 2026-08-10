@@ -16,6 +16,18 @@ import {
 } from './factories.js';
 
 describe('translations integration', () => {
+  function enableSingleRevalidationTarget(fetchMock) {
+    vi.stubEnv('CLIENT_URL', 'http://localhost:3000');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+    vi.stubEnv('BLOG_REVALIDATE_SECRET', 'test-revalidate-secret');
+    vi.stubEnv('CARTOON_HERO_BANNER_REVALIDATE_SECRET', 'test-revalidate-secret');
+    vi.stubEnv('HOME_BANNER_REVALIDATE_SECRET', 'test-revalidate-secret');
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', 'test-revalidate-secret');
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
   it('requires full admin access for translation management', async () => {
     const app = createExpressApp();
     const customer = await createUser();
@@ -220,6 +232,309 @@ describe('translations integration', () => {
       translationPending: false,
       category: expect.objectContaining({ name: 'Toys' }),
     });
+  });
+
+  it('revalidates public product and category surfaces after active translation activation', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const category = await createCategory({ name: 'РРіСЂР°С‡РєРё', slug: 'igrachki', sourceRevision: 1 });
+    const product = await createProduct({
+      owner: admin,
+      category,
+      title: 'Р›СЉРІС‡Рµ',
+      description: 'РџР»РµС‚РµРЅРѕ Р»СЉРІС‡Рµ.',
+      sourceRevision: 1,
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    enableSingleRevalidationTarget(fetchMock);
+
+    try {
+      await request(app)
+        .put(`/translations/category/${category._id}/en`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedTranslationRevision: 0,
+          fields: { name: 'Toys' },
+        })
+        .expect(200);
+
+      await request(app)
+        .put(`/translations/product/${product._id}/en`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedTranslationRevision: 0,
+          fields: { title: 'Little Lion', description: 'Crocheted little lion.' },
+        })
+        .expect(200);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        method: 'POST',
+        body: '{}',
+      });
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+        productId: String(product._id),
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('revalidates public blog surfaces after blog translation draft approval', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const article = await createBlogArticle({
+      owner: admin,
+      title: 'Blog article',
+      sourceRevision: 1,
+      translationDrafts: {
+        en: {
+          title: 'English article',
+          contentHtml: '<p>English body.</p>',
+          contentText: 'English body.',
+          excerpt: 'English body.',
+          heroImageAlt: 'English hero',
+          seoTitle: '',
+          seoDescription: '',
+          sourceRevision: 1,
+          translationRevision: 1,
+          draftRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    enableSingleRevalidationTarget(fetchMock);
+
+    try {
+      await request(app)
+        .post(`/translations/blogArticle/${article._id}/en/draft/approve`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedDraftRevision: 1,
+        })
+        .expect(200);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/revalidate/blog');
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-revalidate-secret': 'test-revalidate-secret',
+        }),
+      });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        articleId: String(article._id),
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('revalidates public home-banner surfaces after home-banner translation draft approval', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner: admin,
+      sourceRevision: 1,
+      translationDrafts: {
+        en: {
+          title: 'English banner',
+          description: 'English banner description.',
+          ctaLabel: 'Open',
+          sourceRevision: 1,
+          translationRevision: 1,
+          draftRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    enableSingleRevalidationTarget(fetchMock);
+
+    try {
+      await request(app)
+        .post(`/translations/homeBanner/${banner._id}/en/draft/approve`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedDraftRevision: 1,
+        })
+        .expect(200);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/revalidate/home-banners');
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-revalidate-secret': 'test-revalidate-secret',
+        }),
+        body: '{}',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('revalidates public cartoon hero surfaces after cartoon banner translation draft approval', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const banner = await createHomeBanner({
+      owner: admin,
+      placement: 'cartoons',
+      title: 'Cartoon banner',
+      description: '',
+      ctaLabel: '',
+      sourceRevision: 1,
+      translationDrafts: {
+        en: {
+          title: 'English cartoon banner',
+          description: '',
+          ctaLabel: '',
+          sourceRevision: 1,
+          translationRevision: 1,
+          draftRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    enableSingleRevalidationTarget(fetchMock);
+
+    try {
+      await request(app)
+        .post(`/translations/homeBanner/${banner._id}/en/draft/approve`)
+        .set('Cookie', authCookie(admin))
+        .send({
+          expectedSourceRevision: 1,
+          expectedDraftRevision: 1,
+        })
+        .expect(200);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3000/api/revalidate/cartoon-hero-banners');
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-revalidate-secret': 'test-revalidate-secret',
+        }),
+        body: '{}',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not fail committed active translations when production revalidation is misconfigured', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const category = await createCategory();
+    const product = await createProduct({
+      owner: admin,
+      category,
+      title: 'Р›СЉРІС‡Рµ',
+      description: 'РџР»РµС‚РµРЅРѕ Р»СЉРІС‡Рµ.',
+      sourceRevision: 1,
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CLIENT_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', '');
+    vi.stubEnv('REVALIDATE_SECRET', '');
+
+    try {
+      const res = await request(app)
+        .put(`/translations/product/${product._id}/en`)
+        .set('Cookie', authCookie(admin))
+        .set('Origin', 'https://happycolors.eu')
+        .send({
+          expectedSourceRevision: 1,
+          expectedTranslationRevision: 0,
+          fields: { title: 'Little Lion', description: 'Crocheted little lion.' },
+        })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        status: 'current',
+        translation: {
+          title: 'Little Lion',
+        },
+      });
+    } finally {
+      consoleError.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not fail committed blog draft approval when production revalidation is misconfigured', async () => {
+    const app = createExpressApp();
+    const admin = await createFullAdmin();
+    const article = await createBlogArticle({
+      owner: admin,
+      title: 'Blog article',
+      sourceRevision: 1,
+      translationDrafts: {
+        en: {
+          title: 'English article',
+          contentHtml: '<p>English body.</p>',
+          contentText: 'English body.',
+          excerpt: 'English body.',
+          heroImageAlt: 'English hero',
+          seoTitle: '',
+          seoDescription: '',
+          sourceRevision: 1,
+          translationRevision: 1,
+          draftRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CLIENT_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+    vi.stubEnv('BLOG_REVALIDATE_SECRET', '');
+    vi.stubEnv('REVALIDATE_SECRET', '');
+
+    try {
+      const res = await request(app)
+        .post(`/translations/blogArticle/${article._id}/en/draft/approve`)
+        .set('Cookie', authCookie(admin))
+        .set('Origin', 'https://happycolors.eu')
+        .send({
+          expectedSourceRevision: 1,
+          expectedDraftRevision: 1,
+        })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        status: 'current',
+        translation: {
+          title: 'English article',
+        },
+      });
+    } finally {
+      consoleError.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 
   it('keeps legacy public product publication and catalog state unchanged after English translation', async () => {

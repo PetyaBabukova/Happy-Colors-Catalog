@@ -7,13 +7,7 @@ import {
   rejectTranslationDraft,
   saveManualTranslation,
 } from '@/managers/translationsManager';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('translationsManager', () => {
   beforeEach(() => {

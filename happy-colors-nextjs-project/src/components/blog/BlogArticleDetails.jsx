@@ -24,17 +24,20 @@ export default function BlogArticleDetails({ article, articles = [] }) {
   const publishedAt = article.publishedAt || article.createdAt;
   const publishedDate = formatDate(publishedAt, formatVisibleDate);
   const asideArticles = articles.filter((item) => item?._id);
+  const fallbackBody = article.excerpt || article.contentText || '';
 
   return (
     <main className={styles.articleLayout}>
-      <div className={styles.heroImageWrap}>
-        <img
-          src={article.heroImageUrl}
-          alt={article.heroImageAlt || article.title}
-          className={styles.heroImage}
-          loading="eager"
-        />
-      </div>
+      {article.heroImageUrl && (
+        <div className={styles.heroImageWrap}>
+          <img
+            src={article.heroImageUrl}
+            alt={article.heroImageAlt || article.title}
+            className={styles.heroImage}
+            loading="eager"
+          />
+        </div>
+      )}
 
       <article className={styles.articlePage}>
         <header className={styles.articleHeader}>
@@ -47,10 +50,16 @@ export default function BlogArticleDetails({ article, articles = [] }) {
           <BlogArticleActions articleId={article._id} />
         </header>
 
-        <div
-          className={styles.articleBody}
-          dangerouslySetInnerHTML={{ __html: article.contentHtml }}
-        />
+        {article.contentHtml ? (
+          <div
+            className={styles.articleBody}
+            dangerouslySetInnerHTML={{ __html: article.contentHtml }}
+          />
+        ) : (
+          <div className={styles.articleBody}>
+            {fallbackBody && <p>{fallbackBody}</p>}
+          </div>
+        )}
       </article>
 
       {asideArticles.length > 0 && (

@@ -6,13 +6,7 @@ import {
   sendNewsletterTest,
   sendNewsletterToSubscribers,
 } from '../../../src/managers/newsletterSendManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 const payload = {
   subject: 'News',

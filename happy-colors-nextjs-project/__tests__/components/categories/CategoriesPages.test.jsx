@@ -5,6 +5,7 @@ import { useProducts } from '@/context/ProductContext';
 import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 import { setMockNavigation } from '../setup.js';
+import { jsonResponse } from '../../api/_helpers.js';
 
 vi.mock('@/context/ProductContext', () => ({
   useProducts: vi.fn(),
@@ -14,13 +15,6 @@ vi.mock('@/managers/translationsManager', () => ({
   acceptCurrentTranslation: vi.fn(),
   generateTranslation: vi.fn(),
 }));
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
 
 describe('category admin pages', () => {
   const triggerCategoriesReload = vi.fn();

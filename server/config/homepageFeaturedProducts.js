@@ -1,1 +1,1 @@
-export const HOMEPAGE_FEATURED_PRODUCTS_LIMIT = 4;
+export { HOMEPAGE_FEATURED_PRODUCTS_LIMIT } from '../../shared/config/homepageFeaturedProducts.js';

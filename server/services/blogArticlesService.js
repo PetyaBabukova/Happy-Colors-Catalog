@@ -4,6 +4,7 @@ import BlogArticle from '../models/BlogArticle.js';
 import HomeBanner from '../models/HomeBanner.js';
 import Product from '../models/Product.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
+import { validateGcsPublicAssetUrl } from '../../shared/gcsCore.js';
 import { projectPublicBlogArticle } from './localization/publicProjection.js';
 
 const CREATE_FIELDS = new Set([
@@ -38,17 +39,6 @@ const BLOG_HERO_PREFIX = 'blog/articles/hero/';
 const BLOG_THUMBNAIL_PREFIX = 'blog/articles/thumbnails/';
 const MAX_CONTENT_JSON_DEPTH = 30;
 const MAX_CONTENT_JSON_CHILDREN = 500;
-const PUBLIC_LIST_PROJECTION = {
-  title: 1,
-  excerpt: 1,
-  thumbnailImageUrl: 1,
-  heroImageAlt: 1,
-  publishedAt: 1,
-  createdAt: 1,
-  updatedAt: 1,
-  sourceRevision: 1,
-  translations: 1,
-};
 const PUBLIC_DETAIL_PROJECTION = {
   title: 1,
   contentHtml: 1,
@@ -442,88 +432,22 @@ export function validateContentJson(contentJson) {
   return contentJson;
 }
 
-function hasUnsafeScheme(value) {
-  return /^[a-z][a-z0-9+.-]*:/i.test(value) && !value.toLowerCase().startsWith('https:');
-}
-
 export function validateBlogImageUrl(imageUrl, expectedPrefix) {
-  const urlValue = String(imageUrl || '').trim();
+  const validation = validateGcsPublicAssetUrl({
+    assetUrl: imageUrl,
+    bucketName: getBucketName(),
+    expectedPrefix,
+    label: 'Article image',
+    messages: {
+      prefix: 'Article image URL must point to the expected blog storage path.',
+    },
+  });
 
-  if (!urlValue) {
-    throw createError('Article image URL is required.');
+  if (!validation.ok) {
+    throw createError(validation.message, validation.statusCode || 400);
   }
 
-  if (hasUnsafeScheme(urlValue)) {
-    throw createError('Article image URL must be a safe storage URL.');
-  }
-
-  const decodedUrlValue = (() => {
-    try {
-      return decodeURIComponent(urlValue);
-    } catch {
-      return urlValue;
-    }
-  })();
-
-  if (/(^|\/)(\.{1,2})(\/|$)/.test(urlValue) || /(^|\/)(\.{1,2})(\/|$)/.test(decodedUrlValue)) {
-    throw createError('Article image URL must point to a valid storage object.');
-  }
-
-  let parsedUrl;
-
-  try {
-    parsedUrl = new URL(urlValue);
-  } catch {
-    throw createError('Article image URL is invalid.');
-  }
-
-  if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'storage.googleapis.com') {
-    throw createError('Article image URL must be a Google Cloud Storage URL.');
-  }
-
-  if (parsedUrl.username || parsedUrl.password) {
-    throw createError('Article image URL must not include credentials.');
-  }
-
-  if (parsedUrl.search || parsedUrl.hash) {
-    throw createError('Article image URL must not include query parameters.');
-  }
-
-  const bucketName = getBucketName();
-
-  if (!bucketName) {
-    throw createError('Storage bucket is not configured.', 500);
-  }
-
-  const parts = parsedUrl.pathname.split('/').filter(Boolean);
-
-  if (parts.length < 2 || parts[0] !== bucketName) {
-    throw createError('Article image URL must point to the configured storage bucket.');
-  }
-
-  let decodedParts;
-
-  try {
-    decodedParts = parts.map((part) => decodeURIComponent(part));
-  } catch {
-    throw createError('Article image URL must point to a valid storage object.');
-  }
-
-  if (
-    decodedParts.some(
-      (part) => part === '.' || part === '..' || part.includes('/') || part.includes('\\')
-    )
-  ) {
-    throw createError('Article image URL must point to a valid storage object.');
-  }
-
-  const objectName = decodedParts.slice(1).join('/');
-
-  if (!objectName.startsWith(expectedPrefix)) {
-    throw createError('Article image URL must point to the expected blog storage path.');
-  }
-
-  return urlValue;
+  return validation.value;
 }
 
 function normalizeArticleFields(data = {}, { requireAll = false } = {}) {
@@ -655,15 +579,48 @@ function ensurePublishedState(article) {
   }
 }
 
+function stripPublicBlogArticleDetailFields(article) {
+  if (!article || typeof article !== 'object') {
+    return article;
+  }
+
+  const {
+    contentHtml,
+    contentText,
+    heroImageUrl,
+    ...summaryArticle
+  } = article;
+
+  return summaryArticle;
+}
+
 export async function getPublicBlogArticles({ locale = 'bg' } = {}) {
   const articles = await BlogArticle.find({ archivedAt: null })
-    .select(PUBLIC_LIST_PROJECTION)
+    .select(PUBLIC_DETAIL_PROJECTION)
     .sort({ publishedAt: -1, createdAt: -1 })
     .lean();
 
-  return articles
-    .map((article) => projectPublicBlogArticle(article, locale, { includeContent: false }))
-    .filter(Boolean);
+  const publicArticles = [];
+  let hasFeaturedArticle = false;
+
+  for (const article of articles) {
+    const projectedArticle = hasFeaturedArticle
+      ? projectPublicBlogArticle(
+          stripPublicBlogArticleDetailFields(article),
+          locale,
+          { includeContent: false }
+        )
+      : projectPublicBlogArticle(article, locale);
+
+    if (!projectedArticle) {
+      continue;
+    }
+
+    publicArticles.push(projectedArticle);
+    hasFeaturedArticle = true;
+  }
+
+  return publicArticles;
 }
 
 export async function getAdminBlogArticles(userId) {

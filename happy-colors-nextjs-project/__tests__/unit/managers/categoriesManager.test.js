@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { onCreateCategorySubmit } from '../../../src/managers/categoriesManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import {
+  getVisibleCategories,
+  getVisibleCategoriesSeed,
+  onCreateCategorySubmit,
+} from '../../../src/managers/categoriesManager.js';
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('categoriesManager', () => {
   beforeEach(() => {
@@ -78,5 +76,39 @@ describe('categoriesManager', () => {
     expect(setSuccess).toHaveBeenCalledWith(false);
     expect(setError).toHaveBeenCalledWith(expect.any(String));
     expect(setInvalidFields).toHaveBeenCalledWith([]);
+  });
+
+  it('loads visible categories with public cache tags and locale separation', async () => {
+    const categories = [{ _id: 'cat-1', name: 'Candles' }];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: categories }));
+
+    await expect(getVisibleCategories({ locale: 'en' })).resolves.toEqual(categories);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/categories/visible?locale=en',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['categories', 'visible-categories', 'products'],
+        },
+      })
+    );
+  });
+
+  it('returns an empty visible category list for failed public reads', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
+
+    await expect(getVisibleCategories()).resolves.toEqual([]);
+  });
+
+  it('marks failed visible category seeds so the client can recover', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
+
+    await expect(getVisibleCategoriesSeed({ locale: 'en' })).resolves.toEqual({
+      categories: [],
+      loaded: false,
+    });
   });
 });

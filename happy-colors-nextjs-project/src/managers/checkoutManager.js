@@ -171,9 +171,9 @@ export function useCheckoutManager() {
       const cityQuery = encodeURIComponent(cityTrimmed);
       const url =
         shipping.shippingMethod === 'econt'
-          ? `/api/offices/econt?city=${cityQuery}`
+          ? `/api/delivery/econt/offices?city=${cityQuery}`
           : shipping.shippingMethod === 'speedy'
-          ? `/api/offices/speedy?city=${cityQuery}`
+          ? `/api/delivery/speedy/offices?city=${cityQuery}`
           : null;
       if (!url) return;
       setOfficesLoading(true);

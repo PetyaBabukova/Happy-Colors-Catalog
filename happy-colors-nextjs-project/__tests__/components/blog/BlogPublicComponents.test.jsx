@@ -38,6 +38,23 @@ describe('public blog components', () => {
     expect(screen.getByText('Tip')).toBeInTheDocument();
   });
 
+  it('renders summary content when the article list has not hydrated full detail fields', () => {
+    render(
+      <BlogArticleDetails
+        article={{
+          _id: 'c'.repeat(24),
+          title: 'Summary-only article',
+          excerpt: 'Short list summary.',
+          publishedAt: '2026-05-15T08:00:00.000Z',
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Summary-only article' })).toBeInTheDocument();
+    expect(screen.getByText('Short list summary.')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
   it('renders an aside list and marks the selected article', () => {
     render(<BlogArticleDetails article={article} articles={[article, olderArticle]} />);
 

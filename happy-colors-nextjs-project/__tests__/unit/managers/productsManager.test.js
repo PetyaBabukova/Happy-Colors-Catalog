@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteProductImage,
   deleteProductVideo,
@@ -9,13 +9,7 @@ import {
   onEditProductSubmit,
   updateHomepageFeaturedProducts,
 } from '../../../src/managers/productsManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 function buildFormValues(overrides = {}) {
   return {
@@ -35,6 +29,11 @@ describe('productsManager', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('loads products and encodes focused category filters', async () => {
     const products = [{ _id: 'p1', title: 'Candle' }];
     fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
@@ -44,7 +43,10 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8+%D0%B8+%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
       expect.objectContaining({
-        cache: 'no-store',
+        next: {
+          revalidate: 60,
+          tags: ['products'],
+        },
       })
     );
   });
@@ -63,7 +65,12 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       'http://localhost:3000/api/products?locale=en&category=English+Toys',
-      expect.objectContaining({ cache: 'no-store' })
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products'],
+        },
+      })
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
@@ -79,6 +86,20 @@ describe('productsManager', () => {
       'http://localhost:3000/api/products/cartoon-gallery?locale=en',
       expect.objectContaining({ cache: 'no-store' })
     );
+  });
+
+  it('keeps client-side product list reads fresh for admin tools', async () => {
+    vi.stubGlobal('window', {});
+    const products = [{ _id: 'p1', title: 'Admin-visible public product' }];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getProducts()).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/products',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty('next');
   });
 
   it('returns an empty list instead of leaking product load failures', async () => {

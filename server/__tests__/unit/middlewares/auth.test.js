@@ -41,6 +41,21 @@ describe('auth middleware', () => {
     expect(() => getJwtSecret()).toThrow();
   });
 
+  it('returns a localized server error when JWT_SECRET is missing during auth', async () => {
+    vi.stubEnv('JWT_SECRET', '');
+    const req = buildReq({ cookies: { [AUTH_COOKIE_NAME]: 'token' } });
+    const res = buildRes();
+    const next = buildNext();
+
+    await requireAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Проблем в конфигурацията на сървъра.',
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('rejects requests without an auth cookie', async () => {
     const res = buildRes();
     const next = buildNext();

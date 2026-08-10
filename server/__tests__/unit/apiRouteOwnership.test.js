@@ -71,7 +71,6 @@ describe('apiRouteOwnership', () => {
     '/api/upload-image',
     '/api/blog/images',
     '/api/analytics/summary',
-    '/api/offices/econt',
     '/api/cartoon-orders/upload-session',
     '/api/cartoon-orders/uploads',
     '/api/cartoon-orders/uploads/cleanup',
@@ -90,6 +89,8 @@ describe('apiRouteOwnership', () => {
     '/api/cartoon-orders/665f1f77bcf86cd799439011/photo-diagnostics/history',
     '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/../secret',
     '/api/cartoon-orders/665f1f77bcf86cd799439011/photos/photo.with.dot',
+    '/api/offices/econt',
+    '/api/offices/speedy',
     '/api/cartoon-orders/upload-session/refresh',
     '/api/cartoon-orders/uploads/cleanup',
   ])('does not treat similar prefix %s as backend-owned', (path) => {

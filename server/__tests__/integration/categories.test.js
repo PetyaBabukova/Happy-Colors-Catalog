@@ -1,10 +1,19 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Product from '../../models/Product.js';
 import { createExpressApp } from '../../server.js';
 import { authCookie, createCategory, createProduct, createFullAdmin, createUser } from './factories.js';
 
 describe('categories integration', () => {
+  function enableSingleRevalidationTarget(fetchMock) {
+    vi.stubEnv('CLIENT_URL', 'http://localhost:3000');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', 'test-revalidate-secret');
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
   it('creates and lists categories', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
@@ -339,6 +348,74 @@ describe('categories integration', () => {
       .send({ name: 'Updated' })
       .expect(403);
     await request(app).delete(`/categories/${category._id}`).set('Cookie', authCookie(customer)).expect(403);
+  });
+
+  it('revalidates public catalog surfaces after category create, update, and delete', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    enableSingleRevalidationTarget(fetchMock);
+
+    try {
+      const createRes = await request(app)
+        .post('/categories')
+        .set('Cookie', authCookie(owner))
+        .send({ name: 'Cacheable Category' })
+        .expect(201);
+
+      await request(app)
+        .put(`/categories/${createRes.body._id}`)
+        .set('Cookie', authCookie(owner))
+        .send({ name: 'Updated Cacheable Category' })
+        .expect(200);
+
+      await request(app)
+        .delete(`/categories/${createRes.body._id}`)
+        .set('Cookie', authCookie(owner))
+        .expect(200);
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      for (const call of fetchMock.mock.calls) {
+        expect(call[0]).toBe('http://localhost:3000/api/revalidate/products');
+        expect(call[1]).toMatchObject({
+          method: 'POST',
+          body: '{}',
+        });
+      }
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not fail committed category writes when production revalidation is misconfigured', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CLIENT_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', '');
+    vi.stubEnv('REVALIDATE_SECRET', '');
+
+    try {
+      const res = await request(app)
+        .post('/categories')
+        .set('Cookie', authCookie(owner))
+        .send({ name: 'Committed Despite Revalidation Misconfig' })
+        .expect(201);
+
+      expect(res.body).toMatchObject({
+        name: 'Committed Despite Revalidation Misconfig',
+      });
+    } finally {
+      consoleError.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 
   it('allows authenticated users to load and update a category', async () => {

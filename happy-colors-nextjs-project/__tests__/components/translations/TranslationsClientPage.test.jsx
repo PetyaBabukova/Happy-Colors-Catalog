@@ -207,10 +207,11 @@ describe('TranslationsClientPage', () => {
 
     const item = await screen.findByRole('article');
     expect(within(item).queryByRole('button', { name: 'Приеми текущия EN' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('EN заглавие')).toHaveValue('Current English article');
+    const titleInput = await screen.findByLabelText('EN заглавие');
+    expect(titleInput).toHaveValue('Current English article');
     expect(screen.getByRole('button', { name: 'Запази промените' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('EN заглавие'), {
+    fireEvent.change(titleInput, {
       target: { value: 'Edited English article' },
     });
     fireEvent.change(screen.getByLabelText('EN HTML съдържание'), {

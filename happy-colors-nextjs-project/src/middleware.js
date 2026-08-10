@@ -16,8 +16,8 @@ import {
   selectLocaleForCountry,
   stripPathLocale,
 } from '@/i18n/routing';
+import { AUTH_COOKIE_NAME } from '../../shared/authConstants.js';
 
-const AUTH_COOKIE_NAME = 'token';
 export const ENGLISH_UNAVAILABLE_NOTICE_QUERY = 'localeNotice';
 export const ENGLISH_UNAVAILABLE_NOTICE_VALUE = 'english-unavailable';
 

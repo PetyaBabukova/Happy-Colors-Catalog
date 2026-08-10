@@ -17,7 +17,7 @@ async function openCheckoutWithSeededProduct(page) {
 }
 
 async function mockEcontOfficeLookup(page) {
-  await page.route('**/api/offices/econt?*', async (route) => {
+  await page.route('**/api/delivery/econt/offices?*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -29,7 +29,7 @@ async function mockEcontOfficeLookup(page) {
 }
 
 async function mockSpeedyOfficeLookup(page) {
-  await page.route('**/api/offices/speedy?*', async (route) => {
+  await page.route('**/api/delivery/speedy/offices?*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

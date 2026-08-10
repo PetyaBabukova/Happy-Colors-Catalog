@@ -4,13 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CartContext } from '@/context/CartContext';
 import { useCheckoutManager } from '@/managers/checkoutManager';
 import { setMockRouter } from '../setup.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 const cartItems = [{ _id: 'product-1', title: 'Lavender Candle', quantity: 2, price: 18 }];
 
@@ -87,8 +81,45 @@ describe('useCheckoutManager', () => {
       result.current.setShippingMethod('econt');
     });
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/offices/econt?city=Sofia'));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/delivery/econt/offices?city=Sofia'));
     await waitFor(() => expect(result.current.econtOffices).toEqual([{ id: 'office-1', address: 'Office 1' }]));
+    expect(result.current.officesLoading).toBe(false);
+  });
+
+  it('fetches Speedy offices through the Express delivery API', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { offices: [{ id: 'speedy-1', address: 'Speedy 1' }] } }));
+    const { Wrapper } = wrapperFactory();
+    const { result } = renderHook(() => useCheckoutManager(), { wrapper: Wrapper });
+
+    await act(async () => {
+      result.current.handleChange(change('city', 'Plovdiv'));
+      result.current.setShippingMethod('speedy');
+    });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/delivery/speedy/offices?city=Plovdiv'));
+    await waitFor(() => expect(result.current.speedyOffices).toEqual([{ id: 'speedy-1', address: 'Speedy 1' }]));
+    expect(result.current.officesLoading).toBe(false);
+  });
+
+  it('keeps office lists empty when the Express delivery API returns an error shape', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      ok: false,
+      body: { message: 'Backend unavailable', offices: [] },
+    }));
+    const { Wrapper } = wrapperFactory();
+    const { result } = renderHook(() => useCheckoutManager(), { wrapper: Wrapper });
+
+    await act(async () => {
+      result.current.handleChange(change('city', 'Sofia'));
+      result.current.setShippingMethod('econt');
+    });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/delivery/econt/offices?city=Sofia'));
+    await waitFor(() => expect(console.warn).toHaveBeenCalledWith('Failed to load offices', {
+      message: 'Backend unavailable',
+      offices: [],
+    }));
+    expect(result.current.econtOffices).toEqual([]);
     expect(result.current.officesLoading).toBe(false);
   });
 

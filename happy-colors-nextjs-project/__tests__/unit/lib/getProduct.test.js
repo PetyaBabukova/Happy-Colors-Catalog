@@ -39,6 +39,7 @@ describe('getProduct', () => {
       cache: 'no-store',
       headers: { Cookie: 'auth_token=test-token' },
     });
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty('next');
   });
 
   it('threads route locale to the backend product endpoint', async () => {

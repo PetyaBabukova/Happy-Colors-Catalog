@@ -6,13 +6,7 @@ import {
   uploadImagesToBucket,
   uploadSignedFile,
 } from '../../../src/managers/uploadManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 function buildFile({ name = 'candle.webp', size = 128, type = 'image/webp' } = {}) {
   return new File(['test-content'], name, { type, lastModified: 1, endings: 'transparent' });

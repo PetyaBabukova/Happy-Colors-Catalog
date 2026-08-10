@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import MessageBox from '@/components/ui/MessageBox';
+import { HOMEPAGE_FEATURED_PRODUCTS_LIMIT } from '@/config/homepageFeaturedProducts';
 import { useAuth } from '@/context/AuthContext';
 import { getProducts, updateHomepageFeaturedProducts } from '@/managers/productsManager';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import styles from './HomepageFeatured.module.css';
-
-const FEATURED_LIMIT = 4;
 
 function getProductImage(product) {
   return normalizeImageUrls(product)[0] || '/logo_64pxH.svg';
@@ -104,8 +103,8 @@ export default function HomepageFeaturedClient() {
       return;
     }
 
-    if (selectedIds.length >= FEATURED_LIMIT) {
-      setError(`Можете да изберете най-много ${FEATURED_LIMIT} продукта.`);
+    if (selectedIds.length >= HOMEPAGE_FEATURED_PRODUCTS_LIMIT) {
+      setError(`Можете да изберете най-много ${HOMEPAGE_FEATURED_PRODUCTS_LIMIT} продукта.`);
       return;
     }
 
@@ -182,7 +181,7 @@ export default function HomepageFeaturedClient() {
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2>Избрани</h2>
-          <span className={styles.counter}>избрани {selectedIds.length} / {FEATURED_LIMIT}</span>
+          <span className={styles.counter}>избрани {selectedIds.length} / {HOMEPAGE_FEATURED_PRODUCTS_LIMIT}</span>
         </div>
 
         {selectedProducts.length > 0 ? (
@@ -256,7 +255,7 @@ export default function HomepageFeaturedClient() {
                     type="button"
                     className={styles.iconButton}
                     onClick={() => toggleProduct(product)}
-                    disabled={saving || isUnavailable || selectedIds.length >= FEATURED_LIMIT}
+                    disabled={saving || isUnavailable || selectedIds.length >= HOMEPAGE_FEATURED_PRODUCTS_LIMIT}
                     aria-label={`Добави ${product.title}`}
                     title="Добави"
                   >

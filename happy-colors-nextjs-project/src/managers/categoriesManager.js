@@ -1,5 +1,45 @@
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
+import { buildApiUrl, getPublicServerFetchOptions } from './requestUtils';
+
+async function fetchVisibleCategoriesResult({ locale } = {}) {
+  try {
+    const res = await fetch(
+      buildApiUrl(baseURL, '/categories/visible', { locale }),
+      getPublicServerFetchOptions({
+        tags: ['categories', 'visible-categories', 'products'],
+        browserNoStore: false,
+      })
+    );
+
+    if (!res.ok) {
+      throw new Error('Failed to load visible categories.');
+    }
+
+    const data = await readResponseJsonSafely(res);
+
+    return {
+      categories: Array.isArray(data) ? data : [],
+      loaded: true,
+    };
+  } catch (err) {
+    console.error(err.message);
+    return {
+      categories: [],
+      loaded: false,
+    };
+  }
+}
+
+export async function getVisibleCategories(options = {}) {
+  const result = await fetchVisibleCategoriesResult(options);
+
+  return result.categories;
+}
+
+export async function getVisibleCategoriesSeed(options = {}) {
+  return fetchVisibleCategoriesResult(options);
+}
 
 export async function onCreateCategorySubmit(
   formValues,

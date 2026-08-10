@@ -7,6 +7,7 @@ import {
   extractObjectNameFromGcsUrl,
   getBucketName,
 } from '../helpers/gcsImageHelper.js';
+import { validateGcsPublicAssetUrl } from '../../shared/gcsCore.js';
 import { projectPublicHomeBanner } from './localization/publicProjection.js';
 
 const ALLOWED_HOME_BANNER_FIELDS = new Set([
@@ -34,10 +35,6 @@ function createError(message, statusCode = 400) {
   return error;
 }
 
-function hasUnsafeScheme(value) {
-  return /^[a-z][a-z0-9+.-]*:/i.test(value) && !value.toLowerCase().startsWith('https:');
-}
-
 export function validateInternalCtaHref(ctaHref) {
   const href = String(ctaHref || '').trim();
 
@@ -57,73 +54,24 @@ export function validateInternalCtaHref(ctaHref) {
   return href;
 }
 
-function hasUnsafePathParts(parts) {
-  try {
-    return parts.some((part) => {
-      const decodedPart = decodeURIComponent(part);
-
-      return (
-        decodedPart === '.' ||
-        decodedPart === '..' ||
-        decodedPart.includes('/') ||
-        decodedPart.includes('\\')
-      );
-    });
-  } catch {
-    return true;
-  }
-}
-
 export function validateHomeBannerImageUrl(imageUrl) {
-  const urlValue = String(imageUrl || '').trim();
+  const validation = validateGcsPublicAssetUrl({
+    assetUrl: imageUrl,
+    bucketName: getBucketName(),
+    label: 'Image',
+    allowCredentials: true,
+    allowSearchHash: true,
+  });
 
-  if (!urlValue) {
-    throw createError('Image URL is required.');
+  if (!validation.ok) {
+    throw createError(validation.message, validation.statusCode || 400);
   }
 
-  if (hasUnsafeScheme(urlValue)) {
-    throw createError('Image URL must be a safe storage URL.');
-  }
-
-  const decodedUrlValue = (() => {
-    try {
-      return decodeURIComponent(urlValue);
-    } catch {
-      return urlValue;
-    }
-  })();
-
-  if (/(^|\/)(\.{1,2})(\/|$)/.test(urlValue) || /(^|\/)(\.{1,2})(\/|$)/.test(decodedUrlValue)) {
-    throw createError('Image URL must point to a valid storage object.');
-  }
-
-  let parsedUrl;
-
-  try {
-    parsedUrl = new URL(urlValue);
-  } catch {
-    throw createError('Image URL is invalid.');
-  }
-
-  if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'storage.googleapis.com') {
-    throw createError('Image URL must be a Google Cloud Storage URL.');
-  }
-
-  const parts = parsedUrl.pathname.split('/').filter(Boolean);
-
-  if (parts.length < 2 || hasUnsafePathParts(parts)) {
-    throw createError('Image URL must point to a valid storage object.');
-  }
-
-  if (!getBucketName()) {
-    throw createError('Storage bucket is not configured.', 500);
-  }
-
-  if (!extractObjectNameFromGcsUrl(urlValue)) {
+  if (!extractObjectNameFromGcsUrl(validation.value)) {
     throw createError('Image URL must point to the configured storage bucket.');
   }
 
-  return urlValue;
+  return validation.value;
 }
 
 export function validateOptionalHomeBannerImageUrl(imageUrl) {

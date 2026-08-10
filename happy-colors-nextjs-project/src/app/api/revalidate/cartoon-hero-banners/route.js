@@ -1,27 +1,17 @@
-import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 
-import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
 import { revalidateLocalizedPath } from '../_lib/localizedPaths';
+import { createRevalidatePostHandler } from '../_lib/revalidateRoute';
 
-export async function POST(request) {
-  try {
-    const auth = requireApiFullAdmin(await requireApiAuth(request));
-
-    if (!auth.ok) {
-      return NextResponse.json({ message: auth.message }, { status: auth.status });
-    }
-
-    revalidateTag('cartoon-hero-banners');
-    revalidateLocalizedPath('/cartoons');
-
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error) {
-    console.error('Error in /api/revalidate/cartoon-hero-banners:', error);
-
-    return NextResponse.json(
-      { message: 'Р“СЂРµС€РєР° РїСЂРё РѕР±РЅРѕРІСЏРІР°РЅРµ РЅР° РєРµС€Р° РЅР° С€Р°СЂР¶ Р±Р°РЅРµСЂРёС‚Рµ.' },
-      { status: 500 }
-    );
-  }
+function revalidateCartoonHeroBannerSurfaces() {
+  revalidateTag('cartoon-hero-banners');
+  revalidateLocalizedPath('/cartoons');
 }
+
+export const POST = createRevalidatePostHandler({
+  routeLabel: '/api/revalidate/cartoon-hero-banners',
+  secretEnvNames: ['CARTOON_HERO_BANNER_REVALIDATE_SECRET', 'REVALIDATE_SECRET'],
+  allowInvalidJson: true,
+  revalidate: revalidateCartoonHeroBannerSurfaces,
+  errorMessage: 'Р вЂњРЎР‚Р ВµРЎв‚¬Р С”Р В° Р С—РЎР‚Р С‘ Р С•Р В±Р Р…Р С•Р Р†РЎРЏР Р†Р В°Р Р…Р Вµ Р Р…Р В° Р С”Р ВµРЎв‚¬Р В° Р Р…Р В° РЎв‚¬Р В°РЎР‚Р В¶ Р В±Р В°Р Р…Р ВµРЎР‚Р С‘РЎвЂљР Вµ.',
+});

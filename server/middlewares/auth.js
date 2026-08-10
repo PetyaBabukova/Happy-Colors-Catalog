@@ -1,17 +1,18 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { AUTH_COOKIE_NAME } from '../../shared/authConstants.js';
+import { getRequiredJwtSecret } from '../../shared/authJwtCore.js';
 import { canArtistManageProducts, isFullAdmin, serializeUser } from '../utils/userRoles.js';
 
-export const AUTH_COOKIE_NAME = 'token';
+export { AUTH_COOKIE_NAME };
+
+const JWT_SECRET_ERROR_MESSAGE = 'JWT_SECRET липсва в environment variables.';
 
 export function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-
-  if (!secret || String(secret).trim() === '') {
-    throw new Error('JWT_SECRET липсва в environment variables.');
-  }
-
-  return secret;
+  return getRequiredJwtSecret({
+    getEnvValue: (name) => process.env[name],
+    errorMessage: JWT_SECRET_ERROR_MESSAGE,
+  });
 }
 
 export function signAuthToken(payload, options) {
@@ -44,7 +45,7 @@ export async function requireAuth(req, res, next) {
     req.user = serializeUser(user);
     next();
   } catch (err) {
-    if (err.message === 'JWT_SECRET липсва в environment variables.') {
+    if (err.message === JWT_SECRET_ERROR_MESSAGE) {
       return res.status(500).json({ message: 'Проблем в конфигурацията на сървъра.' });
     }
 

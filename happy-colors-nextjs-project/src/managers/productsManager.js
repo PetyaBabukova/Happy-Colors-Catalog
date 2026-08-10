@@ -2,19 +2,7 @@
 
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
-
-function buildUrl(path, params = {}) {
-  const searchParams = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      searchParams.set(key, value);
-    }
-  }
-
-  const query = searchParams.toString();
-  return `${baseURL}${path}${query ? `?${query}` : ''}`;
-}
+import { buildApiUrl, getPublicServerFetchOptions } from './requestUtils';
 
 export async function onCreateProductSubmit(
   formValues,
@@ -168,9 +156,10 @@ export async function getProducts(categoryName, { locale } = {}) {
       params.category = categoryName;
     }
 
-    const res = await fetch(buildUrl('/products', params), {
-      cache: 'no-store',
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/products', params),
+      getPublicServerFetchOptions({ tags: ['products'] })
+    );
 
     if (!res.ok) {
       throw new Error('Неуспешно зареждане на продуктите');
@@ -191,12 +180,10 @@ export async function getProducts(categoryName, { locale } = {}) {
 
 export async function getHomepageFeaturedProducts({ locale } = {}) {
   try {
-    const res = await fetch(buildUrl('/products/homepage-featured', { locale }), {
-      next: {
-        revalidate: 60,
-        tags: ['products', 'homepage-featured-products'],
-      },
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/products/homepage-featured', { locale }),
+      getPublicServerFetchOptions({ tags: ['products', 'homepage-featured-products'] })
+    );
 
     if (!res.ok) {
       throw new Error('Неуспешно зареждане на продуктите за началната страница');
@@ -217,7 +204,7 @@ export async function getHomepageFeaturedProducts({ locale } = {}) {
 
 export async function getCartoonGalleryProducts({ locale } = {}) {
   try {
-    const res = await fetch(buildUrl('/products/cartoon-gallery', { locale }), {
+    const res = await fetch(buildApiUrl(baseURL, '/products/cartoon-gallery', { locale }), {
       cache: 'no-store',
     });
 
