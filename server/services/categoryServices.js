@@ -160,25 +160,14 @@ export async function getAllCategories({ locale = 'bg' } = {}) {
 
 // 👉 Връща само категориите, които имат поне 1 продукт (за хедър/shop)
 export async function getVisibleCategories({ locale = 'bg' } = {}) {
-  const categories = await Category.find().lean();
+  const visibleCategoryIds = await Product.distinct('category', {
+    ...buildPublicProductFilter(),
+    // Only catalog products make a category visible in catalog navigation.
+    isInCatalog: true,
+  });
+  const categories = await Category.find({ _id: { $in: visibleCategoryIds } }).lean();
 
-  const visibleCategories = [];
-
-  for (const category of categories) {
-    const productCount = await Product.countDocuments({
-      ...buildPublicProductFilter(),
-      category: category._id,
-      // Само каталожни продукти правят категорията видима в нав,
-      // за да е консистентно с каталога (getAllProducts). Категории само
-      // с шарж продукти (isInCatalog: false) не се показват в Каталог нав.
-      isInCatalog: true,
-    });
-    if (productCount > 0) {
-      visibleCategories.push(category);
-    }
-  }
-
-  return visibleCategories.map((category) => projectPublicCategory(category, locale));
+  return categories.map((category) => projectPublicCategory(category, locale));
 }
 
 export async function deleteCategory(categoryId) {

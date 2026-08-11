@@ -468,6 +468,37 @@ describe('categories integration', () => {
     expect(res.body.map((category) => category.name)).toEqual(['Catalog']);
   });
 
+  it('loads visible categories with a single product category lookup', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const visible = await createCategory({ name: 'Visible Lookup', slug: 'visible-lookup' });
+    const draftOnly = await createCategory({ name: 'Draft Only', slug: 'draft-only' });
+    const cartoonOnly = await createCategory({ name: 'Cartoon Only', slug: 'cartoon-only' });
+    await createProduct({ owner, category: visible });
+    await createProduct({ owner, category: draftOnly, publicationStatus: 'draft' });
+    await createProduct({
+      owner,
+      category: cartoonOnly,
+      isInCatalog: false,
+      isCartoonGallery: true,
+    });
+    const distinctSpy = vi.spyOn(Product, 'distinct');
+    const countDocumentsSpy = vi.spyOn(Product, 'countDocuments');
+
+    const res = await request(app).get('/categories/visible').expect(200);
+
+    expect(res.body.map((category) => category.name)).toEqual(['Visible Lookup']);
+    expect(distinctSpy).toHaveBeenCalledTimes(1);
+    expect(distinctSpy).toHaveBeenCalledWith(
+      'category',
+      expect.objectContaining({
+        isInCatalog: true,
+        $or: expect.any(Array),
+      })
+    );
+    expect(countDocumentsSpy).not.toHaveBeenCalled();
+  });
+
   it('reassigns products when deleting a category in use', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();

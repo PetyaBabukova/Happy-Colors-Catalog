@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 
 const PRODUCTS_COLLECTION = 'products';
 const BLOG_ARTICLES_COLLECTION = 'blogarticles';
+const HOME_BANNERS_COLLECTION = 'homebanners';
 
 function isAllowedObjectName(objectName) {
   if (!objectName || typeof objectName !== 'string') {
@@ -26,6 +27,9 @@ function isAllowedObjectName(objectName) {
   }
 
   return (
+    objectName.startsWith('home-banners/images/') ||
+    objectName.startsWith('home-banners/mobile-images/') ||
+    objectName.startsWith('products/images/') ||
     objectName.startsWith('products/videos/') ||
     objectName.startsWith('products/posters/') ||
     objectName.startsWith('blog/articles/hero/') ||
@@ -38,13 +42,17 @@ async function isAttachedToPersistedContent(publicUrl) {
 
   // Keep these raw collection lookups local to avoid coupling this Next route
   // to the Express-side Mongoose model bundle.
-  const [attachedProduct, attachedBlogArticle] = await Promise.all([
+  const [attachedProduct, attachedBlogArticle, attachedHomeBanner] = await Promise.all([
     mongoose.connection.db.collection(PRODUCTS_COLLECTION).findOne({
       $or: [
         { imageUrl: publicUrl },
         { imageUrls: publicUrl },
         { 'videos.url': publicUrl },
         { 'videos.posterUrl': publicUrl },
+        { 'draftContent.imageUrl': publicUrl },
+        { 'draftContent.imageUrls': publicUrl },
+        { 'draftContent.videos.url': publicUrl },
+        { 'draftContent.videos.posterUrl': publicUrl },
       ],
     }, {
       projection: { _id: 1 },
@@ -57,9 +65,17 @@ async function isAttachedToPersistedContent(publicUrl) {
     }, {
       projection: { _id: 1 },
     }),
+    mongoose.connection.db.collection(HOME_BANNERS_COLLECTION).findOne({
+      $or: [
+        { imageUrl: publicUrl },
+        { mobileImageUrl: publicUrl },
+      ],
+    }, {
+      projection: { _id: 1 },
+    }),
   ]);
 
-  return Boolean(attachedProduct || attachedBlogArticle);
+  return Boolean(attachedProduct || attachedBlogArticle || attachedHomeBanner);
 }
 
 export async function POST(request) {
@@ -100,7 +116,7 @@ export async function POST(request) {
       );
     }
 
-    const uploadAuth = objectName.startsWith('blog/')
+    const uploadAuth = objectName.startsWith('blog/') || objectName.startsWith('home-banners/')
       ? requireApiFullAdmin(auth)
       : requireApiActiveArtistOrFullAdmin(auth);
 

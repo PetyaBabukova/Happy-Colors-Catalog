@@ -9,8 +9,14 @@ const getStorage = vi.fn(() => ({ bucket }));
 const verifyUploadDeleteToken = vi.fn(() => ({ ok: true }));
 const productFindOne = vi.fn();
 const blogArticleFindOne = vi.fn();
+const homeBannerFindOne = vi.fn();
 const collection = vi.fn((name) => ({
-  findOne: name === 'blogarticles' ? blogArticleFindOne : productFindOne,
+  findOne:
+    name === 'blogarticles'
+      ? blogArticleFindOne
+      : name === 'homebanners'
+        ? homeBannerFindOne
+        : productFindOne,
 }));
 const connectToMongo = vi.fn(() =>
   Promise.resolve({
@@ -36,6 +42,7 @@ describe('/api/uploads/delete', () => {
     collection.mockClear();
     productFindOne.mockResolvedValue(null);
     blogArticleFindOne.mockResolvedValue(null);
+    homeBannerFindOne.mockResolvedValue(null);
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth: vi.fn(() => authResult),
@@ -105,6 +112,55 @@ describe('/api/uploads/delete', () => {
     expect(file).toHaveBeenCalledWith('blog/articles/thumbnails/article.webp');
   });
 
+  it('deletes unattached product image uploads with a valid delete token', async () => {
+    authResult = { ok: true, user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' } };
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest({
+        objectName: 'products/images/product.webp',
+        deleteToken: 'valid-token',
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(verifyUploadDeleteToken).toHaveBeenCalledWith({
+      token: 'valid-token',
+      objectName: 'products/images/product.webp',
+      userId: 'artist-1',
+    });
+    expect(file).toHaveBeenCalledWith('products/images/product.webp');
+  });
+
+  it('deletes unattached home banner uploads with a valid full admin delete token', async () => {
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest({
+        objectName: 'home-banners/images/banner.webp',
+        deleteToken: 'valid-token',
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(file).toHaveBeenCalledWith('home-banners/images/banner.webp');
+  });
+
+  it('requires full admin access for home banner upload rollback deletes', async () => {
+    authResult = { ok: true, user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' } };
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest({
+        objectName: 'home-banners/images/banner.webp',
+        deleteToken: 'valid-token',
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(deleteFile).not.toHaveBeenCalled();
+  });
+
   it('rejects unauthorized requests', async () => {
     authResult = { ok: false, status: 401, message: 'Missing authentication token.' };
     const { POST } = await loadRoute();
@@ -172,6 +228,16 @@ describe('/api/uploads/delete', () => {
           deleteToken: 'valid-token',
         })
       )
+    ).resolves.toMatchObject({ status: 409 });
+    expect(deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects assets already attached to home banners', async () => {
+    const { POST } = await loadRoute();
+
+    homeBannerFindOne.mockResolvedValueOnce({ _id: 'banner-1' });
+    await expect(
+      POST(createJsonRequest({ objectName: 'home-banners/mobile-images/banner.webp', deleteToken: 'valid-token' }))
     ).resolves.toMatchObject({ status: 409 });
     expect(deleteFile).not.toHaveBeenCalled();
   });

@@ -136,6 +136,24 @@ describe('/api/uploads/proxy', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('uploads product images to the product image storage folder for active artists', async () => {
+    authResult = { ok: true, user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' } };
+    const { POST } = await loadRoute();
+
+    const response = await POST(createFormRequest({ kind: 'product-image' }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      publicUrl: 'https://storage.googleapis.com/test-bucket/products/images/banner.webp',
+      objectName: 'products/images/banner.webp',
+      deleteToken: 'delete-token',
+      uploadMode: 'proxy',
+    });
+    expect(buildStorageObjectName).toHaveBeenCalledWith('products/images', 'banner.webp', 'image/webp');
+    expect(fileRef).toHaveBeenCalledWith('products/images/banner.webp');
+  });
+
   it('rejects the old generic image upload kind', async () => {
     const { POST } = await loadRoute();
 

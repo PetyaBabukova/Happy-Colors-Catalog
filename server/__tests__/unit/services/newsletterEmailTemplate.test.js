@@ -6,7 +6,7 @@ const baseInput = {
   title: 'Нова колекция',
   contentHtml: '<p>Ръчно изработени подаръци.</p>',
   contentText: 'Ръчно изработени подаръци.',
-  imageUrl: 'https://happycolors.eu/og/happy-colors-og.png',
+  imageUrl: 'https://happycolors.eu/lion_banner.webp',
   ctaUrl: 'https://happycolors.eu/products',
   unsubscribeUrl: 'https://happycolors.eu/bg/newsletter/unsubscribe?token=token-1',
   listUnsubscribeUrl: 'https://happycolors.eu/api/newsletter/unsubscribe/one-click?token=token-1',
@@ -21,7 +21,7 @@ describe('newsletterEmailTemplate', () => {
     expect(result.html).toContain('<meta charset="UTF-8">');
     expect(result.html).toContain('Нова колекция');
     expect(result.html).toContain('<p>Ръчно изработени подаръци.</p>');
-    expect(result.html).toContain('https://happycolors.eu/og/happy-colors-og.png');
+    expect(result.html).toContain('https://happycolors.eu/lion_banner.webp');
     expect(result.html).toContain('https://happycolors.eu/products');
     expect(result.html).toContain('padding:24px 28px;');
     expect(result.html).toContain('<html lang="bg">');

@@ -8,6 +8,8 @@ import {
   getBucketName,
 } from '../helpers/gcsImageHelper.js';
 import { validateGcsPublicAssetUrl } from '../../shared/gcsCore.js';
+import { revalidateCartoonHeroBannerSurfacesSafely } from '../helpers/revalidateCartoonHeroBanners.js';
+import { revalidateHomeBannerSurfacesSafely } from '../helpers/revalidateHomeBanners.js';
 import { projectPublicHomeBanner } from './localization/publicProjection.js';
 
 const ALLOWED_HOME_BANNER_FIELDS = new Set([
@@ -365,6 +367,30 @@ export async function getActiveHomeBanners({ placement = 'home', locale = 'bg' }
     .filter(Boolean);
 }
 
+function normalizeHomeBannerPlacementForRevalidation(placement) {
+  try {
+    return normalizeHomeBannerPlacement(placement, { allowLegacyBlank: true });
+  } catch {
+    return 'home';
+  }
+}
+
+async function revalidateHomeBannerPlacementsSafely(placements = []) {
+  const normalizedPlacements = new Set(
+    placements
+      .filter((placement) => typeof placement !== 'undefined')
+      .map(normalizeHomeBannerPlacementForRevalidation)
+  );
+
+  if (normalizedPlacements.has('home')) {
+    await revalidateHomeBannerSurfacesSafely();
+  }
+
+  if (normalizedPlacements.has('cartoons')) {
+    await revalidateCartoonHeroBannerSurfacesSafely();
+  }
+}
+
 export async function getHomeBannerById(bannerId) {
   assertValidBannerId(bannerId);
 
@@ -388,6 +414,8 @@ export async function createHomeBanner(data, userId) {
   });
   const savedBanner = await banner.save();
 
+  await revalidateHomeBannerPlacementsSafely([savedBanner.placement]);
+
   return normalizeHomeBannerResponse(savedBanner.toObject());
 }
 
@@ -404,6 +432,7 @@ export async function editHomeBanner(bannerId, data, userId) {
     throw createError('Home banner was not found.', 404);
   }
 
+  const previousPlacement = normalizeHomeBannerPlacementForRevalidation(banner.placement);
   const previousUrls = new Set([banner.imageUrl, banner.mobileImageUrl].filter(Boolean));
   const nextData = normalizeHomeBannerFields(data, {
     currentBanner: banner,
@@ -428,6 +457,8 @@ export async function editHomeBanner(bannerId, data, userId) {
     await deleteAssetIfUnreferenced(assetUrl, { excludeBannerId: banner._id });
   }
 
+  await revalidateHomeBannerPlacementsSafely([previousPlacement, banner.placement]);
+
   return normalizeHomeBannerResponse(banner.toObject());
 }
 
@@ -444,6 +475,7 @@ export async function deleteHomeBanner(bannerId, userId) {
     throw createError('Home banner was not found.', 404);
   }
 
+  const previousPlacement = normalizeHomeBannerPlacementForRevalidation(banner.placement);
   const deletionCandidates = [...new Set([banner.imageUrl, banner.mobileImageUrl].filter(Boolean))];
   const deletionFailures = [];
 
@@ -468,6 +500,7 @@ export async function deleteHomeBanner(bannerId, userId) {
   }
 
   await HomeBanner.findByIdAndDelete(bannerId);
+  await revalidateHomeBannerPlacementsSafely([previousPlacement]);
 
   return { message: 'Home banner was deleted successfully.' };
 }

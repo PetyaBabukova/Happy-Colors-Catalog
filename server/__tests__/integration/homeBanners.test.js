@@ -108,7 +108,7 @@ describe('home banners integration', () => {
     expect(bgRes.body[0]).not.toHaveProperty('sourceRevision');
   });
 
-  it('projects approved image-only cartoon banners for English public requests', async () => {
+  it('projects image-only cartoon banners for English public requests without requiring translations', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();
     const translated = await createHomeBanner({
@@ -130,7 +130,7 @@ describe('home banners integration', () => {
         },
       },
     });
-    await createHomeBanner({
+    const untranslated = await createHomeBanner({
       owner,
       placement: 'cartoons',
       title: '',
@@ -155,9 +155,20 @@ describe('home banners integration', () => {
         contentLocale: 'en',
         translationPending: false,
       }),
+      expect.objectContaining({
+        _id: String(untranslated._id),
+        placement: 'cartoons',
+        title: '',
+        description: '',
+        ctaLabel: '',
+        contentLocale: 'en',
+        translationPending: false,
+      }),
     ]);
     expect(res.body[0]).not.toHaveProperty('translations');
     expect(res.body[0]).not.toHaveProperty('sourceRevision');
+    expect(res.body[1]).not.toHaveProperty('translations');
+    expect(res.body[1]).not.toHaveProperty('sourceRevision');
   });
 
   it('bumps home banner sourceRevision when source copy is edited', async () => {

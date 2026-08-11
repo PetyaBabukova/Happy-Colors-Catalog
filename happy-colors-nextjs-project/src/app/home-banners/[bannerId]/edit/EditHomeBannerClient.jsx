@@ -9,6 +9,9 @@ import { editHomeBanner, getHomeBannerById } from '@/managers/homeBannersManager
 export default function EditHomeBannerClient({ params }) {
   const { bannerId } = use(params);
   const { user, loading: authLoading } = useAuth();
+  const translationHref = user?.role === 'full_admin'
+    ? `/translations?entityType=homeBanner&entityId=${encodeURIComponent(bannerId)}`
+    : '';
   const [banner, setBanner] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,6 +67,7 @@ export default function EditHomeBannerClient({ params }) {
     <HomeBannerForm
       initialValues={banner}
       onSubmit={(values) => editHomeBanner(bannerId, values, { previousPlacement: banner?.placement })}
+      translationHref={translationHref}
       legendText="Редактиране на хоум банер"
       successMessage="Хоум банерът беше редактиран успешно."
     />

@@ -262,6 +262,27 @@ describe('HomeBannerForm', () => {
     expect(uploadSignedFile).not.toHaveBeenCalled();
   });
 
+  it('links to the banner translation manager when a translation href is provided', () => {
+    render(
+      <HomeBannerForm
+        initialValues={{
+          title: 'РЎС‚Р°СЂ Р±Р°РЅРµСЂ',
+          ctaLabel: 'Р’РёР¶',
+          ctaHref: '/products',
+          imageUrl: 'https://storage.googleapis.com/test-bucket/home-banners/images/current.webp',
+        }}
+        onSubmit={vi.fn()}
+        legendText="Р РµРґР°РєС‚РёСЂР°РЅРµ"
+        translationHref="/translations?entityType=homeBanner&entityId=banner-1"
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'Управлявай EN превода' })).toHaveAttribute(
+      'href',
+      '/translations?entityType=homeBanner&entityId=banner-1'
+    );
+  });
+
   it('removes an existing mobile image and submits an explicit clear value', async () => {
     const onSubmit = vi.fn().mockResolvedValue({});
 

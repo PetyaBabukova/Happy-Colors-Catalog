@@ -137,11 +137,8 @@ describe('app context providers', () => {
     await waitFor(() => expect(screen.getByTestId('auth-user')).toHaveTextContent('none'));
   });
 
-  it('ProductProvider uses server-rendered visible categories and reloads them on demand', async () => {
-    fetch
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'Candles' }] }))
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-3', name: 'Decor' }] }))
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-4', name: 'Visible Decor' }] }));
+  it('ProductProvider keeps public pages on the server-rendered visible category seed', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-4', name: 'Visible Decor' }] }));
 
     render(
       <ProductProvider initialVisibleCategories={[{ _id: 'cat-2', name: 'Visible' }]}>
@@ -150,26 +147,108 @@ describe('app context providers', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('product-loading')).toHaveTextContent('false'));
-    expect(screen.getByTestId('categories')).toHaveTextContent('Candles');
+    expect(screen.getByTestId('categories')).toHaveTextContent('');
     expect(screen.getByTestId('visible-categories')).toHaveTextContent('Visible');
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls.some(([url]) => String(url).includes('/categories/visible'))).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText('reload'));
 
-    await waitFor(() => expect(screen.getByTestId('categories')).toHaveTextContent('Decor'));
-    expect(screen.getByTestId('visible-categories')).toHaveTextContent('Visible Decor');
-    expect(fetch.mock.calls.some(([url]) => String(url).includes('/categories/visible'))).toBe(true);
+    await waitFor(() => expect(screen.getByTestId('visible-categories')).toHaveTextContent('Visible Decor'));
+    expect(screen.getByTestId('categories')).toHaveTextContent('');
+    expect(fetch).toHaveBeenCalledWith('/api/categories/visible?locale=bg');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('ProductProvider loads full categories only on product form routes', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    setMockNavigation({ pathname: '/en/products/prod-1/edit' });
+    fetch.mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'Form Category' }] }));
+
+    render(
+      <ProductProvider
+        initialVisibleCategories={[{ _id: 'cat-2', name: 'Visible' }]}
+        initialVisibleCategoriesLocale="en"
+      >
+        <ProductHarness />
+      </ProductProvider>,
+      { locale: 'en' }
+    );
+
+    await waitFor(() => expect(screen.getByTestId('categories')).toHaveTextContent('Form Category'));
+    expect(screen.getByTestId('visible-categories')).toHaveTextContent('Visible');
+    expect(fetch).toHaveBeenCalledWith('/api/categories?locale=en');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/categories/visible'))).toBe(false);
+  });
+
+  it('ProductProvider reloads full and visible categories on product form routes', async () => {
+    setMockNavigation({ pathname: '/products/create' });
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'Initial Form Category' }] }))
+      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-2', name: 'Reloaded Form Category' }] }))
+      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-visible', name: 'Reloaded Visible' }] }));
+
+    render(
+      <ProductProvider initialVisibleCategories={[{ _id: 'cat-seed', name: 'Seed Visible' }]}>
+        <ProductHarness />
+      </ProductProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('categories')).toHaveTextContent('Initial Form Category'));
+    expect(screen.getByTestId('visible-categories')).toHaveTextContent('Seed Visible');
+    expect(fetch).toHaveBeenCalledWith('/api/categories?locale=bg');
+
+    fireEvent.click(screen.getByText('reload'));
+
+    await waitFor(() => expect(screen.getByTestId('categories')).toHaveTextContent('Reloaded Form Category'));
+    expect(screen.getByTestId('visible-categories')).toHaveTextContent('Reloaded Visible');
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/categories?locale=bg');
+    expect(fetch).toHaveBeenNthCalledWith(3, '/api/categories/visible?locale=bg');
+  });
+
+  it('ProductProvider loads and clears full categories when route requirements change', async () => {
+    setMockNavigation({ pathname: '/products' });
+    fetch.mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'Form Category' }] }));
+
+    const { rerender } = render(
+      <ProductProvider initialVisibleCategories={[{ _id: 'cat-2', name: 'Visible' }]}>
+        <ProductHarness />
+      </ProductProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('product-loading')).toHaveTextContent('false'));
+    expect(screen.getByTestId('categories')).toHaveTextContent('');
+    expect(fetch).not.toHaveBeenCalled();
+
+    setMockNavigation({ pathname: '/products/create' });
+    rerender(
+      <ProductProvider initialVisibleCategories={[{ _id: 'cat-2', name: 'Visible' }]}>
+        <ProductHarness />
+      </ProductProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('categories')).toHaveTextContent('Form Category'));
+    expect(fetch).toHaveBeenCalledWith('/api/categories?locale=bg');
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    setMockNavigation({ pathname: '/products/prod-1/delete' });
+    rerender(
+      <ProductProvider initialVisibleCategories={[{ _id: 'cat-2', name: 'Visible' }]}>
+        <ProductHarness />
+      </ProductProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('categories')).toHaveTextContent(''));
+    expect(screen.getByTestId('visible-categories')).toHaveTextContent('Visible');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('ProductProvider refreshes visible categories when locale changes beyond the server seed', async () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
     setMockNavigation({ pathname: '/bg/products' });
-    fetch
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'BG Form Category' }] }))
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-2', name: 'EN Form Category' }] }))
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-visible-en', name: 'English Visible' }] }));
+    fetch.mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-visible-en', name: 'English Visible' }] }));
 
     const { rerender } = render(
       <ProductProvider
@@ -181,7 +260,7 @@ describe('app context providers', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('visible-categories')).toHaveTextContent('BG Visible'));
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(fetch).not.toHaveBeenCalled();
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/categories/visible'))).toBe(false);
 
     setMockNavigation({ pathname: '/en/products' });
@@ -207,13 +286,11 @@ describe('app context providers', () => {
     );
 
     expect(screen.getByTestId('visible-categories')).toHaveTextContent('English Visible');
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('ProductProvider recovers visible categories when the server seed failed', async () => {
-    fetch
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-1', name: 'Form Category' }] }))
-      .mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-visible', name: 'Recovered Visible' }] }));
+    fetch.mockResolvedValueOnce(jsonResponse({ body: [{ _id: 'cat-visible', name: 'Recovered Visible' }] }));
 
     render(
       <ProductProvider

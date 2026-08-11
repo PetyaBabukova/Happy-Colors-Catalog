@@ -8,8 +8,9 @@ function banner({
   source = {},
   translation = {},
   sourceRevision = 1,
+  includeTranslation = true,
 } = {}) {
-  return {
+  const entity = {
     _id: 'banner-1',
     placement: 'cartoons',
     title: '',
@@ -18,7 +19,10 @@ function banner({
     imageUrl: 'https://example.com/banner.webp',
     sourceRevision,
     ...source,
-    translations: {
+  };
+
+  if (includeTranslation) {
+    entity.translations = {
       en: {
         title: '',
         description: '',
@@ -27,11 +31,39 @@ function banner({
         method: 'manual',
         ...translation,
       },
-    },
-  };
+    };
+  }
+
+  return entity;
 }
 
 describe('home banner public projection', () => {
+  it('accepts an image-only banner without an English translation record', () => {
+    const entity = banner({ includeTranslation: false });
+
+    expect(hasValidHomeBannerTranslation(entity)).toBe(true);
+    expect(projectPublicHomeBanner(entity, 'en')).toMatchObject({
+      title: '',
+      description: '',
+      ctaLabel: '',
+      contentLocale: 'en',
+      translationPending: false,
+    });
+  });
+
+  it('accepts an image-only banner even when a stale English translation record exists', () => {
+    const entity = banner({
+      sourceRevision: 2,
+      translation: { sourceRevision: 1 },
+    });
+
+    expect(hasValidHomeBannerTranslation(entity)).toBe(true);
+    expect(projectPublicHomeBanner(entity, 'en')).toMatchObject({
+      contentLocale: 'en',
+      translationPending: false,
+    });
+  });
+
   it('accepts a fresh empty translation for an image-only banner', () => {
     const entity = banner();
 
@@ -51,6 +83,16 @@ describe('home banner public projection', () => {
     ['ctaLabel', { ctaLabel: 'Bulgarian CTA' }],
   ])('requires English %s when the Bulgarian source field has text', (fieldName, source) => {
     const entity = banner({ source });
+
+    expect(hasValidHomeBannerTranslation(entity)).toBe(false);
+    expect(projectPublicHomeBanner(entity, 'en')).toBeNull();
+  });
+
+  it('rejects a text banner without an English translation record', () => {
+    const entity = banner({
+      source: { title: 'Bulgarian title' },
+      includeTranslation: false,
+    });
 
     expect(hasValidHomeBannerTranslation(entity)).toBe(false);
     expect(projectPublicHomeBanner(entity, 'en')).toBeNull();

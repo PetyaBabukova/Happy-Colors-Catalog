@@ -42,6 +42,7 @@ export default function DeleteProductClient({ params }) {
 
       triggerCategoriesReload();
       router.push('/products');
+      router.refresh();
     } catch (err) {
       setError(err.message);
     }

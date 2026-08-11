@@ -62,6 +62,7 @@ export async function onCreateProductSubmit(
         ? `/products/${result._id}`
         : `/products/${result._id}?created=review-pending`
     );
+    return result;
   } catch (err) {
     setSuccess(false);
     setError(err.message || 'Възникна грешка при създаване на продукта.');
@@ -71,6 +72,8 @@ export async function onCreateProductSubmit(
     } else {
       setInvalidFields([]);
     }
+
+    return null;
   }
 }
 
@@ -136,6 +139,7 @@ export async function onEditProductSubmit(
         : `/products/${productId}`
     );
     router.refresh();
+    return result;
   } catch (err) {
     setSuccess(false);
     setError(err.message || 'Възникна грешка при редакция на продукта.');
@@ -145,6 +149,8 @@ export async function onEditProductSubmit(
     } else {
       setInvalidFields([]);
     }
+
+    return null;
   }
 }
 
