@@ -90,7 +90,7 @@ export function createMemoryRateLimiter({
 
 async function authenticateRevalidateRequest(
   request,
-  { secretEnvNames, rateLimiter, rateLimitMessage }
+  { secretEnvNames, rateLimiter, rateLimitMessage, authorizeAuthenticatedRequest }
 ) {
   const hasInternalSecret = hasValidRevalidateSecret(request, secretEnvNames);
 
@@ -98,7 +98,8 @@ async function authenticateRevalidateRequest(
     return { ok: true, hasInternalSecret, auth: { ok: true, user: null } };
   }
 
-  const auth = requireApiFullAdmin(await requireApiAuth(request));
+  const authorize = authorizeAuthenticatedRequest || requireApiFullAdmin;
+  const auth = authorize(await requireApiAuth(request));
 
   if (!auth.ok) {
     return { ok: false, response: NextResponse.json({ message: auth.message }, { status: auth.status }) };
@@ -132,6 +133,7 @@ export function createRevalidatePostHandler({
   validatePayload = () => ({ ok: true, value: {} }),
   rateLimiter = null,
   rateLimitMessage = 'Too many revalidation requests. Please try again later.',
+  authorizeAuthenticatedRequest = requireApiFullAdmin,
   revalidate,
   errorMessage,
 } = {}) {
@@ -141,6 +143,7 @@ export function createRevalidatePostHandler({
         secretEnvNames,
         rateLimiter,
         rateLimitMessage,
+        authorizeAuthenticatedRequest,
       });
 
       if (!authResult.ok) {

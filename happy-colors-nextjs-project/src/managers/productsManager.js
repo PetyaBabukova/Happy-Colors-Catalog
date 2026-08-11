@@ -4,6 +4,44 @@ import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
 import { buildApiUrl, getPublicServerFetchOptions } from './requestUtils';
 
+export async function revalidatePublicProductSurfaces(productId) {
+  if (typeof window === 'undefined') {
+    return { skipped: true };
+  }
+
+  try {
+    const payload = productId ? { productId: String(productId) } : {};
+    const res = await fetch('/api/revalidate/products', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      return { ok: false, status: res.status };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error('Failed to revalidate public product surfaces:', error);
+    return { ok: false, error: true };
+  }
+}
+
+function publicHref(path, options = {}) {
+  return typeof options.publicHref === 'function' ? options.publicHref(path) : path;
+}
+
+export function canRequestPublicProductRevalidation(user) {
+  return (
+    user?.role === 'full_admin' ||
+    (user?.role === 'artist' && user?.artistStatus !== 'suspended')
+  );
+}
+
 export async function onCreateProductSubmit(
   formValues,
   setSuccess,
@@ -11,7 +49,8 @@ export async function onCreateProductSubmit(
   setInvalidFields,
   user,
   router,
-  triggerCategoriesReload
+  triggerCategoriesReload,
+  options = {}
 ) {
   try {
     const normalizedImageUrls = Array.isArray(formValues.imageUrls)
@@ -57,11 +96,15 @@ export async function onCreateProductSubmit(
     setInvalidFields([]);
 
     triggerCategoriesReload();
+    if (result.publicationStatus === 'published' && canRequestPublicProductRevalidation(user)) {
+      await revalidatePublicProductSurfaces(result._id);
+    }
     router.push(
       result.publicationStatus === 'published'
-        ? `/products/${result._id}`
-        : `/products/${result._id}?created=review-pending`
+        ? publicHref(`/products/${result._id}`, options)
+        : publicHref(`/products/${result._id}?created=review-pending`, options)
     );
+    router.refresh?.();
     return result;
   } catch (err) {
     setSuccess(false);
@@ -125,6 +168,10 @@ export async function onEditProductSubmit(
     setError('');
     setInvalidFields([]);
 
+    if (canRequestPublicProductRevalidation(user)) {
+      await revalidatePublicProductSurfaces(productId);
+    }
+
     if (
       result?.englishTranslationDecision &&
       typeof options.onTranslationDecision === 'function'
@@ -135,8 +182,8 @@ export async function onEditProductSubmit(
 
     router.push(
       result?.reviewStatus === 'pending_review' || result?.publicationStatus === 'pending_review'
-        ? `/products/${productId}?updated=review-pending`
-        : `/products/${productId}`
+        ? publicHref(`/products/${productId}?updated=review-pending`, options)
+        : publicHref(`/products/${productId}`, options)
     );
     router.refresh();
     return result;

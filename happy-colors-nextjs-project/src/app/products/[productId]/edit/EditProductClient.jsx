@@ -6,14 +6,20 @@ import { useAuth } from '@/context/AuthContext';
 import ProductForm from '@/components/products/ProductForm';
 import MessageBox from '@/components/ui/MessageBox';
 import TranslationDecisionModal from '@/components/translations/TranslationDecisionModal';
-import { onEditProductSubmit } from '@/managers/productsManager';
+import {
+  canRequestPublicProductRevalidation,
+  onEditProductSubmit,
+  revalidatePublicProductSurfaces,
+} from '@/managers/productsManager';
 import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import { checkProductAccess } from '@/utils/checkProductAccess';
 
 export default function EditProductClient({ params }) {
   const { productId } = typeof params?.then === 'function' ? use(params) : params;
   const { user } = useAuth();
   const router = useRouter();
+  const { publicHref } = useLocaleNavigation();
 
   const [product, setProduct] = useState(null);
   const [unauthorized, setUnauthorized] = useState(false);
@@ -41,7 +47,7 @@ export default function EditProductClient({ params }) {
   }, [productId, user]);
 
   const navigateToProduct = () => {
-    router.push(`/products/${productId}`);
+    router.push(publicHref(`/products/${productId}`));
     router.refresh();
   };
 
@@ -62,6 +68,9 @@ export default function EditProductClient({ params }) {
         expectedSourceRevision: translationDecision.sourceRevision,
         expectedTranslationRevision: translationDecision.translationRevision,
       });
+      if (canRequestPublicProductRevalidation(user)) {
+        await revalidatePublicProductSurfaces(productId);
+      }
       setTranslationDecision(null);
       navigateToProduct();
     } catch (decisionError) {
@@ -113,6 +122,7 @@ export default function EditProductClient({ params }) {
             router,
             productId,
             {
+              publicHref,
               onTranslationDecision: (decision) => {
                 setTranslationDecisionError('');
                 setTranslationDecision(decision);

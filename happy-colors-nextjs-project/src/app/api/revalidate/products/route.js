@@ -1,7 +1,16 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 
+import { requireApiActiveArtistOrFullAdmin } from '../../_lib/auth';
 import { revalidateLocalizedPath } from '../_lib/localizedPaths';
-import { createRevalidatePostHandler, isValidObjectId } from '../_lib/revalidateRoute';
+import {
+  createMemoryRateLimiter,
+  createRevalidatePostHandler,
+  isValidObjectId,
+} from '../_lib/revalidateRoute';
+
+const productRevalidationRateLimiter = createMemoryRateLimiter({
+  keyPrefix: 'product-revalidation',
+});
 
 function validatePayload(body) {
   const hasProductId = Object.prototype.hasOwnProperty.call(body || {}, 'productId');
@@ -40,6 +49,8 @@ export const POST = createRevalidatePostHandler({
   secretEnvNames: ['PRODUCT_REVALIDATE_SECRET', 'REVALIDATE_SECRET'],
   allowInvalidJson: true,
   validatePayload,
+  authorizeAuthenticatedRequest: requireApiActiveArtistOrFullAdmin,
+  rateLimiter: productRevalidationRateLimiter,
   revalidate: revalidateProductSurfaces,
-  errorMessage: 'Р“СЂРµС€РєР° РїСЂРё РѕР±РЅРѕРІСЏРІР°РЅРµ РЅР° РєРµС€Р° РЅР° РїСЂРѕРґСѓРєС‚РёС‚Рµ.',
+  errorMessage: 'Failed to revalidate product cache.',
 });

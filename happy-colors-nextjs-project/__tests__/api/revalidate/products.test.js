@@ -4,6 +4,7 @@ import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpe
 const revalidatePath = vi.fn();
 const revalidateTag = vi.fn();
 const requireApiAuth = vi.fn();
+const requireApiActiveArtistOrFullAdmin = vi.fn();
 let authResult;
 
 async function loadRoute() {
@@ -21,9 +22,17 @@ describe('/api/revalidate/products', () => {
     vi.clearAllMocks();
     authResult = { ok: true, user: { _id: 'owner-1', role: 'full_admin' } };
     requireApiAuth.mockImplementation(() => authResult);
+    requireApiActiveArtistOrFullAdmin.mockImplementation((auth) =>
+      auth.ok &&
+      auth.user?.role !== 'full_admin' &&
+      !(auth.user?.role === 'artist' && auth.user?.artistStatus !== 'suspended')
+        ? { ok: false, status: 403, message: 'Forbidden.' }
+        : auth
+    );
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth,
+      requireApiActiveArtistOrFullAdmin,
       requireApiFullAdmin: vi.fn((auth) =>
         auth.ok && auth.user?.role !== 'full_admin'
           ? { ok: false, status: 403, message: 'Forbidden.' }
@@ -79,6 +88,21 @@ describe('/api/revalidate/products', () => {
     expect(revalidatePath).toHaveBeenCalledWith(`/products/${validProductId}`);
     expect(revalidatePath).toHaveBeenCalledWith(`/bg/products/${validProductId}`);
     expect(revalidatePath).toHaveBeenCalledWith(`/en/products/${validProductId}`);
+  });
+
+  it('accepts active artist revalidation for product mutation freshness', async () => {
+    authResult = {
+      ok: true,
+      user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' },
+    };
+    const { POST } = await loadRoute();
+
+    const response = await POST(createJsonRequest({ productId: validProductId }));
+
+    expect(response.status).toBe(200);
+    expect(requireApiActiveArtistOrFullAdmin).toHaveBeenCalledWith(authResult);
+    expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products');
   });
 
   it('rejects invalid product ids before revalidating detail paths', async () => {

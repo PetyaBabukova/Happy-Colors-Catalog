@@ -4,16 +4,22 @@ import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useProducts } from '@/context/ProductContext';
+import {
+  canRequestPublicProductRevalidation,
+  revalidatePublicProductSurfaces,
+} from '@/managers/productsManager';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import { checkProductAccess } from '@/utils/checkProductAccess';
 import MessageBox from '@/components/ui/MessageBox';
 import styles from './delete.module.css';
 import baseURL from '@/config';
 
 export default function DeleteProductClient({ params }) {
-  const { productId } = use(params);
+  const { productId } = typeof params?.then === 'function' ? use(params) : params;
   const { user, loading } = useAuth();
   const { triggerCategoriesReload } = useProducts();
   const router = useRouter();
+  const { publicHref } = useLocaleNavigation();
 
   const [product, setProduct] = useState(null);
   const [unauthorized, setUnauthorized] = useState(false);
@@ -41,7 +47,10 @@ export default function DeleteProductClient({ params }) {
       if (!res.ok) throw new Error('Грешка при изтриването');
 
       triggerCategoriesReload();
-      router.push('/products');
+      if (canRequestPublicProductRevalidation(user)) {
+        await revalidatePublicProductSurfaces(productId);
+      }
+      router.push(publicHref('/products'));
       router.refresh();
     } catch (err) {
       setError(err.message);
@@ -57,7 +66,7 @@ export default function DeleteProductClient({ params }) {
       <h2>Сигурни ли сте, че искате да изтриете &quot;{product?.title}&quot;?</h2>
       <div className={styles.buttons}>
         <button className={styles.deleteBtn} onClick={handleDelete}>Да</button>
-        <button className={styles.cancelBtn} onClick={() => router.push(`/products/${productId}`)}>Отказ</button>
+        <button className={styles.cancelBtn} onClick={() => router.push(publicHref(`/products/${productId}`))}>Отказ</button>
       </div>
     </div>
   );
