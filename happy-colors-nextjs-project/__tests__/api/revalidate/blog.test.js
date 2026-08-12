@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpers.js';
 
 const revalidatePath = vi.fn();
@@ -12,6 +12,8 @@ async function loadRoute() {
 
 describe('/api/revalidate/blog', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
     authResult = { ok: true, user: { _id: 'owner-1', role: 'full_admin' } };
     requireApiAuth.mockImplementation(() => authResult);
 
@@ -27,6 +29,10 @@ describe('/api/revalidate/blog', () => {
       revalidatePath,
       revalidateTag,
     }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -69,6 +75,50 @@ describe('/api/revalidate/blog', () => {
     expect(revalidatePath).toHaveBeenCalledWith(`/bg/blog/${articleId}`);
     expect(revalidatePath).toHaveBeenCalledWith(`/en/blog/${articleId}`);
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
+  });
+
+  it('accepts server-owned shared-secret revalidation without admin auth', async () => {
+    vi.stubEnv('BLOG_REVALIDATE_SECRET', 'test-secret');
+    authResult = { ok: false, status: 401, message: 'Missing authentication token.' };
+    const articleId = 'b'.repeat(24);
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest(
+        { articleId },
+        {
+          headers: {
+            get: (name) => (String(name).toLowerCase() === 'x-revalidate-secret' ? 'test-secret' : null),
+          },
+        }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(requireApiAuth).not.toHaveBeenCalled();
+    expect(revalidateTag).toHaveBeenCalledWith('blog-articles');
+    expect(revalidatePath).toHaveBeenCalledWith(`/en/blog/${articleId}`);
+  });
+
+  it('does not allow an invalid shared secret to bypass admin auth', async () => {
+    vi.stubEnv('BLOG_REVALIDATE_SECRET', 'test-secret');
+    authResult = { ok: false, status: 401, message: 'Missing authentication token.' };
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest(
+        { articleId: 'c'.repeat(24) },
+        {
+          headers: {
+            get: (name) => (String(name).toLowerCase() === 'x-revalidate-secret' ? 'xxxx-secret' : null),
+          },
+        }
+      )
+    );
+
+    expect(response.status).toBe(401);
+    expect(requireApiAuth).toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
   });
 
   it('rate limits repeated authenticated revalidation requests', async () => {

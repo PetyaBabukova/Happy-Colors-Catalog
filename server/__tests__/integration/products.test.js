@@ -556,6 +556,38 @@ describe('products integration', () => {
     );
   });
 
+  it('does not fail committed product writes when production revalidation is misconfigured', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin({ email: 'revalidation-misconfig-admin@example.com' });
+    const category = await createCategory();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CLIENT_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('NEWSLETTER_PUBLIC_SITE_URL', '');
+    vi.stubEnv('PUBLIC_SITE_URL', '');
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', '');
+    vi.stubEnv('REVALIDATE_SECRET', '');
+
+    try {
+      const res = await request(app)
+        .post('/products')
+        .set('Cookie', authCookie(owner))
+        .set('Origin', 'https://happycolors.eu')
+        .send(buildProduct({ owner, category, title: 'Committed Product' }))
+        .expect(201);
+
+      expect(res.body).toMatchObject({
+        title: 'Committed Product',
+        publicationStatus: 'published',
+      });
+    } finally {
+      consoleError.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('rejects product creation for customers', async () => {
     const app = createExpressApp();
     const customer = await createUser();

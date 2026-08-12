@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createBlogArticle,
   deleteBlogArticle,
@@ -9,18 +9,17 @@ import {
   getBlogArticles,
   invalidateBlogCaches,
 } from '../../../src/managers/blogArticlesManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('blogArticlesManager', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('loads public and admin blog article endpoints with the expected options', async () => {
@@ -38,13 +37,19 @@ describe('blogArticlesManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       'http://localhost:3000/api/blog-articles',
-      expect.objectContaining({ cache: 'no-store' })
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['blog-articles'],
+        },
+      })
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       'http://localhost:3000/api/blog-articles/aaaaaaaaaaaaaaaaaaaaaaaa',
       expect.objectContaining({ cache: 'no-store' })
     );
+    expect(fetch.mock.calls[1][1]).not.toHaveProperty('next');
     expect(fetch).toHaveBeenNthCalledWith(
       3,
       'http://localhost:3000/api/blog-articles/admin',
@@ -70,13 +75,31 @@ describe('blogArticlesManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       'http://localhost:3000/api/blog-articles?locale=en',
-      expect.objectContaining({ cache: 'no-store' })
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['blog-articles'],
+        },
+      })
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       'http://localhost:3000/api/blog-articles/aaaaaaaaaaaaaaaaaaaaaaaa?locale=en',
       expect.objectContaining({ cache: 'no-store' })
     );
+  });
+
+  it('keeps client-side public blog list refreshes uncached', async () => {
+    vi.stubGlobal('window', {});
+    fetch.mockResolvedValueOnce(jsonResponse({ body: [] }));
+
+    await expect(getBlogArticles()).resolves.toEqual([]);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/blog-articles',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty('next');
   });
 
   it('creates and edits articles while invalidating caches', async () => {

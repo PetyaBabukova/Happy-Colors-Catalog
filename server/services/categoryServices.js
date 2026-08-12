@@ -2,6 +2,7 @@ import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 import { slugify } from '../utils/slugify.js';
 import mongoose from 'mongoose'; 
+import { revalidateProductSurfacesSafely } from '../helpers/revalidateProducts.js';
 import { buildPublicProductFilter } from '../utils/productPublication.js';
 import { getSourceRevision, projectPublicCategory } from './localization/publicProjection.js';
 
@@ -143,7 +144,11 @@ export async function createCategory(data) {
     canonicalSlugReviewed: Boolean(data.canonicalSlugReviewed),
     slugAliases,
   });
-  return await category.save();
+  const savedCategory = await category.save();
+
+  await revalidateProductSurfacesSafely();
+
+  return savedCategory;
 }
 
 // 👉 Връща всички категории (за create/edit форми)
@@ -155,25 +160,14 @@ export async function getAllCategories({ locale = 'bg' } = {}) {
 
 // 👉 Връща само категориите, които имат поне 1 продукт (за хедър/shop)
 export async function getVisibleCategories({ locale = 'bg' } = {}) {
-  const categories = await Category.find().lean();
+  const visibleCategoryIds = await Product.distinct('category', {
+    ...buildPublicProductFilter(),
+    // Only catalog products make a category visible in catalog navigation.
+    isInCatalog: true,
+  });
+  const categories = await Category.find({ _id: { $in: visibleCategoryIds } }).lean();
 
-  const visibleCategories = [];
-
-  for (const category of categories) {
-    const productCount = await Product.countDocuments({
-      ...buildPublicProductFilter(),
-      category: category._id,
-      // Само каталожни продукти правят категорията видима в нав,
-      // за да е консистентно с каталога (getAllProducts). Категории само
-      // с шарж продукти (isInCatalog: false) не се показват в Каталог нав.
-      isInCatalog: true,
-    });
-    if (productCount > 0) {
-      visibleCategories.push(category);
-    }
-  }
-
-  return visibleCategories.map((category) => projectPublicCategory(category, locale));
+  return categories.map((category) => projectPublicCategory(category, locale));
 }
 
 export async function deleteCategory(categoryId) {
@@ -189,6 +183,7 @@ export async function deleteCategory(categoryId) {
   if (productCount === 0) {
     // Няма продукти → директно изтриваме категорията
     await Category.findByIdAndDelete(categoryId);
+    await revalidateProductSurfacesSafely();
     return { message: 'Категорията беше изтрита успешно.', reassigned: false };
   }
 
@@ -211,6 +206,7 @@ export async function deleteCategory(categoryId) {
 
   // Изтриваме оригиналната категория
   await Category.findByIdAndDelete(categoryId);
+  await revalidateProductSurfacesSafely();
 
   return {
     message: `Категорията беше изтрита. Продуктите бяха прехвърлени към категория "${fallbackCategory.name}".`,
@@ -272,6 +268,7 @@ export async function updateCategory(categoryId, data) {
   category.slugAliases = nextSlugAliases;
 
   await category.save();
+  await revalidateProductSurfacesSafely();
 
   return withTranslationDecision(category, {
     changedPublicSource: hasSourceNameChange,

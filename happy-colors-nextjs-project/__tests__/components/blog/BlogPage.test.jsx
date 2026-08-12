@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '../test-utils.jsx';
 
 vi.hoisted(() => {
@@ -26,8 +26,14 @@ vi.mock('@/managers/blogArticlesManager', () => ({
 }));
 
 describe('BlogPage', () => {
+  beforeEach(() => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu/');
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('generates English metadata for localized blog routes', async () => {
@@ -57,17 +63,63 @@ describe('BlogPage', () => {
     expect(screen.getByText('There are no published blog articles yet.')).toBeInTheDocument();
   });
 
-  it('loads the latest article while threading locale to backend calls', async () => {
-    getBlogArticles.mockResolvedValue([{ _id: 'article-1' }, { _id: 'article-2' }]);
-    getBlogArticle.mockResolvedValue({ _id: 'article-1', title: 'Latest article' });
+  it('renders the cached article list without fetching uncached detail data', async () => {
+    getBlogArticles.mockResolvedValue([
+      {
+        _id: 'article-1',
+        title: 'Latest article',
+        contentHtml: '<p>Full article body.</p>',
+        heroImageUrl: 'https://cdn.example.com/article-hero.webp',
+        thumbnailImageUrl: 'https://cdn.example.com/article.webp',
+        heroImageAlt: 'Article image',
+        publishedAt: '2026-05-15T08:00:00.000Z',
+      },
+      {
+        _id: 'article-2',
+        title: 'Older article',
+        excerpt: 'Older summary.',
+      },
+    ]);
 
     const element = await BlogPage({ params: Promise.resolve({ locale: 'en' }) });
 
     render(element, { locale: 'en' });
 
     expect(getBlogArticles).toHaveBeenCalledWith({ locale: 'en' });
-    expect(getBlogArticle).toHaveBeenCalledWith('article-1', { locale: 'en' });
+    expect(getBlogArticle).not.toHaveBeenCalled();
     expect(screen.getByTestId('blog-article-details')).toHaveAttribute('data-article-id', 'article-1');
     expect(screen.getByTestId('blog-article-details')).toHaveAttribute('data-count', '2');
+  });
+
+  it('shows a load state instead of a false empty state when the localized list payload is unusable', async () => {
+    getBlogArticles.mockResolvedValue([{ title: 'Missing id article' }]);
+
+    const element = await BlogPage({ params: Promise.resolve({ locale: 'en' }) });
+
+    render(element, { locale: 'en' });
+
+    expect(getBlogArticles).toHaveBeenCalledWith({ locale: 'en' });
+    expect(getBlogArticle).not.toHaveBeenCalled();
+    expect(screen.getByText('The latest blog article cannot be shown at the moment.')).toBeInTheDocument();
+    expect(screen.queryByText('There are no published blog articles yet.')).not.toBeInTheDocument();
+  });
+
+  it('keeps showing articles when the latest list item only has summary fields', async () => {
+    getBlogArticles.mockResolvedValue([
+      {
+        _id: 'article-1',
+        title: 'Latest article',
+        excerpt: 'Summary text.',
+        thumbnailImageUrl: 'https://cdn.example.com/article.webp',
+      },
+    ]);
+
+    const element = await BlogPage({ params: Promise.resolve({ locale: 'en' }) });
+
+    render(element, { locale: 'en' });
+
+    expect(getBlogArticle).not.toHaveBeenCalled();
+    expect(screen.getByTestId('blog-article-details')).toHaveAttribute('data-article-id', 'article-1');
+    expect(screen.queryByText('The latest blog article cannot be shown at the moment.')).not.toBeInTheDocument();
   });
 });

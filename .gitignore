@@ -33,6 +33,7 @@ test-results/
 playwright-report/
 e2e/.auth/
 .playwright-cache/
+storage-audits/
 
 # nyc test coverage
 .nyc_output

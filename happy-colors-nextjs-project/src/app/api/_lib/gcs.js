@@ -3,19 +3,21 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { Storage } from '@google-cloud/storage';
 import { ensureServerEnvLoaded } from './env';
-import { CARTOON_ORDER_PHOTO_PREFIX } from '@/config/productLimits';
+import {
+  createPublicUrl,
+  isCartoonOrderPhotoObjectName,
+} from '../../../../../shared/gcsCore.js';
 
 let storageInstance = null;
 let keyFilenameCache = null;
 const projectRoot = process.cwd();
 const repoRoot = path.resolve(projectRoot, '..');
-
-const DEFAULT_EXTENSION_BY_MIME_TYPE = {
+const DEFAULT_EXTENSION_BY_MIME_TYPE = Object.freeze({
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
   'video/mp4': '.mp4',
-};
+});
 
 function resolveGoogleCredentialsPath() {
   ensureServerEnvLoaded();
@@ -44,7 +46,6 @@ export function getCartoonOrdersBucketName() {
     return privateBucketName;
   }
 
-  // Development/test convenience only; production must use a private cartoon-orders bucket.
   return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
     ? getBucketName()
     : '';
@@ -70,9 +71,10 @@ export function getStorage() {
   return storageInstance;
 }
 
-export function createPublicUrl(bucketName, objectName) {
-  return `https://storage.googleapis.com/${bucketName}/${objectName}`;
-}
+export {
+  createPublicUrl,
+  isCartoonOrderPhotoObjectName,
+};
 
 export function resolveUploadExtension(fileName, mimeType) {
   const originalExtension = path.extname(fileName || '').toLowerCase();
@@ -88,14 +90,6 @@ export function buildStorageObjectName(folder, fileName, mimeType) {
   const safeExtension = resolveUploadExtension(fileName, mimeType);
 
   return `${folder}/${randomUUID()}${safeExtension}`;
-}
-
-export function isCartoonOrderPhotoObjectName(objectName) {
-  return (
-    typeof objectName === 'string' &&
-    objectName.startsWith(`${CARTOON_ORDER_PHOTO_PREFIX}/`) &&
-    !objectName.split('/').some((part) => part === '..' || part === '.' || part.includes('\\'))
-  );
 }
 
 export async function createCartoonOrderPhotoSignedReadUrl({

@@ -11,7 +11,7 @@ import { useProducts } from '@/context/ProductContext';
 import styles from './create.module.css';
 import {
   deleteSignedUploadedFile,
-  uploadImagesToBucket,
+  uploadProductImagesToBucket,
   uploadSignedFile,
 } from '@/managers/uploadManager';
 import { deleteProductImage, deleteProductVideo } from '@/managers/productsManager';
@@ -154,6 +154,7 @@ export default function ProductForm({
   const [selectedPosterVersion, setSelectedPosterVersion] = useState(0);
   const [videoInputKey, setVideoInputKey] = useState(0);
   const [videoReplacing, setVideoReplacing] = useState(null);
+  const [uploadedImageUploads, setUploadedImageUploads] = useState({});
 
   useEffect(() => {
     if (!initialValues) {
@@ -184,6 +185,15 @@ export default function ProductForm({
     () => new Set(normalizeVideos(initialValues?.videos).map((video) => video.url)),
     [initialValues?.videos]
   );
+  const savedImageUrls = useMemo(() => {
+    const imageUrls = Array.isArray(initialValues?.imageUrls)
+      ? initialValues.imageUrls.filter(Boolean)
+      : initialValues?.imageUrl
+        ? [initialValues.imageUrl]
+        : [];
+
+    return new Set(imageUrls);
+  }, [initialValues?.imageUrl, initialValues?.imageUrls]);
   const videos = normalizeVideos(formValues.videos);
   const hasImages = Array.isArray(formValues.imageUrls) && formValues.imageUrls.length > 0;
   const hasVideos = videos.length > 0;
@@ -256,7 +266,8 @@ export default function ProductForm({
     try {
       setUploading(true);
 
-      const uploadedImageUrls = await uploadImagesToBucket(selectedFiles);
+      const uploadedImages = await uploadProductImagesToBucket(selectedFiles);
+      const uploadedImageUrls = uploadedImages.map((upload) => upload.publicUrl);
 
       setFormValues((prev) => {
         const currentImageUrls = Array.isArray(prev.imageUrls)
@@ -271,6 +282,15 @@ export default function ProductForm({
           imageUrls: mergedImageUrls,
           imageUrl: mergedImageUrls[0] || '',
         };
+      });
+      setUploadedImageUploads((prev) => {
+        const next = { ...prev };
+
+        for (const upload of uploadedImages) {
+          next[upload.publicUrl] = upload;
+        }
+
+        return next;
       });
 
       event.target.value = '';
@@ -496,6 +516,76 @@ export default function ProductForm({
     }
   };
 
+  const cleanupUploadedProductImages = async (uploads = uploadedImageUploads) => {
+    await Promise.allSettled(
+      Object.values(uploads)
+        .filter(Boolean)
+        .map((upload) => deleteSignedUploadedFile(upload.objectName, upload.deleteToken))
+    );
+  };
+
+  const removeUploadedProductImageUrlsFromForm = (uploads = uploadedImageUploads) => {
+    const uploadedUrls = new Set(Object.keys(uploads));
+
+    if (uploadedUrls.size === 0) {
+      return;
+    }
+
+    setFormValues((prev) => {
+      const imageUrls = (prev.imageUrls || []).filter((imageUrl) => !uploadedUrls.has(imageUrl));
+
+      return {
+        ...prev,
+        imageUrls,
+        imageUrl: imageUrls[0] || '',
+      };
+    });
+  };
+
+  const removeProductImage = async (url) => {
+    const localUpload = uploadedImageUploads[url];
+
+    if (initialValues?._id && savedImageUrls.has(url)) {
+      const result = await deleteProductImage(initialValues._id, url);
+
+      setFormValues((prev) => {
+        const serverImages = Array.isArray(result.imageUrls)
+          ? result.imageUrls.filter(Boolean)
+          : result.imageUrl
+            ? [result.imageUrl]
+            : [];
+        const localOnlyImages = (prev.imageUrls || []).filter((imageUrl) => !savedImageUrls.has(imageUrl));
+        const updated = [...new Set([...serverImages, ...localOnlyImages])];
+
+        return {
+          ...prev,
+          imageUrls: updated,
+          imageUrl: updated[0] || '',
+        };
+      });
+      return;
+    }
+
+    if (localUpload) {
+      await deleteSignedUploadedFile(localUpload.objectName, localUpload.deleteToken);
+      setUploadedImageUploads((prev) => {
+        const { [url]: removedUpload, ...rest } = prev;
+
+        return rest;
+      });
+    }
+
+    setFormValues((prev) => {
+      const updated = (prev.imageUrls || []).filter((imageUrl) => imageUrl !== url);
+
+      return {
+        ...prev,
+        imageUrls: updated,
+        imageUrl: updated[0] || '',
+      };
+    });
+  };
+
   const validateVideoSubmitState = () => {
     if (videoDeletingUrl) {
       return {
@@ -548,7 +638,20 @@ export default function ProductForm({
         }
 
         Promise.resolve(submitResult)
-          .catch((error) => {
+          .then(async (result) => {
+            if (result) {
+              setUploadedImageUploads({});
+              return;
+            }
+
+            await cleanupUploadedProductImages();
+            removeUploadedProductImageUrlsFromForm();
+            setUploadedImageUploads({});
+          })
+          .catch(async (error) => {
+            await cleanupUploadedProductImages();
+            removeUploadedProductImageUrlsFromForm();
+            setUploadedImageUploads({});
             setSubmitSuccess(false);
             setSubmitError(error?.message || 'Възникна грешка при запазване на продукта.');
           })
@@ -695,21 +798,7 @@ export default function ProductForm({
                       type="button"
                       onClick={async () => {
                         try {
-                          if (!initialValues?._id) {
-                            return;
-                          }
-
-                          await deleteProductImage(initialValues._id, url);
-
-                          setFormValues((prev) => {
-                            const updated = prev.imageUrls.filter((img) => img !== url);
-
-                            return {
-                              ...prev,
-                              imageUrls: updated,
-                              imageUrl: updated[0] || '',
-                            };
-                          });
+                          await removeProductImage(url);
                         } catch (err) {
                           alert(err.message);
                         }

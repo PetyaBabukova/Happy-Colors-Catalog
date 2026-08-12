@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PaymentSuccessClient from '@/app/checkout/payment-success/PaymentSuccessClient';
 import { act, render } from '../test-utils.jsx';
 import { setMockNavigation } from '../setup.js';
+import { jsonResponse } from '../../api/_helpers.js';
 
 async function flushEffects(times = 6) {
   for (let i = 0; i < times; i += 1) {
@@ -9,13 +10,6 @@ async function flushEffects(times = 6) {
       await Promise.resolve();
     });
   }
-}
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
 }
 
 describe('PaymentSuccessClient', () => {

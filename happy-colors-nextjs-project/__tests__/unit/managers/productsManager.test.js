@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  canRequestPublicProductRevalidation,
   deleteProductImage,
   deleteProductVideo,
   getCartoonGalleryProducts,
@@ -7,15 +8,10 @@ import {
   getProducts,
   onCreateProductSubmit,
   onEditProductSubmit,
+  revalidatePublicProductSurfaces,
   updateHomepageFeaturedProducts,
 } from '../../../src/managers/productsManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 function buildFormValues(overrides = {}) {
   return {
@@ -35,6 +31,11 @@ describe('productsManager', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('loads products and encodes focused category filters', async () => {
     const products = [{ _id: 'p1', title: 'Candle' }];
     fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
@@ -44,7 +45,10 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8+%D0%B8+%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
       expect.objectContaining({
-        cache: 'no-store',
+        next: {
+          revalidate: 60,
+          tags: ['products'],
+        },
       })
     );
   });
@@ -63,7 +67,12 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       'http://localhost:3000/api/products?locale=en&category=English+Toys',
-      expect.objectContaining({ cache: 'no-store' })
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['products'],
+        },
+      })
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
@@ -79,6 +88,20 @@ describe('productsManager', () => {
       'http://localhost:3000/api/products/cartoon-gallery?locale=en',
       expect.objectContaining({ cache: 'no-store' })
     );
+  });
+
+  it('keeps client-side product list reads fresh for admin tools', async () => {
+    vi.stubGlobal('window', {});
+    const products = [{ _id: 'p1', title: 'Admin-visible public product' }];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: products }));
+
+    await expect(getProducts()).resolves.toEqual(products);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/products',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty('next');
   });
 
   it('returns an empty list instead of leaking product load failures', async () => {
@@ -216,20 +239,23 @@ describe('productsManager', () => {
   });
 
   it('creates products with normalized owner, category, media, and availability', async () => {
+    vi.stubGlobal('window', {});
     const setSuccess = vi.fn();
     const setError = vi.fn();
     const setInvalidFields = vi.fn();
     const triggerCategoriesReload = vi.fn();
-    const router = { push: vi.fn() };
+    const router = { push: vi.fn(), refresh: vi.fn() };
 
-    fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-1', publicationStatus: 'published' } }));
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ body: { _id: '507f1f77bcf86cd799439011', publicationStatus: 'published' } }))
+      .mockResolvedValueOnce(jsonResponse({ body: { success: true } }));
 
     await onCreateProductSubmit(
       buildFormValues({ availability: '' }),
       setSuccess,
       setError,
       setInvalidFields,
-      { _id: 'owner-1' },
+      { _id: 'owner-1', role: 'full_admin' },
       router,
       triggerCategoriesReload
     );
@@ -249,12 +275,55 @@ describe('productsManager', () => {
       imageUrl: 'https://cdn.test/one.webp',
       availability: 'available',
     });
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/revalidate/products',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ productId: '507f1f77bcf86cd799439011' }),
+      })
+    );
     expect(triggerCategoriesReload).toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(router.push).toHaveBeenCalledWith('/products/product-1');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(router.push).toHaveBeenCalledWith('/products/507f1f77bcf86cd799439011');
+    expect(router.refresh).toHaveBeenCalled();
     expect(setSuccess).toHaveBeenCalledWith(true);
     expect(setError).toHaveBeenCalledWith('');
     expect(setInvalidFields).toHaveBeenCalledWith([]);
+  });
+
+  it('revalidates public product surfaces from browser mutations', async () => {
+    vi.stubGlobal('window', {});
+    fetch.mockResolvedValueOnce(jsonResponse({ body: { success: true } }));
+
+    await expect(revalidatePublicProductSurfaces('507f1f77bcf86cd799439011')).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/revalidate/products',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ productId: '507f1f77bcf86cd799439011' }),
+      })
+    );
+  });
+
+  it('keeps server-side product mutations from calling the browser revalidation route', async () => {
+    await expect(revalidatePublicProductSurfaces('product-1')).resolves.toEqual({ skipped: true });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not let suspended artists request browser product revalidation', () => {
+    expect(
+      canRequestPublicProductRevalidation({
+        _id: 'artist-1',
+        role: 'artist',
+        artistStatus: 'suspended',
+      })
+    ).toBe(false);
   });
 
   it('redirects newly submitted artist products to the detail page with a pending-review notice', async () => {
@@ -262,7 +331,7 @@ describe('productsManager', () => {
     const setError = vi.fn();
     const setInvalidFields = vi.fn();
     const triggerCategoriesReload = vi.fn();
-    const router = { push: vi.fn() };
+    const router = { push: vi.fn(), refresh: vi.fn() };
 
     fetch.mockResolvedValueOnce(jsonResponse({ body: { _id: 'product-2', publicationStatus: 'pending_review' } }));
 
@@ -277,6 +346,8 @@ describe('productsManager', () => {
     );
 
     expect(router.push).toHaveBeenCalledWith('/products/product-2?created=review-pending');
+    expect(router.refresh).toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(setSuccess).toHaveBeenCalledWith(true);
   });
 
@@ -378,6 +449,7 @@ describe('productsManager', () => {
   });
 
   it('surfaces direct edit English translation decisions without navigating first', async () => {
+    vi.stubGlobal('window', {});
     const setSuccess = vi.fn();
     const setError = vi.fn();
     const setInvalidFields = vi.fn();
@@ -394,12 +466,12 @@ describe('productsManager', () => {
     fetch.mockResolvedValueOnce(
       jsonResponse({
         body: {
-          _id: 'product-1',
+          _id: '507f1f77bcf86cd799439011',
           publicationStatus: 'published',
           englishTranslationDecision,
         },
       })
-    );
+    ).mockResolvedValueOnce(jsonResponse({ body: { success: true } }));
 
     await onEditProductSubmit(
       buildFormValues(),
@@ -412,9 +484,18 @@ describe('productsManager', () => {
       { onTranslationDecision }
     );
 
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/revalidate/products',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ productId: 'product-1' }),
+      })
+    );
     expect(onTranslationDecision).toHaveBeenCalledWith(
       englishTranslationDecision,
-      expect.objectContaining({ _id: 'product-1' })
+      expect.objectContaining({ _id: '507f1f77bcf86cd799439011' })
     );
     expect(router.push).not.toHaveBeenCalled();
     expect(router.refresh).not.toHaveBeenCalled();

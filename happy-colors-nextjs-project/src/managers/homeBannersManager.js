@@ -1,5 +1,6 @@
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
+import { buildApiUrl, getPublicServerFetchOptions } from './requestUtils';
 
 const BANNER_PLACEMENTS = new Set(['home', 'cartoons']);
 
@@ -7,20 +8,6 @@ function normalizeBannerPlacement(value) {
   const placement = String(value || 'home').trim().toLowerCase();
 
   return BANNER_PLACEMENTS.has(placement) ? placement : 'home';
-}
-
-function buildUrl(path, params = {}) {
-  const searchParams = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      searchParams.set(key, String(value));
-    }
-  }
-
-  const query = searchParams.toString();
-
-  return `${baseURL}${path}${query ? `?${query}` : ''}`;
 }
 
 async function postRevalidation(path, errorMessage) {
@@ -61,12 +48,10 @@ async function invalidateBannerCachesForPlacements(placements = ['home']) {
 
 export async function getHomeBanners({ locale } = {}) {
   try {
-    const res = await fetch(buildUrl('/home-banners', { locale }), {
-      next: {
-        revalidate: 60,
-        tags: ['home-banners'],
-      },
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/home-banners', { locale }),
+      getPublicServerFetchOptions({ tags: ['home-banners'], browserNoStore: false })
+    );
 
     if (!res.ok) {
       throw new Error('РќРµСѓСЃРїРµС€РЅРѕ Р·Р°СЂРµР¶РґР°РЅРµ РЅР° homepage Р±Р°РЅРµСЂРёС‚Рµ.');
@@ -87,12 +72,10 @@ export async function getHomeBanners({ locale } = {}) {
 
 export async function getCartoonHeroBanners({ locale } = {}) {
   try {
-    const res = await fetch(buildUrl('/home-banners', { placement: 'cartoons', locale }), {
-      next: {
-        revalidate: 60,
-        tags: ['cartoon-hero-banners'],
-      },
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/home-banners', { placement: 'cartoons', locale }),
+      getPublicServerFetchOptions({ tags: ['cartoon-hero-banners'], browserNoStore: false })
+    );
 
     if (!res.ok) {
       throw new Error('РќРµСѓСЃРїРµС€РЅРѕ Р·Р°СЂРµР¶РґР°РЅРµ РЅР° С€Р°СЂР¶ Р±Р°РЅРµСЂРёС‚Рµ.');

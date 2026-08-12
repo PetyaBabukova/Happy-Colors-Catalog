@@ -148,8 +148,14 @@ export function hasValidCategoryTranslation(category) {
 }
 
 export function hasValidHomeBannerTranslation(banner) {
-  const translation = readTranslation(banner);
   const translatedFields = ['title', 'description', 'ctaLabel'];
+  const requiresTranslation = translatedFields.some((fieldName) => hasText(banner?.[fieldName]));
+
+  if (!requiresTranslation) {
+    return true;
+  }
+
+  const translation = readTranslation(banner);
 
   return (
     hasFreshSourceRevision(banner, translation) &&
@@ -245,11 +251,15 @@ export function projectPublicHomeBanner(banner, locale = 'bg') {
 
   const translation = readTranslation(banner);
 
+  if (!translation) {
+    return markTranslated(publicBanner);
+  }
+
   return markTranslated({
     ...publicBanner,
-    title: translation.title,
+    title: translation.title || '',
     description: translation.description || '',
-    ctaLabel: translation.ctaLabel,
+    ctaLabel: translation.ctaLabel || '',
   });
 }
 

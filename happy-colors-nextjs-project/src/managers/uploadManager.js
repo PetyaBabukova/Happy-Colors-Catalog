@@ -57,14 +57,24 @@ export async function uploadImagesToBucket(files = []) {
     return [];
   }
 
-  const uploadedImageUrls = [];
+  const uploadedImages = await uploadProductImagesToBucket(files);
 
-  for (const file of files) {
-    const imageUrl = await uploadImageToBucket(file);
-    uploadedImageUrls.push(imageUrl);
+  return uploadedImages.map((upload) => upload.publicUrl);
+}
+
+export async function uploadProductImagesToBucket(files = []) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return [];
   }
 
-  return uploadedImageUrls;
+  const uploadedImages = [];
+
+  for (const file of files) {
+    const upload = await uploadSignedFile({ kind: 'product-image', file });
+    uploadedImages.push(upload);
+  }
+
+  return uploadedImages;
 }
 
 async function uploadFileViaProxy({ kind, file }) {
@@ -106,6 +116,7 @@ export async function uploadSignedFile({ kind, file }) {
   if (
     kind === 'home-banner-image' ||
     kind === 'home-banner-mobile-image' ||
+    kind === 'product-image' ||
     kind === 'video' ||
     kind === 'poster'
   ) {

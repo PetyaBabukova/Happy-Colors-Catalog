@@ -1,3 +1,13 @@
+import { vi } from 'vitest';
+
+export function jsonResponse({ ok = true, status = ok ? 200 : 400, body = {} } = {}) {
+  return {
+    ok,
+    status,
+    json: vi.fn().mockResolvedValue(body),
+  };
+}
+
 export function createJsonRequest(body, overrides = {}) {
   return {
     json: async () => body,

@@ -7,13 +7,7 @@ import {
   unsubscribeFromNewsletter,
   updateNewsletterPreferences,
 } from '../../../src/managers/newsletterManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('newsletterManager', () => {
   beforeEach(() => {

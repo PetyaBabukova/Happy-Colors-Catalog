@@ -28,6 +28,10 @@ const KIND_CONFIG = {
     folder: 'home-banners/mobile-images',
     validateFile: validateImageUploadFile,
   },
+  'product-image': {
+    folder: 'products/images',
+    validateFile: validateImageUploadFile,
+  },
   video: {
     folder: 'products/videos',
     validateFile: validateVideoUploadFile,

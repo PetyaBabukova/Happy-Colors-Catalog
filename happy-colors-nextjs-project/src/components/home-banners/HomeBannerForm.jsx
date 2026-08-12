@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import MessageBox from '@/components/ui/MessageBox';
 import useForm from '@/hooks/useForm';
@@ -77,6 +78,7 @@ export default function HomeBannerForm({
   initialValues = INITIAL_VALUES,
   onSubmit,
   legendText,
+  translationHref = '',
   successMessage = 'Банерът беше запазен успешно.',
 }) {
   const router = useRouter();
@@ -261,7 +263,7 @@ export default function HomeBannerForm({
       });
       setUploadedImages({});
       setSuccess(true);
-      router.push('/');
+      router.push(bannerPlacement === 'cartoons' ? '/cartoons' : '/');
       router.refresh();
     } catch (err) {
       await cleanupUploadedImages();
@@ -289,6 +291,11 @@ export default function HomeBannerForm({
       {success && <MessageBox type="success" message={successMessage} />}
 
       <h2 className={styles.formTitle}>{legendText}</h2>
+      {translationHref ? (
+        <Link href={translationHref} className={styles.translationLink}>
+          Управлявай EN превода
+        </Link>
+      ) : null}
 
       <form className={styles.form} onSubmit={handleSubmit}>
         <label htmlFor="placement">Позиция на банера</label>

@@ -4,15 +4,10 @@ import {
   uploadBlogArticleImage,
   uploadImageToBucket,
   uploadImagesToBucket,
+  uploadProductImagesToBucket,
   uploadSignedFile,
 } from '../../../src/managers/uploadManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 function buildFile({ name = 'candle.webp', size = 128, type = 'image/webp' } = {}) {
   return new File(['test-content'], name, { type, lastModified: 1, endings: 'transparent' });
@@ -44,15 +39,39 @@ describe('uploadManager', () => {
     );
   });
 
-  it('returns uploaded image urls in input order', async () => {
+  it('returns product image urls in input order through the proxy route', async () => {
     fetch
-      .mockResolvedValueOnce(jsonResponse({ body: { imageUrl: 'https://cdn.test/one.webp' } }))
-      .mockResolvedValueOnce(jsonResponse({ body: { imageUrl: 'https://cdn.test/two.webp' } }));
+      .mockResolvedValueOnce(jsonResponse({
+        body: {
+          publicUrl: 'https://cdn.test/one.webp',
+          objectName: 'products/images/one.webp',
+          deleteToken: 'one-delete-token',
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        body: {
+          publicUrl: 'https://cdn.test/two.webp',
+          objectName: 'products/images/two.webp',
+          deleteToken: 'two-delete-token',
+        },
+      }));
 
     await expect(uploadImagesToBucket([buildFile({ name: 'one.webp' }), buildFile({ name: 'two.webp' })])).resolves.toEqual([
       'https://cdn.test/one.webp',
       'https://cdn.test/two.webp',
     ]);
+    expect(fetch).toHaveBeenCalledWith('/api/uploads/proxy', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('returns product image upload metadata for rollback cleanup', async () => {
+    const upload = {
+      publicUrl: 'https://cdn.test/products/images/candle.webp',
+      objectName: 'products/images/candle.webp',
+      deleteToken: 'delete-token',
+    };
+    fetch.mockResolvedValueOnce(jsonResponse({ body: upload }));
+
+    await expect(uploadProductImagesToBucket([buildFile()])).resolves.toEqual([upload]);
   });
 
   it('uses backend error messages from legacy image upload failures', async () => {
@@ -128,8 +147,30 @@ describe('uploadManager', () => {
     expect(fetch).toHaveBeenCalledWith('/api/uploads/proxy', expect.objectContaining({ method: 'POST' }));
   });
 
+  it('routes product image uploads through the proxy route', async () => {
+    const file = buildFile();
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        body: {
+          publicUrl: 'https://cdn.test/products/images/candle.webp',
+          objectName: 'products/images/candle.webp',
+          deleteToken: 'delete-token',
+        },
+      })
+    );
+
+    await expect(uploadSignedFile({ kind: 'product-image', file })).resolves.toEqual({
+      publicUrl: 'https://cdn.test/products/images/candle.webp',
+      objectName: 'products/images/candle.webp',
+      deleteToken: 'delete-token',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('/api/uploads/proxy', expect.objectContaining({ method: 'POST' }));
+  });
+
   it('rejects unsupported upload kinds before calling the network', async () => {
-    await expect(uploadSignedFile({ kind: 'product-image', file: buildFile() })).rejects.toThrow(
+    await expect(uploadSignedFile({ kind: 'unsupported-image', file: buildFile() })).rejects.toThrow(
       'Неподдържан тип upload.'
     );
 

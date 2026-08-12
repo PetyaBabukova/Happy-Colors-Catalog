@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { logoutUser, onLoginSubmit, onRegisterSubmit } from '../../../src/managers/userManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('userManager', () => {
   beforeEach(() => {

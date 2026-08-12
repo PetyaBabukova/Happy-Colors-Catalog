@@ -15,14 +15,7 @@ import {
   updateCartoonOrderWorkflow,
   uploadCartoonOrderPhoto,
 } from '../../../src/managers/cartoonOrdersManager.js';
-
-function jsonResponse({ ok = true, status = ok ? 200 : 400, body = {} } = {}) {
-  return {
-    ok,
-    status,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('cartoonOrdersManager', () => {
   beforeEach(() => {

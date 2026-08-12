@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import EditProductClient from '@/app/products/[productId]/edit/EditProductClient';
 import { checkProductAccess } from '@/utils/checkProductAccess';
-import { onEditProductSubmit } from '@/managers/productsManager';
+import { onEditProductSubmit, revalidatePublicProductSurfaces } from '@/managers/productsManager';
 import { generateTranslation } from '@/managers/translationsManager';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 
@@ -10,7 +10,9 @@ vi.mock('@/utils/checkProductAccess', () => ({
 }));
 
 vi.mock('@/managers/productsManager', () => ({
+  canRequestPublicProductRevalidation: vi.fn(() => true),
   onEditProductSubmit: vi.fn(),
+  revalidatePublicProductSurfaces: vi.fn(),
 }));
 
 vi.mock('@/managers/translationsManager', () => ({
@@ -66,6 +68,7 @@ describe('EditProductClient', () => {
       return { _id: 'product-1' };
     });
     generateTranslation.mockResolvedValue({ ok: true });
+    revalidatePublicProductSurfaces.mockResolvedValue({ ok: true });
   });
 
   it('links full admins directly to this product translation', async () => {
@@ -107,6 +110,7 @@ describe('EditProductClient', () => {
       })
     );
     expect(mockPush).toHaveBeenCalledWith('/products/product-1');
+    expect(revalidatePublicProductSurfaces).toHaveBeenCalledWith('product-1');
     expect(mockRefresh).toHaveBeenCalled();
   });
 });

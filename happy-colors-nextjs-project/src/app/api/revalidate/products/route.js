@@ -1,48 +1,56 @@
-import { NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 
-import { requireApiAuth, requireApiFullAdmin } from '../../_lib/auth';
+import { requireApiActiveArtistOrFullAdmin } from '../../_lib/auth';
 import { revalidateLocalizedPath } from '../_lib/localizedPaths';
+import {
+  createMemoryRateLimiter,
+  createRevalidatePostHandler,
+  isValidObjectId,
+} from '../_lib/revalidateRoute';
 
-function hasValidRevalidateSecret(request) {
-  const secret = String(process.env.PRODUCT_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET || '').trim();
-  const provided = String(request.headers.get('x-revalidate-secret') || '').trim();
+const productRevalidationRateLimiter = createMemoryRateLimiter({
+  keyPrefix: 'product-revalidation',
+});
 
-  return Boolean(secret && provided && provided === secret);
+function validatePayload(body) {
+  const hasProductId = Object.prototype.hasOwnProperty.call(body || {}, 'productId');
+  const productId = hasProductId && typeof body?.productId === 'string' ? body.productId.trim() : '';
+
+  if (
+    hasProductId &&
+    body?.productId !== null &&
+    body?.productId !== '' &&
+    (typeof body?.productId !== 'string' || !isValidObjectId(productId))
+  ) {
+    return { ok: false, message: 'Invalid productId.' };
+  }
+
+  return { ok: true, value: { productId } };
 }
 
-export async function POST(request) {
-  try {
-    if (!hasValidRevalidateSecret(request)) {
-      const auth = requireApiFullAdmin(await requireApiAuth(request));
+function revalidateProductSurfaces({ productId } = {}) {
+  revalidateTag('products');
+  revalidateTag('categories');
+  revalidateTag('visible-categories');
+  revalidateTag('homepage-featured-products');
+  revalidateTag('cartoon-gallery-products');
+  revalidateLocalizedPath('/products');
+  revalidateLocalizedPath('/');
+  revalidateLocalizedPath('/cartoons');
+  revalidatePath('/sitemap.xml');
 
-      if (!auth.ok) {
-        return NextResponse.json({ message: auth.message }, { status: auth.status });
-      }
-    }
-
-    const body = await request.json().catch(() => ({}));
-    const productId = typeof body?.productId === 'string' ? body.productId.trim() : '';
-
-    revalidateTag('products');
-    revalidateTag('homepage-featured-products');
-    revalidateTag('cartoon-gallery-products');
-    revalidateLocalizedPath('/products');
-    revalidateLocalizedPath('/');
-    revalidateLocalizedPath('/cartoons');
-    revalidatePath('/sitemap.xml');
-
-    if (productId) {
-      revalidateLocalizedPath(`/products/${productId}`);
-    }
-
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error) {
-    console.error('Error in /api/revalidate/products:', error);
-
-    return NextResponse.json(
-      { message: 'Грешка при обновяване на кеша на продуктите.' },
-      { status: 500 }
-    );
+  if (productId) {
+    revalidateLocalizedPath(`/products/${productId}`);
   }
 }
+
+export const POST = createRevalidatePostHandler({
+  routeLabel: '/api/revalidate/products',
+  secretEnvNames: ['PRODUCT_REVALIDATE_SECRET', 'REVALIDATE_SECRET'],
+  allowInvalidJson: true,
+  validatePayload,
+  authorizeAuthenticatedRequest: requireApiActiveArtistOrFullAdmin,
+  rateLimiter: productRevalidationRateLimiter,
+  revalidate: revalidateProductSurfaces,
+  errorMessage: 'Failed to revalidate product cache.',
+});

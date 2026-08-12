@@ -29,6 +29,9 @@ export default function ClientLayout({
   children,
   dictionary,
   enableAnalytics = false,
+  hasSessionHint = false,
+  initialVisibleCategories = [],
+  initialVisibleCategoriesLoaded = true,
   locale = DEFAULT_LOCALE,
 }) {
   return (
@@ -40,8 +43,12 @@ export default function ClientLayout({
         <Suspense fallback={null}>
           <GoogleAnalyticsConsent enableAnalytics={enableAnalytics} />
         </Suspense>
-        <AuthWrapper>
-          <ProductProvider>
+        <AuthWrapper hasSessionHint={hasSessionHint}>
+          <ProductProvider
+            initialVisibleCategories={initialVisibleCategories}
+            initialVisibleCategoriesLoaded={initialVisibleCategoriesLoaded}
+            initialVisibleCategoriesLocale={locale}
+          >
             <CartProvider>
               <Header />
               <main>{children}</main>

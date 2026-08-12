@@ -4,10 +4,12 @@ import ProductForm from '@/components/products/ProductForm';
 import { onCreateProductSubmit } from '@/managers/productsManager';
 import { useAuth } from '@/context/AuthContext';
 import { useProducts } from '@/context/ProductContext';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 
 export default function CreateProductClient() {
   const { user } = useAuth();
   const { triggerCategoriesReload } = useProducts();
+  const { publicHref } = useLocaleNavigation();
 
   return (
     <ProductForm
@@ -32,7 +34,8 @@ export default function CreateProductClient() {
           setInvalidFields,
           user,
           router,
-          triggerCategoriesReload
+          triggerCategoriesReload,
+          { publicHref }
         )
       }
       legendText="Създаване на нов продукт"

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductForm from '@/components/products/ProductForm';
 import { useProducts } from '@/context/ProductContext';
 import { deleteProductVideo } from '@/managers/productsManager';
-import { deleteSignedUploadedFile, uploadImagesToBucket, uploadSignedFile } from '@/managers/uploadManager';
+import { deleteSignedUploadedFile, uploadProductImagesToBucket, uploadSignedFile } from '@/managers/uploadManager';
 import { getVideoDurationSeconds } from '@/utils/videoMetadata';
 import { fireEvent, render, screen, waitFor } from '../test-utils.jsx';
 
@@ -12,7 +12,7 @@ vi.mock('@/context/ProductContext', () => ({
 
 vi.mock('@/managers/uploadManager', () => ({
   deleteSignedUploadedFile: vi.fn(),
-  uploadImagesToBucket: vi.fn(),
+  uploadProductImagesToBucket: vi.fn(),
   uploadSignedFile: vi.fn(),
 }));
 
@@ -52,7 +52,13 @@ describe('ProductForm', () => {
         { _id: 'cat-2', name: 'Decor' },
       ],
     });
-    uploadImagesToBucket.mockResolvedValue(['/images/uploaded.webp']);
+    uploadProductImagesToBucket.mockResolvedValue([
+      {
+        publicUrl: '/images/uploaded.webp',
+        objectName: 'products/images/uploaded.webp',
+        deleteToken: 'image-delete-token',
+      },
+    ]);
     uploadSignedFile.mockImplementation(({ kind }) =>
       Promise.resolve({
         publicUrl: kind === 'video' ? '/videos/uploaded.mp4' : '/images/uploaded-poster.webp',
@@ -67,7 +73,7 @@ describe('ProductForm', () => {
   });
 
   it('normalizes initial values and submits the current form state', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = vi.fn().mockResolvedValue({ _id: 'product-1' });
 
     const { container } = render(
       <ProductForm
@@ -175,7 +181,7 @@ describe('ProductForm', () => {
       target: { files: [file('notes.txt', 'text/plain')] },
     });
 
-    expect(uploadImagesToBucket).not.toHaveBeenCalled();
+    expect(uploadProductImagesToBucket).not.toHaveBeenCalled();
     expect(await screen.findByText(/само файлове от тип изображение|СЃР°РјРѕ С„Р°Р№Р»РѕРІРµ/)).toBeInTheDocument();
   });
 
@@ -194,7 +200,7 @@ describe('ProductForm', () => {
       target: { files: [file('uploaded.webp', 'image/webp')] },
     });
 
-    await waitFor(() => expect(uploadImagesToBucket).toHaveBeenCalledWith([expect.any(File)]));
+    await waitFor(() => expect(uploadProductImagesToBucket).toHaveBeenCalledWith([expect.any(File)]));
     await waitFor(() => expect(screen.getByText(/Текущи изображения: 2|РўРµРєСѓС‰Рё РёР·РѕР±СЂР°Р¶РµРЅРёСЏ: 2/)).toBeInTheDocument());
 
     fireEvent.submit(container.querySelector('form'));
@@ -209,6 +215,36 @@ describe('ProductForm', () => {
       expect.any(Function),
       expect.any(Object)
     );
+    await waitFor(() => expect(deleteSignedUploadedFile).not.toHaveBeenCalled());
+  });
+
+  it('rolls back newly uploaded product images when save returns a handled failure', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(null);
+    const { container } = render(
+      <ProductForm
+        initialValues={buildInitialValues({ imageUrls: ['/images/one.webp'] })}
+        onSubmit={onSubmit}
+        legendText="Edit"
+      />
+    );
+    const imageInput = container.querySelector('input[name="imageUrls"]');
+
+    fireEvent.change(imageInput, {
+      target: { files: [file('uploaded.webp', 'image/webp')] },
+    });
+
+    await waitFor(() => expect(uploadProductImagesToBucket).toHaveBeenCalledWith([expect.any(File)]));
+    await waitFor(() => expect(screen.getByText(/: 2/)).toBeInTheDocument());
+
+    fireEvent.submit(container.querySelector('form'));
+
+    await waitFor(() => {
+      expect(deleteSignedUploadedFile).toHaveBeenCalledWith(
+        'products/images/uploaded.webp',
+        'image-delete-token'
+      );
+    });
+    await waitFor(() => expect(screen.getByText(/: 1/)).toBeInTheDocument());
   });
 
   it('auto-uploads a valid video and poster pair before submit', async () => {

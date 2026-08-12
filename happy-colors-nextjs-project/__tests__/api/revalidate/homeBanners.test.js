@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createJsonRequest, readJson } from '../_helpers.js';
+import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpers.js';
 
 const revalidatePath = vi.fn();
 const revalidateTag = vi.fn();
@@ -36,6 +36,55 @@ describe('/api/revalidate/home-banners', () => {
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({ success: true });
+    expect(revalidateTag).toHaveBeenCalledWith('home-banners');
+    expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg');
+    expect(revalidatePath).toHaveBeenCalledWith('/en');
+  });
+
+  it('revalidates when the caller posts without a JSON body', async () => {
+    const { POST } = await loadRoute();
+
+    const response = await POST(createInvalidJsonRequest());
+
+    expect(response.status).toBe(200);
+    expect(revalidateTag).toHaveBeenCalledWith('home-banners');
+    expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg');
+    expect(revalidatePath).toHaveBeenCalledWith('/en');
+  });
+
+  it('requires auth before accepting a bodyless revalidation request', async () => {
+    authResult = { ok: false, status: 401, message: 'Missing authentication token.' };
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createInvalidJsonRequest({
+        headers: {
+          get: (name) => (String(name).toLowerCase() === 'x-revalidate-secret' ? 'ignored-secret' : null),
+        },
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('allows internal revalidation requests with the configured secret', async () => {
+    vi.stubEnv('HOME_BANNER_REVALIDATE_SECRET', 'server-secret');
+    authResult = { ok: false, status: 401, message: 'Missing authentication token.' };
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createInvalidJsonRequest({
+        headers: {
+          get: (name) => (String(name).toLowerCase() === 'x-revalidate-secret' ? 'server-secret' : null),
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
     expect(revalidateTag).toHaveBeenCalledWith('home-banners');
     expect(revalidatePath).toHaveBeenCalledWith('/');
     expect(revalidatePath).toHaveBeenCalledWith('/bg');

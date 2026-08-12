@@ -4,6 +4,7 @@ import { createInvalidJsonRequest, createJsonRequest, readJson } from '../_helpe
 const revalidatePath = vi.fn();
 const revalidateTag = vi.fn();
 const requireApiAuth = vi.fn();
+const requireApiActiveArtistOrFullAdmin = vi.fn();
 let authResult;
 
 async function loadRoute() {
@@ -11,6 +12,8 @@ async function loadRoute() {
 }
 
 describe('/api/revalidate/products', () => {
+  const validProductId = '507f1f77bcf86cd799439011';
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -19,9 +22,17 @@ describe('/api/revalidate/products', () => {
     vi.clearAllMocks();
     authResult = { ok: true, user: { _id: 'owner-1', role: 'full_admin' } };
     requireApiAuth.mockImplementation(() => authResult);
+    requireApiActiveArtistOrFullAdmin.mockImplementation((auth) =>
+      auth.ok &&
+      auth.user?.role !== 'full_admin' &&
+      !(auth.user?.role === 'artist' && auth.user?.artistStatus !== 'suspended')
+        ? { ok: false, status: 403, message: 'Forbidden.' }
+        : auth
+    );
 
     vi.doMock('../../../src/app/api/_lib/auth.js', () => ({
       requireApiAuth,
+      requireApiActiveArtistOrFullAdmin,
       requireApiFullAdmin: vi.fn((auth) =>
         auth.ok && auth.user?.role !== 'full_admin'
           ? { ok: false, status: 403, message: 'Forbidden.' }
@@ -37,11 +48,13 @@ describe('/api/revalidate/products', () => {
   it('revalidates product list and detail paths', async () => {
     const { POST } = await loadRoute();
 
-    const response = await POST(createJsonRequest({ productId: 'product-1' }));
+    const response = await POST(createJsonRequest({ productId: validProductId }));
 
     expect(response.status).toBe(200);
     await expect(readJson(response)).resolves.toEqual({ success: true });
     expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidateTag).toHaveBeenCalledWith('categories');
+    expect(revalidateTag).toHaveBeenCalledWith('visible-categories');
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
     expect(revalidateTag).toHaveBeenCalledWith('cartoon-gallery-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
@@ -54,9 +67,9 @@ describe('/api/revalidate/products', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/bg/cartoons');
     expect(revalidatePath).toHaveBeenCalledWith('/en/cartoons');
     expect(revalidatePath).toHaveBeenCalledWith('/sitemap.xml');
-    expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
-    expect(revalidatePath).toHaveBeenCalledWith('/bg/products/product-1');
-    expect(revalidatePath).toHaveBeenCalledWith('/en/products/product-1');
+    expect(revalidatePath).toHaveBeenCalledWith(`/products/${validProductId}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/bg/products/${validProductId}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/en/products/${validProductId}`);
   });
 
   it('accepts server-owned revalidation with the shared secret', async () => {
@@ -65,16 +78,59 @@ describe('/api/revalidate/products', () => {
 
     const response = await POST(
       createJsonRequest(
-        { productId: 'product-1' },
+        { productId: validProductId },
         { headers: { get: (name) => (name === 'x-revalidate-secret' ? 'server-secret' : null) } }
       )
     );
 
     expect(response.status).toBe(200);
     expect(requireApiAuth).not.toHaveBeenCalled();
-    expect(revalidatePath).toHaveBeenCalledWith('/products/product-1');
-    expect(revalidatePath).toHaveBeenCalledWith('/bg/products/product-1');
-    expect(revalidatePath).toHaveBeenCalledWith('/en/products/product-1');
+    expect(revalidatePath).toHaveBeenCalledWith(`/products/${validProductId}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/bg/products/${validProductId}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/en/products/${validProductId}`);
+  });
+
+  it('accepts active artist revalidation for product mutation freshness', async () => {
+    authResult = {
+      ok: true,
+      user: { _id: 'artist-1', role: 'artist', artistStatus: 'active' },
+    };
+    const { POST } = await loadRoute();
+
+    const response = await POST(createJsonRequest({ productId: validProductId }));
+
+    expect(response.status).toBe(200);
+    expect(requireApiActiveArtistOrFullAdmin).toHaveBeenCalledWith(authResult);
+    expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products');
+  });
+
+  it('rejects invalid product ids before revalidating detail paths', async () => {
+    const { POST } = await loadRoute();
+
+    const response = await POST(createJsonRequest({ productId: '../admin' }));
+
+    expect(response.status).toBe(400);
+    await expect(readJson(response)).resolves.toEqual({ message: 'Invalid productId.' });
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid product ids on the shared-secret path too', async () => {
+    vi.stubEnv('PRODUCT_REVALIDATE_SECRET', 'server-secret');
+    const { POST } = await loadRoute();
+
+    const response = await POST(
+      createJsonRequest(
+        { productId: '../admin' },
+        { headers: { get: (name) => (name === 'x-revalidate-secret' ? 'server-secret' : null) } }
+      )
+    );
+
+    expect(response.status).toBe(400);
+    expect(requireApiAuth).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -95,6 +151,8 @@ describe('/api/revalidate/products', () => {
 
     expect(response.status).toBe(200);
     expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidateTag).toHaveBeenCalledWith('categories');
+    expect(revalidateTag).toHaveBeenCalledWith('visible-categories');
     expect(revalidateTag).toHaveBeenCalledWith('homepage-featured-products');
     expect(revalidateTag).toHaveBeenCalledWith('cartoon-gallery-products');
     expect(revalidatePath).toHaveBeenCalledWith('/products');
@@ -110,6 +168,23 @@ describe('/api/revalidate/products', () => {
     expect(revalidatePath).not.toHaveBeenCalledWith('/products/undefined');
   });
 
+  it('revalidates tag/list surfaces without detail paths when productId is omitted', async () => {
+    const { POST } = await loadRoute();
+
+    const response = await POST(createJsonRequest({}));
+
+    expect(response.status).toBe(200);
+    expect(revalidateTag).toHaveBeenCalledWith('products');
+    expect(revalidateTag).toHaveBeenCalledWith('categories');
+    expect(revalidateTag).toHaveBeenCalledWith('visible-categories');
+    expect(revalidatePath).toHaveBeenCalledWith('/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/bg/products');
+    expect(revalidatePath).toHaveBeenCalledWith('/en/products');
+    expect(revalidatePath).not.toHaveBeenCalledWith(expect.stringMatching(/^\/products\/.+/));
+    expect(revalidatePath).not.toHaveBeenCalledWith(expect.stringMatching(/^\/bg\/products\/.+/));
+    expect(revalidatePath).not.toHaveBeenCalledWith(expect.stringMatching(/^\/en\/products\/.+/));
+  });
+
   it('returns 500 when auth validation throws', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     requireApiAuth.mockImplementationOnce(() => {
@@ -117,7 +192,7 @@ describe('/api/revalidate/products', () => {
     });
     const { POST } = await loadRoute();
 
-    const response = await POST(createJsonRequest({ productId: 'product-1' }));
+    const response = await POST(createJsonRequest({ productId: validProductId }));
 
     expect(response.status).toBe(500);
     expect(revalidateTag).not.toHaveBeenCalled();

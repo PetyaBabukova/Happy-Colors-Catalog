@@ -3,7 +3,7 @@
 import './globals.css';
 import ClientLayout from './ClientLayout';
 import { Roboto } from 'next/font/google';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import {
   metadataBaseUrl,
   currentSiteUrl,
@@ -18,6 +18,8 @@ import {
   normalizeLocale,
 } from '@/i18n/config';
 import { getDictionary } from '@/i18n/getDictionary';
+import { getVisibleCategoriesSeed } from '@/managers/categoriesManager';
+import { hasAuthSessionHint } from '@/context/authSessionHint';
 
 const roboto = Roboto({
   subsets: ['latin', 'cyrillic'],
@@ -80,7 +82,10 @@ async function resolveLayoutLocale() {
 
 export default async function RootLayout({ children }) {
   const locale = await resolveLayoutLocale();
+  const requestCookies = await cookies();
   const dictionary = getDictionary(locale);
+  const visibleCategoriesSeed = await getVisibleCategoriesSeed({ locale });
+  const hasSessionHint = hasAuthSessionHint(requestCookies);
 
   return (
     <html lang={LOCALE_DETAILS[locale].htmlLang}>
@@ -92,6 +97,9 @@ export default async function RootLayout({ children }) {
         <ClientLayout
           dictionary={dictionary}
           enableAnalytics={shouldIndexSite}
+          hasSessionHint={hasSessionHint}
+          initialVisibleCategories={visibleCategoriesSeed.categories}
+          initialVisibleCategoriesLoaded={visibleCategoriesSeed.loaded}
           locale={locale}
         >
           {children}

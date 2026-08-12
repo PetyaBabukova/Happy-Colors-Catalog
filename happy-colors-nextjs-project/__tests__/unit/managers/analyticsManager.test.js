@@ -4,13 +4,7 @@ import {
   fetchAnalyticsSummary,
   fetchNewsletterSubscriberAnalytics,
 } from '../../../src/managers/analyticsManager.js';
-
-function jsonResponse({ ok = true, body = {} } = {}) {
-  return {
-    ok,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('analyticsManager', () => {
   beforeEach(() => {

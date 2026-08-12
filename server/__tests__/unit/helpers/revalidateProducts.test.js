@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { revalidateProductSurfaces } from '../../../helpers/revalidateProducts.js';
+import {
+  revalidateProductSurfaces,
+  revalidateProductSurfacesSafely,
+} from '../../../helpers/revalidateProducts.js';
 
 describe('revalidateProductSurfaces', () => {
   beforeEach(() => {
@@ -28,6 +31,16 @@ describe('revalidateProductSurfaces', () => {
     await expect(revalidateProductSurfaces({ productId: 'product-1' })).rejects.toThrow(
       'Product revalidation is not configured.'
     );
+  });
+
+  it('converts production configuration failures into safe side-effect failures', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(revalidateProductSurfacesSafely({ productId: 'product-1' })).resolves.toEqual({
+      ok: false,
+      error: true,
+    });
   });
 
   it('posts to the configured revalidation endpoint with the shared secret', async () => {

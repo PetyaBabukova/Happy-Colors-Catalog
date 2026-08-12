@@ -1,13 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sendContactForm } from '../../../src/managers/contactsManager.js';
-
-function jsonResponse({ ok = true, status = ok ? 200 : 400, body = {} } = {}) {
-  return {
-    ok,
-    status,
-    json: vi.fn().mockResolvedValue(body),
-  };
-}
+import { jsonResponse } from '../../api/_helpers.js';
 
 describe('contactsManager', () => {
   beforeEach(() => {

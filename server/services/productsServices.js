@@ -5,7 +5,7 @@ import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { sendEmail } from '../helpers/sendEmail.js';
 import { deleteImageFromGCS, getBucketName } from '../helpers/gcsImageHelper.js';
-import { revalidateProductSurfaces } from '../helpers/revalidateProducts.js';
+import { revalidateProductSurfacesSafely } from '../helpers/revalidateProducts.js';
 import {
   isAllowedPosterStorageUrl,
   isAllowedVideoStorageUrl,
@@ -766,7 +766,7 @@ export async function updateHomepageFeaturedProducts(productIds) {
     await session.endSession();
   }
 
-  await revalidateProductSurfaces();
+  await revalidateProductSurfacesSafely();
 
   return getHomepageFeaturedProducts();
 }
@@ -786,7 +786,7 @@ export async function createProduct(data, user) {
   const savedProduct = await product.save();
   await notifyFullAdminsForProductReview(savedProduct, user);
   if (savedProduct.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
-    await revalidateProductSurfaces({ productId: savedProduct._id });
+    await revalidateProductSurfacesSafely({ productId: savedProduct._id });
   }
 
   return normalizeProductMedia(savedProduct.toObject());
@@ -1004,7 +1004,7 @@ export async function editProduct(productId, productData, user) {
     await notifyFullAdminsForProductReview(product, user);
   }
   if (wasPublic || product.publicationStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
-    await revalidateProductSurfaces({ productId: product._id });
+    await revalidateProductSurfacesSafely({ productId: product._id });
   }
 
   return withTranslationDecision(product.toObject(), {
@@ -1033,7 +1033,7 @@ export async function deleteProduct(productId, user) {
   await Product.findByIdAndDelete(product._id);
 
   if (wasPublic) {
-    await revalidateProductSurfaces({ productId: product._id });
+    await revalidateProductSurfacesSafely({ productId: product._id });
   }
 
   return { message: 'Продуктът беше изтрит успешно.' };
@@ -1193,7 +1193,7 @@ async function setReviewedProductStatus(productId, user, nextStatus, reviewNote 
   await deleteAssetsFromStorage(approvedDraftAssetsToDelete, { excludeProductId: product._id });
 
   if (wasPublic || nextStatus === PRODUCT_PUBLICATION_STATUSES.PUBLISHED) {
-    await revalidateProductSurfaces({ productId: product._id });
+    await revalidateProductSurfacesSafely({ productId: product._id });
   }
 
   return withTranslationDecision(product.toObject(), {

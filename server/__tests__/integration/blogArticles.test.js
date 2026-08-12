@@ -65,14 +65,50 @@ describe('blog articles integration', () => {
     expect(res.body[0]).toMatchObject({
       title: 'Newest published',
       excerpt: expect.any(String),
+      contentHtml: expect.any(String),
+      heroImageUrl: expect.any(String),
       thumbnailImageUrl: expect.any(String),
     });
-    expect(res.body[0]).not.toHaveProperty('contentHtml');
+    expect(res.body[1]).not.toHaveProperty('contentHtml');
+    expect(res.body[1]).not.toHaveProperty('heroImageUrl');
     expect(res.body[0]).not.toHaveProperty('contentJson');
     expect(res.body[0]).not.toHaveProperty('owner');
     expect(res.body[0]).not.toHaveProperty('newsletterReady');
     expect(res.body[0]).not.toHaveProperty('newsletterSentAt');
     expect(res.body[0]).not.toHaveProperty('archivedAt');
+  });
+
+  it('hydrates the featured public article without a separate detail lookup', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    await createBlogArticle(
+      articleFields({
+        owner,
+        title: 'Featured article',
+        publishedAt: new Date('2026-05-02T10:00:00.000Z'),
+      })
+    );
+    await createBlogArticle(
+      articleFields({
+        owner,
+        title: 'Older article',
+        publishedAt: new Date('2026-05-01T10:00:00.000Z'),
+      })
+    );
+    const findOneSpy = vi.spyOn(BlogArticle, 'findOne');
+
+    try {
+      const res = await request(app).get('/blog-articles').expect(200);
+
+      expect(res.body.map((article) => article.title)).toEqual(['Featured article', 'Older article']);
+      expect(res.body[0]).toHaveProperty('contentHtml');
+      expect(res.body[0]).toHaveProperty('heroImageUrl');
+      expect(res.body[1]).not.toHaveProperty('contentHtml');
+      expect(res.body[1]).not.toHaveProperty('heroImageUrl');
+      expect(findOneSpy).not.toHaveBeenCalled();
+    } finally {
+      findOneSpy.mockRestore();
+    }
   });
 
   it('returns public detail only for non-archived articles', async () => {
@@ -175,6 +211,8 @@ describe('blog articles integration', () => {
       expect.objectContaining({
         _id: String(translated._id),
         title: 'English article',
+        contentHtml: '<p>English body.</p>',
+        contentText: 'English body.',
         excerpt: 'English excerpt',
         heroImageAlt: 'English alt',
         seoTitle: 'English SEO',
@@ -184,7 +222,6 @@ describe('blog articles integration', () => {
         translationPending: false,
       }),
     ]);
-    expect(listRes.body[0]).not.toHaveProperty('contentHtml');
     expect(listRes.body[0]).not.toHaveProperty('translations');
     expect(listRes.body[0]).not.toHaveProperty('sourceRevision');
     expect(detailRes.body).toMatchObject({

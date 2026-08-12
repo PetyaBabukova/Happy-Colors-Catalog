@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Storage } from '@google-cloud/storage';
-import { CARTOON_ORDER_PHOTO_PREFIX } from '../config/productLimits.js';
+import {
+  extractObjectNameFromGcsUrl as extractGcsObjectName,
+  isCartoonOrderPhotoObjectName,
+} from '../../shared/gcsCore.js';
+import { CARTOON_ORDER_PHOTO_PREFIX } from '../../shared/config/productLimits.js';
 import { classifyStorageError } from './storageErrorClassifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +18,8 @@ let storageInstance = null;
 let cartoonOrdersStorageInstance = null;
 let keyFilenameCache;
 const DIAGNOSTIC_SIGN_PROBE_OBJECT_NAME = 'diagnostics/sign-probe/non-customer-placeholder';
+
+export { isCartoonOrderPhotoObjectName };
 
 function resolveGoogleCredentialsPath() {
   const candidates = [
@@ -121,18 +127,9 @@ export function getCartoonOrdersBucketName() {
     return privateBucketName;
   }
 
-  // Development/test convenience only; production must use a private cartoon-orders bucket.
   return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
     ? getBucketName()
     : '';
-}
-
-export function isCartoonOrderPhotoObjectName(objectName) {
-  return (
-    typeof objectName === 'string' &&
-    objectName.startsWith(`${CARTOON_ORDER_PHOTO_PREFIX}/`) &&
-    !objectName.split('/').some((part) => part === '..' || part === '.' || part.includes('\\'))
-  );
 }
 
 export async function createCartoonOrderPhotoSignedReadUrl({
@@ -324,61 +321,11 @@ export async function listCartoonOrderPhotoObjects({ limit = 1000 } = {}) {
 }
 
 export function extractObjectNameFromGcsUrl(assetUrl) {
-  if (!assetUrl) {
-    return null;
-  }
-
-  const bucketName = getBucketName();
-
-  if (!bucketName) {
-    return null;
-  }
-
-  try {
-    const rawAssetUrl = String(assetUrl);
-    const decodedAssetUrl = decodeURIComponent(rawAssetUrl);
-
-    if (
-      /(^|\/)(\.{1,2})(\/|$)/.test(rawAssetUrl) ||
-      /(^|\/)(\.{1,2})(\/|$)/.test(decodedAssetUrl)
-    ) {
-      return null;
-    }
-
-    const url = new URL(assetUrl);
-    const parts = url.pathname.split('/').filter(Boolean);
-    const decodedParts = parts.map((part) => decodeURIComponent(part));
-
-    if (url.protocol !== 'https:' || url.hostname !== 'storage.googleapis.com') {
-      return null;
-    }
-
-    if (
-      decodedParts.some(
-        (part) => part === '..' || part === '.' || part.includes('/') || part.includes('\\')
-      )
-    ) {
-      return null;
-    }
-
-    if (parts.length < 2) {
-      return null;
-    }
-
-    const bucketFromUrl = parts[0];
-
-    if (bucketFromUrl !== bucketName) {
-      console.warn(
-        `GCS helper: bucket in URL (${bucketFromUrl}) != env bucket (${bucketName}).`
-      );
-      return null;
-    }
-
-    return parts.slice(1).join('/');
-  } catch (error) {
-    console.error('GCS helper: invalid asset URL:', assetUrl, error);
-    return null;
-  }
+  return extractGcsObjectName(assetUrl, {
+    bucketName: getBucketName(),
+    warn: console.warn,
+    logError: console.error,
+  });
 }
 
 export async function deleteImageFromGCS(imageUrl, { throwOnError = false } = {}) {

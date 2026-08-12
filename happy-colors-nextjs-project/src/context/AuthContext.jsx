@@ -14,7 +14,7 @@ import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandle
 
 export const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
+export const AuthProvider = ({ children, hasSessionHint = false }) => {
   const [user, setUser] = useState(undefined);
   const [loading, setLoading] = useState(true);
   const authVersionRef = useRef(0);
@@ -67,8 +67,14 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    if (!hasSessionHint) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     refreshUser();
-  }, [refreshUser]);
+  }, [hasSessionHint, refreshUser]);
 
   const value = useMemo(
     () => ({

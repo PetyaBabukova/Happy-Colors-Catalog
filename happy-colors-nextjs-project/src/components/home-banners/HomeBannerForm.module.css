@@ -17,6 +17,25 @@
   margin: 0;
 }
 
+.translationLink {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--dark-green);
+  border-radius: 0.5rem;
+  background-color: var(--dark-green);
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.translationLink:hover,
+.translationLink:focus-visible {
+  background-color: var(--light-green);
+  color: white;
+}
+
 .form {
   display: flex;
   flex-direction: column;

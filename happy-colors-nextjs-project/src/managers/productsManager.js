@@ -2,18 +2,44 @@
 
 import baseURL from '@/config';
 import { createResponseError, readResponseJsonSafely } from '@/utils/errorHandler';
+import { buildApiUrl, getPublicServerFetchOptions } from './requestUtils';
 
-function buildUrl(path, params = {}) {
-  const searchParams = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      searchParams.set(key, value);
-    }
+export async function revalidatePublicProductSurfaces(productId) {
+  if (typeof window === 'undefined') {
+    return { skipped: true };
   }
 
-  const query = searchParams.toString();
-  return `${baseURL}${path}${query ? `?${query}` : ''}`;
+  try {
+    const payload = productId ? { productId: String(productId) } : {};
+    const res = await fetch('/api/revalidate/products', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      return { ok: false, status: res.status };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error('Failed to revalidate public product surfaces:', error);
+    return { ok: false, error: true };
+  }
+}
+
+function publicHref(path, options = {}) {
+  return typeof options.publicHref === 'function' ? options.publicHref(path) : path;
+}
+
+export function canRequestPublicProductRevalidation(user) {
+  return (
+    user?.role === 'full_admin' ||
+    (user?.role === 'artist' && user?.artistStatus !== 'suspended')
+  );
 }
 
 export async function onCreateProductSubmit(
@@ -23,7 +49,8 @@ export async function onCreateProductSubmit(
   setInvalidFields,
   user,
   router,
-  triggerCategoriesReload
+  triggerCategoriesReload,
+  options = {}
 ) {
   try {
     const normalizedImageUrls = Array.isArray(formValues.imageUrls)
@@ -69,11 +96,16 @@ export async function onCreateProductSubmit(
     setInvalidFields([]);
 
     triggerCategoriesReload();
+    if (result.publicationStatus === 'published' && canRequestPublicProductRevalidation(user)) {
+      await revalidatePublicProductSurfaces(result._id);
+    }
     router.push(
       result.publicationStatus === 'published'
-        ? `/products/${result._id}`
-        : `/products/${result._id}?created=review-pending`
+        ? publicHref(`/products/${result._id}`, options)
+        : publicHref(`/products/${result._id}?created=review-pending`, options)
     );
+    router.refresh?.();
+    return result;
   } catch (err) {
     setSuccess(false);
     setError(err.message || 'Възникна грешка при създаване на продукта.');
@@ -83,6 +115,8 @@ export async function onCreateProductSubmit(
     } else {
       setInvalidFields([]);
     }
+
+    return null;
   }
 }
 
@@ -134,6 +168,10 @@ export async function onEditProductSubmit(
     setError('');
     setInvalidFields([]);
 
+    if (canRequestPublicProductRevalidation(user)) {
+      await revalidatePublicProductSurfaces(productId);
+    }
+
     if (
       result?.englishTranslationDecision &&
       typeof options.onTranslationDecision === 'function'
@@ -144,10 +182,11 @@ export async function onEditProductSubmit(
 
     router.push(
       result?.reviewStatus === 'pending_review' || result?.publicationStatus === 'pending_review'
-        ? `/products/${productId}?updated=review-pending`
-        : `/products/${productId}`
+        ? publicHref(`/products/${productId}?updated=review-pending`, options)
+        : publicHref(`/products/${productId}`, options)
     );
     router.refresh();
+    return result;
   } catch (err) {
     setSuccess(false);
     setError(err.message || 'Възникна грешка при редакция на продукта.');
@@ -157,6 +196,8 @@ export async function onEditProductSubmit(
     } else {
       setInvalidFields([]);
     }
+
+    return null;
   }
 }
 
@@ -168,9 +209,10 @@ export async function getProducts(categoryName, { locale } = {}) {
       params.category = categoryName;
     }
 
-    const res = await fetch(buildUrl('/products', params), {
-      cache: 'no-store',
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/products', params),
+      getPublicServerFetchOptions({ tags: ['products'] })
+    );
 
     if (!res.ok) {
       throw new Error('Неуспешно зареждане на продуктите');
@@ -191,12 +233,10 @@ export async function getProducts(categoryName, { locale } = {}) {
 
 export async function getHomepageFeaturedProducts({ locale } = {}) {
   try {
-    const res = await fetch(buildUrl('/products/homepage-featured', { locale }), {
-      next: {
-        revalidate: 60,
-        tags: ['products', 'homepage-featured-products'],
-      },
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/products/homepage-featured', { locale }),
+      getPublicServerFetchOptions({ tags: ['products', 'homepage-featured-products'] })
+    );
 
     if (!res.ok) {
       throw new Error('Неуспешно зареждане на продуктите за началната страница');
@@ -217,7 +257,7 @@ export async function getHomepageFeaturedProducts({ locale } = {}) {
 
 export async function getCartoonGalleryProducts({ locale } = {}) {
   try {
-    const res = await fetch(buildUrl('/products/cartoon-gallery', { locale }), {
+    const res = await fetch(buildApiUrl(baseURL, '/products/cartoon-gallery', { locale }), {
       cache: 'no-store',
     });
 

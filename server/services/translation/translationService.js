@@ -4,6 +4,10 @@ import {
   getEntityTranslationConfig,
   pickTranslationFields,
 } from './entityTranslationConfig.js';
+import { revalidateBlogSurfacesSafely } from '../../helpers/revalidateBlog.js';
+import { revalidateCartoonHeroBannerSurfacesSafely } from '../../helpers/revalidateCartoonHeroBanners.js';
+import { revalidateHomeBannerSurfacesSafely } from '../../helpers/revalidateHomeBanners.js';
+import { revalidateProductSurfacesSafely } from '../../helpers/revalidateProducts.js';
 import { getSourceRevision as normalizeSourceRevision } from '../localization/publicProjection.js';
 import { translateEntityFields } from './translationProvider.js';
 
@@ -422,6 +426,32 @@ function serializeQueueItem(entity, config, locale) {
   };
 }
 
+async function revalidateActivatedTranslation(config, entity) {
+  if (config.entityType === 'product') {
+    await revalidateProductSurfacesSafely({ productId: entity._id });
+    return;
+  }
+
+  if (config.entityType === 'category') {
+    await revalidateProductSurfacesSafely();
+    return;
+  }
+
+  if (config.entityType === 'blogArticle') {
+    await revalidateBlogSurfacesSafely({ articleId: entity._id });
+    return;
+  }
+
+  if (config.entityType === 'homeBanner') {
+    if (String(entity?.placement || 'home').trim().toLowerCase() === 'cartoons') {
+      await revalidateCartoonHeroBannerSurfacesSafely();
+      return;
+    }
+
+    await revalidateHomeBannerSurfacesSafely();
+  }
+}
+
 async function findEntityOr404(config, entityId) {
   if (!mongoose.Types.ObjectId.isValid(String(entityId || ''))) {
     throw createTranslationError('Translation entity was not found.', 404);
@@ -558,6 +588,7 @@ export async function saveManualTranslation({
     setEntries: [{ fieldName: 'translations', locale, value: nextTranslation }],
     guardClauses: buildActiveTranslationWriteGuards(locale, payload),
   });
+  await revalidateActivatedTranslation(config, entity);
 
   return {
     status: 'current',
@@ -614,6 +645,7 @@ export async function acceptCurrentTranslation({
       buildDraftStateGuard(locale, getMapEntry(entity.translationDrafts, locale)),
     ],
   });
+  await revalidateActivatedTranslation(config, entity);
 
   return {
     status: 'current',
@@ -670,6 +702,7 @@ export async function approveTranslationDraft({
     unsetEntries: [{ fieldName: 'translationDrafts', locale }],
     guardClauses: buildDraftTranslationWriteGuards(locale, payload),
   });
+  await revalidateActivatedTranslation(config, entity);
 
   return {
     status: 'current',
@@ -810,6 +843,7 @@ export async function generateTranslation({
     setEntries: [{ fieldName: 'translations', locale, value: nextTranslation }],
     guardClauses: buildActiveTranslationWriteGuards(locale, payload),
   });
+  await revalidateActivatedTranslation(config, freshEntity);
 
   return {
     status: 'current',
