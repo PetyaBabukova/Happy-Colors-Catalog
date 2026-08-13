@@ -257,9 +257,10 @@ export async function getHomepageFeaturedProducts({ locale } = {}) {
 
 export async function getCartoonGalleryProducts({ locale } = {}) {
   try {
-    const res = await fetch(buildApiUrl(baseURL, '/products/cartoon-gallery', { locale }), {
-      cache: 'no-store',
-    });
+    const res = await fetch(
+      buildApiUrl(baseURL, '/products/cartoon-gallery', { locale }),
+      getPublicServerFetchOptions({ tags: ['products', 'cartoon-gallery-products'], browserNoStore: false })
+    );
 
     if (!res.ok) {
       throw new Error('Failed to load cartoon gallery products.');

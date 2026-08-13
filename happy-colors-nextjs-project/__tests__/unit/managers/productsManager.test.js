@@ -86,7 +86,11 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       3,
       'http://localhost:3000/api/products/cartoon-gallery?locale=en',
-      expect.objectContaining({ cache: 'no-store' })
+      expect.objectContaining({
+        next: expect.objectContaining({
+          tags: ['products', 'cartoon-gallery-products'],
+        }),
+      })
     );
   });
 
@@ -180,12 +184,14 @@ describe('productsManager', () => {
       2,
       'http://localhost:3000/api/products/cartoon-gallery',
       expect.objectContaining({
-        cache: 'no-store',
+        next: expect.objectContaining({
+          tags: ['products', 'cartoon-gallery-products'],
+        }),
       })
     );
   });
 
-  it('loads cartoon gallery products fresh from the dedicated endpoint', async () => {
+  it('loads cartoon gallery products with the gallery cache tag', async () => {
     const products = [
       { _id: 'product-1', title: 'First' },
       { _id: 'product-2', title: 'Second' },
@@ -197,7 +203,10 @@ describe('productsManager', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/products/cartoon-gallery',
       expect.objectContaining({
-        cache: 'no-store',
+        next: {
+          revalidate: 60,
+          tags: ['products', 'cartoon-gallery-products'],
+        },
       })
     );
   });
