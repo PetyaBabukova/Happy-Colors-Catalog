@@ -16,8 +16,8 @@ describe('ProductsPage metadata', () => {
     const { generateMetadata } = await import('@/app/products/page');
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title).toBe('Handmade Crochet Toys, Accessories, And Home Decor - Catalog');
-    expect(metadata.description).toMatch(/Browse handmade crochet toys/);
+    expect(metadata.title).toBe('Shop Handmade Crochet Toys and Home Decor');
+    expect(metadata.description).toMatch(/Shop available handmade crochet toys/);
     expect(metadata.alternates.canonical).toBe('/en/products');
   });
 });

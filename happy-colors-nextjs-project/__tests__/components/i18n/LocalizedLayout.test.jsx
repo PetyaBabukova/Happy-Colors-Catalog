@@ -59,10 +59,10 @@ describe('LocalizedLayout', () => {
     });
 
     expect(metadata.title).toEqual({
-      default: 'Handmade Crochet Toys, Accessories, And Home Decor | Happy Colors',
+      default: 'Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors',
       template: '%s | Happy Colors',
     });
-    expect(metadata.description).not.toMatch(/[А-Яа-я]/);
+    expect(metadata.description).not.toMatch(/[\u0400-\u04FF]/);
   });
 
   it('keeps the Bulgarian title suffix for Bulgarian localized routes', async () => {

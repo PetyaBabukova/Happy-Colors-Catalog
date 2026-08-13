@@ -17,7 +17,7 @@ export const homePageContent = {
   en: {
     metadata: {
       title: {
-        absolute: 'Handmade Crochet Toys, Accessories, And Home Decor | Happy Colors',
+        absolute: 'Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors',
       },
       description:
         'Handmade crochet toys, accessories, and home decorations by Happy Colors - original gift ideas, cozy accents, and beautiful pieces with character.',

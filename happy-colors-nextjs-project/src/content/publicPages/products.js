@@ -8,9 +8,9 @@ export const productsPageContent = {
   },
   en: {
     metadata: {
-      title: 'Handmade Crochet Toys, Accessories, And Home Decor - Catalog',
+      title: 'Shop Handmade Crochet Toys and Home Decor',
       description:
-        'Browse handmade crochet toys, accessories, and home decorations from Happy Colors - original pieces for gifts, special occasions, and cozy homes.',
+        'Shop available handmade crochet toys, accessories, and home decor from Happy Colors, with gift ideas for special occasions and cozy spaces.',
     },
   },
 };
