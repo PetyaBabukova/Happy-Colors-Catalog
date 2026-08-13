@@ -188,6 +188,7 @@ describe('sitemap', () => {
     const entries = await sitemap();
     const urls = entries.map((entry) => entry.url);
 
+    expect(urls.every((url) => /^https:\/\/happycolors\.eu\/(?:bg|en)(?:\/|$)/.test(url))).toBe(true);
     expect(urls).toContain('https://happycolors.eu/bg');
     expect(urls).toContain('https://happycolors.eu/en');
     expect(urls).toContain('https://happycolors.eu/bg/partners');

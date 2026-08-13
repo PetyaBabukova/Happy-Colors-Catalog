@@ -62,7 +62,7 @@ describe('HomePage', () => {
   it('generates English metadata for localized home routes', async () => {
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, And Home Decor | Happy Colors');
+    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors');
     expect(metadata.description).toMatch(/Handmade crochet toys/);
     expect(metadata.alternates.canonical).toBe('/en');
   });
@@ -70,6 +70,6 @@ describe('HomePage', () => {
   it('re-exports metadata generation from the localized home wrapper', async () => {
     const metadata = await generateLocalizedMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, And Home Decor | Happy Colors');
+    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors');
   });
 });
