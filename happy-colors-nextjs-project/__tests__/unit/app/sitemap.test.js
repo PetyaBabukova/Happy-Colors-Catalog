@@ -86,6 +86,30 @@ describe('sitemap', () => {
         priority: 0.6,
       },
       {
+        url: 'https://happycolors.eu/gifts',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.75,
+      },
+      {
+        url: 'https://happycolors.eu/gifts/gifts-for-children',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
+        url: 'https://happycolors.eu/gifts/handmade-crochet-toy-gift',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
+        url: 'https://happycolors.eu/gifts/original-handmade-gift',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
         url: 'https://happycolors.eu/blog',
         lastModified: new Date('2026-05-07T09:00:00.000Z'),
         changeFrequency: 'weekly',
@@ -191,6 +215,10 @@ describe('sitemap', () => {
     expect(urls.every((url) => /^https:\/\/happycolors\.eu\/(?:bg|en)(?:\/|$)/.test(url))).toBe(true);
     expect(urls).toContain('https://happycolors.eu/bg');
     expect(urls).toContain('https://happycolors.eu/en');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts');
+    expect(urls).toContain('https://happycolors.eu/en/gifts');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts/gifts-for-children');
+    expect(urls).toContain('https://happycolors.eu/en/gifts/gifts-for-children');
     expect(urls).toContain('https://happycolors.eu/bg/partners');
     expect(urls).toContain('https://happycolors.eu/en/partners');
     expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
@@ -224,6 +252,15 @@ describe('sitemap', () => {
           bg: 'https://happycolors.eu/bg',
           en: 'https://happycolors.eu/en',
           'x-default': 'https://happycolors.eu/bg',
+        },
+      },
+    });
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/en/gifts/gifts-for-children')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/gifts/gifts-for-children',
+          en: 'https://happycolors.eu/en/gifts/gifts-for-children',
+          'x-default': 'https://happycolors.eu/bg/gifts/gifts-for-children',
         },
       },
     });
@@ -265,6 +302,8 @@ describe('sitemap', () => {
     const urls = entries.map((entry) => entry.url);
 
     expect(urls).toContain('https://happycolors.eu/bg');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts/original-handmade-gift');
     expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
     expect(urls).toContain('https://happycolors.eu/bg/blog/translated-blog');
     expect(urls.some((url) => url.includes('https://happycolors.eu/en'))).toBe(false);
@@ -292,12 +331,16 @@ describe('sitemap', () => {
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
       next: { revalidate: 3600, tags: ['blog-articles'] },
     });
-    expect(entries).toHaveLength(7);
+    expect(entries).toHaveLength(11);
     expect(entries.map((entry) => entry.url)).toEqual([
       'https://happycolors.eu/',
       'https://happycolors.eu/products',
       'https://happycolors.eu/aboutus',
       'https://happycolors.eu/faq',
+      'https://happycolors.eu/gifts',
+      'https://happycolors.eu/gifts/gifts-for-children',
+      'https://happycolors.eu/gifts/handmade-crochet-toy-gift',
+      'https://happycolors.eu/gifts/original-handmade-gift',
       'https://happycolors.eu/blog',
       'https://happycolors.eu/contacts',
       'https://happycolors.eu/partners',

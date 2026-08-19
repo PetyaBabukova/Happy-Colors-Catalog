@@ -65,7 +65,7 @@ export async function getHomeBanners({ locale } = {}) {
 
     return data;
   } catch (error) {
-    console.error(error.message);
+    console.warn(error.message);
     return [];
   }
 }
@@ -89,7 +89,7 @@ export async function getCartoonHeroBanners({ locale } = {}) {
 
     return data;
   } catch (error) {
-    console.error(error.message);
+    console.warn(error.message);
     return [];
   }
 }

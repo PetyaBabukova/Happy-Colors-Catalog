@@ -26,7 +26,7 @@ describe('FaqPage', () => {
       alternates: { canonical: '/en/faq' },
     });
 
-    render(element, { locale: 'en' });
+    const { container } = render(element, { locale: 'en' });
 
     expect(screen.getByRole('heading', { name: 'Frequently asked questions' })).toBeInTheDocument();
     for (const link of screen.getAllByRole('link', { name: 'catalog' })) {
@@ -35,5 +35,21 @@ describe('FaqPage', () => {
     expect(screen.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', '/en/contacts');
     expect(screen.getAllByText('Inquiries and availability').length).toBeGreaterThan(0);
     expect(screen.getByText('Can I pay online through the site?')).toBeInTheDocument();
+
+    const [faqJsonLd] = [...container.querySelectorAll('script[type="application/ld+json"]')]
+      .map((script) => JSON.parse(script.textContent));
+
+    expect(faqJsonLd).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+    });
+    expect(faqJsonLd.mainEntity.length).toBeGreaterThan(10);
+    expect(faqJsonLd.mainEntity[0]).toMatchObject({
+      '@type': 'Question',
+      acceptedAnswer: {
+        '@type': 'Answer',
+      },
+    });
+    expect(JSON.stringify(faqJsonLd)).not.toMatch(/localhost|preview|onrender|vercel|netlify/i);
   });
 });

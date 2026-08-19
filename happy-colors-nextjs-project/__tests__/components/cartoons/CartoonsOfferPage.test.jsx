@@ -86,6 +86,22 @@ describe('CartoonsOfferPage', () => {
     });
     expect(screen.getByRole('link', { name: 'contact form' })).toHaveAttribute('href', '/en/contacts');
     expect(screen.getByRole('link', { name: 'View gallery' })).toHaveAttribute('href', '/en/cartoons');
+
+    const scripts = [...container.querySelectorAll('script[type="application/ld+json"]')]
+      .map((script) => JSON.parse(script.textContent));
+
+    expect(scripts.map((script) => script['@type'])).toEqual(['Service', 'BreadcrumbList']);
+    expect(scripts[0]).toMatchObject({
+      '@id': 'https://happycolors.eu/en/cartoons/offer#service',
+      url: 'https://happycolors.eu/en/cartoons/offer',
+      provider: {
+        '@id': 'https://happycolors.eu/#organization',
+      },
+      inLanguage: 'en-US',
+    });
+    expect(scripts[0]).not.toHaveProperty('offers');
+    expect(scripts[1].itemListElement).toHaveLength(3);
+    expect(JSON.stringify(scripts)).not.toMatch(/localhost|preview|onrender|vercel|netlify/i);
   });
 
   it('uses default-locale canonical metadata when no locale params are provided', async () => {

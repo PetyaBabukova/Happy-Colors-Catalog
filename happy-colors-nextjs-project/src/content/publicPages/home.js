@@ -12,6 +12,29 @@ export const homePageContent = {
       text: 'В Happy Colors ще откриете ръчно изработени плетени играчки, аксесоари и декорация за дома, създадени с внимание към всеки детайл. Колекцията включва красиви и оригинални изделия, подходящи за подарък, детска стая, празник или уютен акцент у дома. Ако нещо ви хареса, можете да се свържете с мен за наличност, въпроси и поръчка. Разгледайте галерията и открийте изделие с характер, изработено с грижа и стил.',
     },
     favoritesTitle: 'Най-любимите ви продукти',
+    giftIdeas: {
+      title: 'Идеи за подарък',
+      intro:
+        'Няколко кратки посоки, ако търсите ръчно изработен подарък за дете, специален повод или човек, който обича цветни handmade изделия.',
+      cards: [
+        {
+          title: 'Подаръци за деца',
+          text: 'Меки плетени играчки, цветни герои и идеи според възрастта и повода.',
+          href: '/gifts/gifts-for-children',
+        },
+        {
+          title: 'Плетена играчка като подарък',
+          text: 'Кога crochet toy е мил, личен и запомнящ се избор.',
+          href: '/gifts/handmade-crochet-toy-gift',
+        },
+        {
+          title: 'Оригинален handmade подарък',
+          text: 'Идеи за подарък с характер, текстура и лично усещане.',
+          href: '/gifts/original-handmade-gift',
+        },
+      ],
+      hubCta: 'Всички идеи за подарък',
+    },
     faqLinkLabel: 'Често задавани въпроси',
   },
   en: {
@@ -27,6 +50,29 @@ export const homePageContent = {
       text: 'At Happy Colors you will find handmade crochet toys, accessories, and home decorations created with attention to every detail. The collection includes beautiful and original pieces for gifts, children’s rooms, holidays, or a cozy accent at home. If something catches your eye, you can contact me about availability, questions, or a custom request. Browse the gallery and discover a piece with character, made with care and style.',
     },
     favoritesTitle: 'Your favorite products',
+    giftIdeas: {
+      title: 'Gift ideas',
+      intro:
+        'A few calm starting points when you are looking for a handmade gift for a child, a special occasion, or someone who loves colorful handmade pieces.',
+      cards: [
+        {
+          title: 'Gifts for children',
+          text: 'Soft crochet toys, colorful characters, and age-aware ideas.',
+          href: '/gifts/gifts-for-children',
+        },
+        {
+          title: 'Crochet toy as a gift',
+          text: 'When a handmade crochet toy feels personal and memorable.',
+          href: '/gifts/handmade-crochet-toy-gift',
+        },
+        {
+          title: 'Original handmade gift',
+          text: 'Gift ideas with texture, character, and a more personal feeling.',
+          href: '/gifts/original-handmade-gift',
+        },
+      ],
+      hubCta: 'All gift ideas',
+    },
     faqLinkLabel: 'Frequently asked questions',
   },
 };

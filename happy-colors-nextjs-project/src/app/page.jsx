@@ -52,6 +52,24 @@ export default async function Home(props = {}) {
         </section>
       )}
 
+      <section className={`${styles.giftIdeasSection} pageInline`} aria-labelledby="home-gift-ideas">
+        <div className={styles.giftIdeasHeader}>
+          <h2 id="home-gift-ideas">{content.giftIdeas.title}</h2>
+          <p>{content.giftIdeas.intro}</p>
+        </div>
+        <div className={styles.giftIdeasGrid}>
+          {content.giftIdeas.cards.map((card) => (
+            <Link key={card.href} href={publicHref(card.href)} className={styles.giftIdeaCard}>
+              <h3>{card.title}</h3>
+              <p>{card.text}</p>
+            </Link>
+          ))}
+        </div>
+        <Link href={publicHref('/gifts')} className={styles.giftIdeasLink}>
+          {content.giftIdeas.hubCta}
+        </Link>
+      </section>
+
       <section className={`${styles.faqSection} pageInline`}>
         <Link href={publicHref('/faq')} className={styles.faqLink}>
           <span>{content.faqLinkLabel}</span>

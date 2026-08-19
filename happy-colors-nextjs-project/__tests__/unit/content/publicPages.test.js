@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { publicPageContentModules } from '@/content/publicPages';
+import {
+  GIFT_GUIDE_SLUGS,
+  GIFT_HUB_PATH,
+  getGiftGuideCards,
+  getGiftGuideContent,
+  getGiftsPageContent,
+} from '@/content/publicPages/gifts';
 
 const ENGLISH_CYRILLIC_PATTERN = /[\u0400-\u04FF]/;
 const BRAND_NAMES = ['Happy Colors', 'Хепи Колорс'];
@@ -92,5 +99,43 @@ describe('public page content modules', () => {
     expect(productsMetadata.description).not.toBe(homeMetadata.description);
     expect(productsTitle).toContain('Shop');
     expect(productsTitle).not.toContain('Accessories, and Home Decor');
+  });
+
+  it('keeps gift guide content complete for every shared English slug', () => {
+    expect(GIFT_HUB_PATH).toBe('/gifts');
+
+    for (const locale of ['bg', 'en']) {
+      const content = getGiftsPageContent(locale);
+      const cards = getGiftGuideCards(locale);
+
+      expect(cards).toHaveLength(GIFT_GUIDE_SLUGS.length);
+      expect(cards.map((card) => card.slug)).toEqual([...GIFT_GUIDE_SLUGS]);
+      expect(cards.map((card) => card.href)).toEqual(
+        GIFT_GUIDE_SLUGS.map((slug) => `/gifts/${slug}`)
+      );
+
+      for (const slug of GIFT_GUIDE_SLUGS) {
+        const guide = getGiftGuideContent(slug, locale);
+
+        expect(guide, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.metadata.title, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.metadata.description, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.title, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.summary, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.sections, `${locale}:${slug}`).toHaveLength(3);
+        expect(guide.pathCards, `${locale}:${slug}`).toHaveLength(3);
+        expect(guide.pathCards.every((card) => card.href.startsWith('/'))).toBe(true);
+      }
+
+      const titles = GIFT_GUIDE_SLUGS.map((slug) => content.guides[slug].metadata.title);
+      expect(new Set(titles).size, locale).toBe(titles.length);
+    }
+  });
+
+  it('keeps gift runtime content on shared /gifts slugs without translated aliases', () => {
+    const serializedGiftContent = JSON.stringify(publicPageContentModules.gifts);
+
+    expect(serializedGiftContent).toContain('/gifts/gifts-for-children');
+    expect(serializedGiftContent).not.toMatch(/\/podaraci/i);
   });
 });

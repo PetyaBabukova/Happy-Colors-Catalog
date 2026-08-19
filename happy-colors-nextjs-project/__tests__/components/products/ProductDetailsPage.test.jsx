@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getProductMock = vi.hoisted(() => vi.fn());
 const buildProductJsonLdMock = vi.hoisted(() => vi.fn(() => ({ '@type': 'Product' })));
+const buildProductBreadcrumbJsonLdMock = vi.hoisted(() => vi.fn(() => ({ '@type': 'BreadcrumbList' })));
 const buildProductMetadataMock = vi.hoisted(() => vi.fn(() => ({ title: 'Product metadata' })));
 const shouldRenderProductJsonLdMock = vi.hoisted(() => vi.fn(() => true));
 
@@ -14,6 +15,7 @@ vi.mock('@/app/products/[productId]/ProductDetails', () => ({
 }));
 
 vi.mock('@/utils/productSeo', () => ({
+  buildProductBreadcrumbJsonLd: buildProductBreadcrumbJsonLdMock,
   buildProductJsonLd: buildProductJsonLdMock,
   buildProductMetadata: buildProductMetadataMock,
   shouldRenderProductJsonLd: shouldRenderProductJsonLdMock,
@@ -55,7 +57,13 @@ describe('ProductDetailsPage locale wiring', () => {
     );
     expect(buildProductJsonLdMock).toHaveBeenCalledWith(
       { _id: 'product-1', title: 'Crochet Lion' },
-      'en'
+      'en',
+      'product-1'
+    );
+    expect(buildProductBreadcrumbJsonLdMock).toHaveBeenCalledWith(
+      { _id: 'product-1', title: 'Crochet Lion' },
+      'en',
+      'product-1'
     );
   });
 
@@ -84,6 +92,7 @@ describe('ProductDetailsPage locale wiring', () => {
       'en'
     );
     expect(buildProductJsonLdMock).not.toHaveBeenCalled();
+    expect(buildProductBreadcrumbJsonLdMock).not.toHaveBeenCalled();
   });
 
   it('generates localized noindex metadata when an English product is missing', async () => {

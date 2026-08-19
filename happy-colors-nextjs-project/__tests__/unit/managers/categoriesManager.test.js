@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getVisibleCategories,
   getVisibleCategoriesSeed,
@@ -9,6 +9,13 @@ import { jsonResponse } from '../../api/_helpers.js';
 describe('categoriesManager', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('creates a category, reloads categories, and navigates to product creation', async () => {
@@ -96,19 +103,21 @@ describe('categoriesManager', () => {
   });
 
   it('returns an empty visible category list for failed public reads', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getVisibleCategories()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('marks failed visible category seeds so the client can recover', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getVisibleCategoriesSeed({ locale: 'en' })).resolves.toEqual({
       categories: [],
       loaded: false,
     });
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 });

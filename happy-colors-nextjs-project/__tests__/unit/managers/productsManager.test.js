@@ -29,6 +29,7 @@ describe('productsManager', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -112,6 +113,8 @@ describe('productsManager', () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getProducts()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('loads homepage featured products with the homepage cache tag', async () => {
@@ -221,12 +224,16 @@ describe('productsManager', () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getCartoonGalleryProducts()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('returns an empty list instead of leaking homepage featured product load failures', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getHomepageFeaturedProducts()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('updates homepage featured products through the backend mutation', async () => {

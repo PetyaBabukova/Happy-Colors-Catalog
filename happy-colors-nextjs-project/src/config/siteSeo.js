@@ -9,11 +9,15 @@ import {
   normalizeLocale,
 } from '@/i18n/config';
 import { localizePath } from '@/i18n/routing';
+import { getVerifiedSameAsUrls } from '@/config/publicSocialProfiles';
 
 const PROD_SITE_URL = 'https://happycolors.eu';
 const LOCAL_URL = 'http://localhost:3000';
 const RENDER_PREVIEW_BRANCH = 'single-deploy-refactor';
 export const SITE_OG_IMAGE_PATH = '/lion_banner.webp';
+export const ORGANIZATION_SCHEMA_ID = `${PROD_SITE_URL}/#organization`;
+export const WEBSITE_SCHEMA_ID = `${PROD_SITE_URL}/#website`;
+export const HAPPY_COLORS_ALTERNATE_NAMES = ['Хепи Колорс', 'Хепи Калърс'];
 
 function stripTrailingSlash(value) {
   return value.replace(/\/+$/, '');
@@ -66,6 +70,137 @@ export const metadataBaseUrl = new URL(
 );
 
 export { PROD_SITE_URL };
+
+const PRODUCTION_SITE_HOSTNAME = new URL(PROD_SITE_URL).hostname;
+
+function isLocalStructuredDataHostname(hostname) {
+  const normalizedHostname = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+
+  return (
+    normalizedHostname === 'localhost' ||
+    normalizedHostname === '0.0.0.0' ||
+    normalizedHostname === '::1' ||
+    normalizedHostname.startsWith('127.') ||
+    normalizedHostname.endsWith('.local') ||
+    normalizedHostname.endsWith('.localhost')
+  );
+}
+
+export function isUnsafeStructuredDataUrl(value) {
+  if (!value || typeof value !== 'string') {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(value);
+    const hostname = parsedUrl.hostname.toLowerCase();
+
+    // Deny known non-production hosts while still allowing legitimate third-party asset URLs.
+    return (
+      parsedUrl.protocol !== 'http:' &&
+      parsedUrl.protocol !== 'https:'
+    ) || (
+      hostname !== PRODUCTION_SITE_HOSTNAME &&
+      (
+        isLocalStructuredDataHostname(hostname) ||
+        hostname.includes('preview') ||
+        hostname.endsWith('.onrender.com') ||
+        hostname.endsWith('.vercel.app') ||
+        hostname.endsWith('.netlify.app')
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function buildStructuredDataUrl(value = '/', { fallbackPath = '/' } = {}) {
+  const normalizedValue = String(value || fallbackPath || '/').trim();
+
+  try {
+    const parsedUrl = new URL(normalizedValue, PROD_SITE_URL);
+
+    if (isUnsafeStructuredDataUrl(parsedUrl.toString())) {
+      return new URL(
+        `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`,
+        PROD_SITE_URL
+      ).toString();
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return new URL(fallbackPath || '/', PROD_SITE_URL).toString();
+  }
+}
+
+export function buildStructuredDataId(path = '/', fragment = '') {
+  const url = buildStructuredDataUrl(path);
+  const normalizedFragment = String(fragment || '').replace(/^#+/, '');
+
+  return normalizedFragment ? `${url}#${normalizedFragment}` : url;
+}
+
+export function getOrganizationReference() {
+  return {
+    '@type': 'Organization',
+    '@id': ORGANIZATION_SCHEMA_ID,
+    name: 'Happy Colors',
+    alternateName: HAPPY_COLORS_ALTERNATE_NAMES,
+  };
+}
+
+export function getOrganizationLogoSchema() {
+  return {
+    '@type': 'ImageObject',
+    url: buildStructuredDataUrl('/logo_64pxH.svg'),
+  };
+}
+
+export function buildOrganizationJsonLd() {
+  const sameAs = getVerifiedSameAsUrls();
+
+  return {
+    '@context': 'https://schema.org',
+    ...getOrganizationReference(),
+    url: buildStructuredDataUrl('/'),
+    logo: getOrganizationLogoSchema(),
+    ...(sameAs.length ? { sameAs } : {}),
+  };
+}
+
+export function buildWebsiteJsonLd(locale = DEFAULT_LOCALE) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': WEBSITE_SCHEMA_ID,
+    name: 'Happy Colors',
+    alternateName: HAPPY_COLORS_ALTERNATE_NAMES,
+    url: buildStructuredDataUrl('/'),
+    publisher: {
+      '@id': ORGANIZATION_SCHEMA_ID,
+    },
+    inLanguage: getStructuredDataLanguage(locale),
+  };
+}
+
+export function getStructuredDataLanguage(locale = DEFAULT_LOCALE) {
+  return LOCALE_DETAILS[getMetadataLocale(locale)].intlLocale;
+}
+
+export function buildBreadcrumbListJsonLd(items = []) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items
+      .filter((item) => item?.name && item?.path)
+      .map((item, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: item.name,
+        item: buildStructuredDataUrl(item.path),
+      })),
+  };
+}
 
 function normalizeCanonicalPath(path) {
   const normalizedPath = String(path || '/');

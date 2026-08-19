@@ -86,29 +86,43 @@ describe('productSeo', () => {
     expect(buildProductSeoDescription(productWithCategoryFallback, 'en')).not.toMatch(/[А-Яа-я]/);
   });
 
-  it('builds JSON-LD with offer and video metadata', async () => {
+  it('builds production-safe enriched JSON-LD with offer and video metadata', async () => {
     const { buildProductJsonLd } = await import('../../../src/utils/productSeo.js');
     const jsonLd = buildProductJsonLd(product);
 
     expect(jsonLd).toMatchObject({
       '@context': 'https://schema.org',
       '@type': 'Product',
+      '@id': 'https://happycolors.eu/products/product-1#product',
       name: 'Colorful Candle',
       description: 'Handmade candle',
+      url: 'https://happycolors.eu/products/product-1',
+      brand: {
+        '@id': 'https://happycolors.eu/#organization',
+      },
+      category: 'Candles',
+      inLanguage: 'bg-BG',
       offers: {
         '@type': 'Offer',
         price: '12',
         priceCurrency: 'EUR',
+        seller: {
+          '@id': 'https://happycolors.eu/#organization',
+        },
+        itemCondition: 'https://schema.org/NewCondition',
         availability: 'https://schema.org/InStock',
       },
     });
-    expect(jsonLd.image).toEqual(['http://test.local/images/candle.webp']);
+    expect(jsonLd.image).toEqual(['https://happycolors.eu/images/candle.webp']);
     expect(jsonLd.video[0]).toMatchObject({
       '@type': 'VideoObject',
-      contentUrl: 'http://test.local/videos/candle.mp4',
-      thumbnailUrl: 'http://test.local/posters/candle.webp',
+      contentUrl: 'https://happycolors.eu/videos/candle.mp4',
+      thumbnailUrl: 'https://happycolors.eu/posters/candle.webp',
       duration: 'PT8S',
     });
+    expect(jsonLd).not.toHaveProperty('review');
+    expect(jsonLd).not.toHaveProperty('aggregateRating');
+    expect(JSON.stringify(jsonLd)).not.toMatch(/shipping|return/i);
   });
 
   it('localizes generated English video JSON-LD copy', async () => {
@@ -124,6 +138,26 @@ describe('productSeo', () => {
     expect(jsonLd.description).not.toMatch(/[А-Яа-я]/);
     expect(jsonLd.video[0].name).toBe('Colorful Candle - video 1');
     expect(jsonLd.video[0].description).toBe(jsonLd.description);
+  });
+
+  it('uses localized production URLs for translated English Product JSON-LD', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const { buildProductJsonLd } = await import('../../../src/utils/productSeo.js');
+
+    const jsonLd = buildProductJsonLd(
+      {
+        ...product,
+        contentLocale: 'en',
+        translationPending: false,
+      },
+      'en',
+      product._id
+    );
+
+    expect(jsonLd['@id']).toBe('https://happycolors.eu/en/products/product-1#product');
+    expect(jsonLd.url).toBe('https://happycolors.eu/en/products/product-1');
+    expect(jsonLd.inLanguage).toBe('en-US');
   });
 
   it('omits optional JSON-LD fields when product data is missing', async () => {
@@ -148,8 +182,8 @@ describe('productSeo', () => {
     expect(jsonLd).not.toHaveProperty('offers');
     expect(jsonLd.video).toEqual([
       expect.objectContaining({
-        contentUrl: 'http://test.local/bad%20url',
-        thumbnailUrl: 'http://test.local/poster.webp',
+        contentUrl: 'https://happycolors.eu/bad%20url',
+        thumbnailUrl: 'https://happycolors.eu/poster.webp',
         encodingFormat: 'video/mp4',
       }),
     ]);
@@ -165,6 +199,52 @@ describe('productSeo', () => {
     });
 
     expect(jsonLd.offers.availability).toBe('https://schema.org/OutOfStock');
+  });
+
+  it('omits Product offers when price is missing or invalid', async () => {
+    const { buildProductJsonLd } = await import('../../../src/utils/productSeo.js');
+
+    expect(buildProductJsonLd({ ...product, price: '' })).not.toHaveProperty('offers');
+    expect(buildProductJsonLd({ ...product, price: 'contact us' })).not.toHaveProperty('offers');
+    const jsonLd = buildProductJsonLd({ ...product, price: 0 });
+
+    expect(jsonLd).not.toHaveProperty('offers');
+    expect(jsonLd).not.toHaveProperty('seller');
+    expect(jsonLd).not.toHaveProperty('itemCondition');
+  });
+
+  it('builds production-safe localized product breadcrumbs', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+    const { buildProductBreadcrumbJsonLd } = await import('../../../src/utils/productSeo.js');
+
+    const breadcrumb = buildProductBreadcrumbJsonLd(product, 'en', product._id);
+
+    expect(breadcrumb).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: 'https://happycolors.eu/en',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Products',
+          item: 'https://happycolors.eu/en/products',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: 'Colorful Candle',
+          item: 'https://happycolors.eu/en/products/product-1',
+        },
+      ],
+    });
+    expect(JSON.stringify(breadcrumb)).not.toMatch(/localhost|preview|onrender/i);
   });
 
   it('builds metadata with video Open Graph data', async () => {
@@ -200,6 +280,12 @@ describe('productSeo', () => {
     ]);
     expect(metadata.openGraph).not.toHaveProperty('videos');
     expect(metadata.twitter.images).toEqual(['http://test.local/lion_banner.webp']);
+  });
+
+  it('keeps product metadata canonical independent of cartoons query context', async () => {
+    const { buildProductMetadata } = await import('../../../src/utils/productSeo.js');
+
+    expect(buildProductMetadata(product, product._id).alternates.canonical).toBe('/products/product-1');
   });
 
   it('marks English fallback product metadata as noindex with a Bulgarian canonical', async () => {

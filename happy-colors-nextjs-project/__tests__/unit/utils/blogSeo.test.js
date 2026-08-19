@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildBlogArticleBreadcrumbJsonLd,
   buildBlogArticleJsonLd,
   buildBlogMetadata,
   buildBlogSeoDescription,
@@ -78,7 +79,7 @@ describe('blogSeo', () => {
     ]);
   });
 
-  it('builds BlogPosting JSON-LD and escapes serialized script content', () => {
+  it('builds tightened production-safe BlogPosting JSON-LD and escapes serialized script content', () => {
     const jsonLd = buildBlogArticleJsonLd(
       {
         ...article,
@@ -88,11 +89,31 @@ describe('blogSeo', () => {
     );
 
     expect(jsonLd['@type']).toBe('BlogPosting');
-    expect(jsonLd.url).toBe('http://localhost:3000/blog/article-1');
+    expect(jsonLd['@id']).toBe('https://happycolors.eu/blog/article-1#blogposting');
+    expect(jsonLd.url).toBe('https://happycolors.eu/blog/article-1');
+    expect(jsonLd.mainEntityOfPage).toEqual({
+      '@type': 'WebPage',
+      '@id': 'https://happycolors.eu/blog/article-1',
+    });
     expect(jsonLd.image).toEqual([
       'https://storage.googleapis.com/test-bucket/blog/articles/hero/article.webp',
     ]);
+    expect(jsonLd.author).toMatchObject({
+      '@type': 'Organization',
+      '@id': 'https://happycolors.eu/#organization',
+      name: 'Happy Colors',
+    });
+    expect(jsonLd.publisher).toMatchObject({
+      '@type': 'Organization',
+      '@id': 'https://happycolors.eu/#organization',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://happycolors.eu/logo_64pxH.svg',
+      },
+    });
+    expect(jsonLd.inLanguage).toBe('bg-BG');
     expect(stringifyJsonLd(jsonLd)).toContain('\\u003cscript');
+    expect(JSON.stringify(jsonLd)).not.toMatch(/localhost|preview|onrender/i);
   });
 
   it('uses the site Open Graph image when an article image is missing', () => {
@@ -120,8 +141,48 @@ describe('blogSeo', () => {
       },
     ]);
     expect(metadata.twitter.images).toEqual(['http://localhost:3000/lion_banner.webp']);
-    expect(jsonLd.image).toEqual(['http://localhost:3000/lion_banner.webp']);
+    expect(jsonLd.image).toEqual(['https://happycolors.eu/lion_banner.webp']);
   });
+
+  it('builds production-safe localized blog breadcrumbs', () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const breadcrumb = buildBlogArticleBreadcrumbJsonLd(
+      {
+        ...article,
+        title: 'English story',
+      },
+      article._id,
+      'en'
+    );
+
+    expect(breadcrumb).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: 'https://happycolors.eu/en',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Blog',
+          item: 'https://happycolors.eu/en/blog',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: 'English story',
+          item: 'https://happycolors.eu/en/blog/article-1',
+        },
+      ],
+    });
+  });
+
   it('adds English article hreflang only for a real English article page', () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');

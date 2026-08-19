@@ -5,6 +5,7 @@ import {
   shouldExposeSitemap,
 } from '@/config/siteSeo';
 import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
+import { GIFT_GUIDE_SLUGS, GIFT_HUB_PATH } from '@/content/publicPages/gifts';
 import {
   DEFAULT_LOCALE,
   getEnabledPublicLocales,
@@ -106,6 +107,11 @@ function buildStaticEntries(now) {
       : []),
     ['/aboutus', { changeFrequency: 'monthly', priority: 0.7 }],
     ['/faq', { changeFrequency: 'monthly', priority: 0.6 }],
+    [GIFT_HUB_PATH, { changeFrequency: 'monthly', priority: 0.75 }],
+    ...GIFT_GUIDE_SLUGS.map((slug) => [
+      `${GIFT_HUB_PATH}/${slug}`,
+      { changeFrequency: 'monthly', priority: 0.7 },
+    ]),
     ['/blog', { changeFrequency: 'weekly', priority: 0.7 }],
     ['/contacts', { changeFrequency: 'monthly', priority: 0.7 }],
     ['/partners', { changeFrequency: 'monthly', priority: 0.6 }],

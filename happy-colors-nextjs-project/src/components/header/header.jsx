@@ -242,6 +242,7 @@ export default function Header() {
             </li>
 
             {isCartoonsServiceEnabled && <li><Link href={publicHref('/cartoons')}>{t('cartoons')}</Link></li>}
+            <li><Link href={publicHref('/gifts')}>{t('gifts')}</Link></li>
             <li><Link href={publicHref('/blog')}>{t('blog')}</Link></li>
             <li><Link href={publicHref('/aboutus')}>{t('about')}</Link></li>
             <li><Link href={publicHref('/faq')}>{t('faq')}</Link></li>

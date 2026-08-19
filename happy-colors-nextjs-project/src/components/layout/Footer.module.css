@@ -13,6 +13,25 @@
   text-align: right;
 }
 
+.siteLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.siteLinks a {
+  color: var(--dark-green);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.siteLinks a:hover,
+.siteLinks a:focus-visible {
+  color: var(--dark-orange);
+  outline: none;
+}
+
 .socialBlock {
   display: grid;
   justify-items: end;
@@ -86,6 +105,10 @@
 
   .socialBlock {
     justify-items: start;
+  }
+
+  .siteLinks {
+    justify-content: flex-start;
   }
 
   .socialLinks {

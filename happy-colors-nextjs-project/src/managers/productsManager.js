@@ -226,7 +226,7 @@ export async function getProducts(categoryName, { locale } = {}) {
 
     return data;
   } catch (err) {
-    console.error(err.message);
+    console.warn(err.message);
     return [];
   }
 }
@@ -250,7 +250,7 @@ export async function getHomepageFeaturedProducts({ locale } = {}) {
 
     return data;
   } catch (err) {
-    console.error(err.message);
+    console.warn(err.message);
     return [];
   }
 }
@@ -270,7 +270,7 @@ export async function getCartoonGalleryProducts({ locale } = {}) {
 
     return Array.isArray(data) ? data : [];
   } catch (err) {
-    console.error(err.message);
+    console.warn(err.message);
     return [];
   }
 }

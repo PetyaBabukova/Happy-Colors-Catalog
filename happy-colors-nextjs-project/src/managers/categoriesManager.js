@@ -23,7 +23,7 @@ async function fetchVisibleCategoriesResult({ locale } = {}) {
       loaded: true,
     };
   } catch (err) {
-    console.error(err.message);
+    console.warn(err.message);
     return {
       categories: [],
       loaded: false,

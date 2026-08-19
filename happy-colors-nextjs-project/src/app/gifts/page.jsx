@@ -1,0 +1,133 @@
+import Link from 'next/link';
+import {
+  buildBreadcrumbListJsonLd,
+  buildPageMetadata,
+  buildStructuredDataId,
+  buildStructuredDataUrl,
+  getLocalizedCanonicalPath,
+  getStructuredDataLanguage,
+  WEBSITE_SCHEMA_ID,
+} from '@/config/siteSeo';
+import {
+  GIFT_HUB_PATH,
+  getGiftGuideCards,
+  getGiftsPageContent,
+} from '@/content/publicPages/gifts';
+import { DEFAULT_LOCALE } from '@/i18n/config';
+import { getServerPublicHref } from '@/i18n/serverNavigation';
+import { stringifyJsonLd } from '@/utils/jsonLd';
+import styles from './gifts.module.css';
+
+function buildGiftHubStructuredData(content, cards, locale) {
+  const canonicalPath = getLocalizedCanonicalPath(GIFT_HUB_PATH, locale);
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': buildStructuredDataId(canonicalPath, 'collection'),
+    name: content.hub.title,
+    description: content.hub.metadata.description,
+    url: buildStructuredDataUrl(canonicalPath),
+    inLanguage: getStructuredDataLanguage(locale),
+    isPartOf: {
+      '@id': WEBSITE_SCHEMA_ID,
+    },
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: cards.map((card, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: card.title,
+        url: buildStructuredDataUrl(getLocalizedCanonicalPath(card.href, locale)),
+      })),
+    },
+  };
+}
+
+function buildGiftHubBreadcrumb(content, locale) {
+  return buildBreadcrumbListJsonLd([
+    {
+      name: content.common.breadcrumbHome,
+      path: getLocalizedCanonicalPath('/', locale),
+    },
+    {
+      name: content.common.breadcrumbGifts,
+      path: getLocalizedCanonicalPath(GIFT_HUB_PATH, locale),
+    },
+  ]);
+}
+
+export async function generateMetadata(props = {}) {
+  const params = await props.params;
+  const locale = params?.locale || DEFAULT_LOCALE;
+  const content = getGiftsPageContent(locale);
+
+  return buildPageMetadata({
+    ...content.hub.metadata,
+    path: GIFT_HUB_PATH,
+    locale,
+  });
+}
+
+export default async function GiftsPage(props = {}) {
+  const params = await props.params;
+  const locale = params?.locale || DEFAULT_LOCALE;
+  const content = getGiftsPageContent(locale);
+  const publicHref = (href) => getServerPublicHref(href, locale);
+  const cards = getGiftGuideCards(locale);
+  const structuredData = buildGiftHubStructuredData(content, cards, locale);
+  const breadcrumbData = buildGiftHubBreadcrumb(content, locale);
+
+  return (
+    <main className={`${styles.page} pageInline`}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(structuredData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(breadcrumbData) }}
+      />
+
+      <section className={styles.hero}>
+        <h1>{content.hub.title}</h1>
+        <p className={styles.intro}>{content.hub.intro}</p>
+        <p className={styles.lead}>{content.hub.lead}</p>
+      </section>
+
+      <section aria-labelledby="gift-guide-list">
+        <div className={styles.sectionHeader}>
+          <h2 id="gift-guide-list">{content.hub.guideSectionTitle}</h2>
+        </div>
+        <div className={styles.guideGrid}>
+          {cards.map((card) => (
+            <Link key={card.slug} className={styles.guideCard} href={publicHref(card.href)}>
+              <div>
+                <h2>{card.title}</h2>
+                <p className={styles.cardText}>{card.text}</p>
+              </div>
+              <span className={styles.cardAction}>{content.hub.browseLabel}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="gift-support">
+        <div className={styles.sectionHeader}>
+          <h2 id="gift-support">{content.hub.supportTitle}</h2>
+        </div>
+        <div className={styles.supportGrid}>
+          {content.hub.supportItems.map((item) => (
+            <Link key={item.title} className={styles.supportCard} href={publicHref(item.cta.href)}>
+              <div>
+                <h3>{item.title}</h3>
+                <p className={styles.cardText}>{item.text}</p>
+              </div>
+              <span className={styles.cardAction}>{item.cta.label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}

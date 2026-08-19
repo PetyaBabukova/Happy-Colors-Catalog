@@ -17,6 +17,7 @@
     "catalog": "Каталог",
     "allProducts": "Всички",
     "cartoons": "Шаржове",
+    "gifts": "Подаръци",
     "blog": "Блог",
     "about": "За Happy Colors",
     "faq": "Въпроси",
@@ -34,6 +35,8 @@
     "copyright": "© {year} Happy Colors. Всички права запазени.",
     "socialHeading": "Последвайте ни:",
     "socialNavLabel": "Социални профили",
+    "siteNavLabel": "Полезни страници",
+    "giftsLabel": "Идеи за подарък",
     "facebookLabel": "Happy Colors във Facebook",
     "instagramLabel": "Happy Colors в Instagram",
     "creditPrefix": "Онлайн каталог от"

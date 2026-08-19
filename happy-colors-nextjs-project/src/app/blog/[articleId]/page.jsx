@@ -4,6 +4,7 @@ import { getDictionary } from '@/i18n/getDictionary';
 import { getBlogArticle } from '@/lib/getBlogArticle';
 import { getBlogArticles } from '@/managers/blogArticlesManager';
 import {
+  buildBlogArticleBreadcrumbJsonLd,
   buildBlogArticleJsonLd,
   buildBlogMetadata,
   shouldRenderBlogArticleJsonLd,
@@ -41,8 +42,12 @@ export default async function BlogArticlePage({ params: paramsPromise }) {
     notFound();
   }
 
-  const articleJsonLd = shouldRenderBlogArticleJsonLd(article, locale)
+  const shouldRenderStructuredData = shouldRenderBlogArticleJsonLd(article, locale);
+  const articleJsonLd = shouldRenderStructuredData
     ? buildBlogArticleJsonLd(article, articleId, locale)
+    : null;
+  const breadcrumbJsonLd = shouldRenderStructuredData
+    ? buildBlogArticleBreadcrumbJsonLd(article, articleId, locale)
     : null;
 
   return (
@@ -51,6 +56,12 @@ export default async function BlogArticlePage({ params: paramsPromise }) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: stringifyJsonLd(articleJsonLd) }}
+        />
+      ) : null}
+      {breadcrumbJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(breadcrumbJsonLd) }}
         />
       ) : null}
       <BlogArticleDetails article={article} articles={articles} />

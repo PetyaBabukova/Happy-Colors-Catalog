@@ -147,7 +147,7 @@ describe('CartoonsPage', () => {
     const { default: CartoonsPage } = await importPage();
     const element = await CartoonsPage({ params: Promise.resolve({ locale: 'en' }) });
 
-    render(element);
+    const { container } = render(element);
 
     expect(screen.getByTestId('cartoons-hero')).toHaveTextContent('1');
     expect(screen.getByRole('heading', { name: 'Custom caricature from a photo for a memorable gift' })).toBeInTheDocument();
@@ -171,6 +171,21 @@ describe('CartoonsPage', () => {
       'href',
       '/products/product-1?service=cartoons'
     );
+
+    const scripts = [...container.querySelectorAll('script[type="application/ld+json"]')]
+      .map((script) => JSON.parse(script.textContent));
+
+    expect(scripts.map((script) => script['@type'])).toEqual(['Service', 'BreadcrumbList']);
+    expect(scripts[0]).toMatchObject({
+      '@id': 'https://happycolors.eu/en/cartoons#service',
+      url: 'https://happycolors.eu/en/cartoons',
+      provider: {
+        '@id': 'https://happycolors.eu/#organization',
+      },
+      inLanguage: 'en-US',
+    });
+    expect(scripts[0]).not.toHaveProperty('offers');
+    expect(JSON.stringify(scripts)).not.toMatch(/localhost|preview|onrender|vercel|netlify/i);
   });
 
   it('keeps default-locale links unprefixed when locale routing is off', async () => {

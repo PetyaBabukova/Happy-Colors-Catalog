@@ -2,6 +2,7 @@
 
 .introSection,
 .favoriteSection,
+.giftIdeasSection,
 .faqSection {
   width: 100%;
   margin: 0 auto;
@@ -34,6 +35,85 @@
   text-align: center;
 }
 
+.giftIdeasSection {
+  display: grid;
+  gap: 1rem;
+  padding-top: 1rem;
+  padding-bottom: 2.75rem;
+}
+
+.giftIdeasHeader {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 52rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.giftIdeasHeader h2 {
+  margin: 0;
+  color: var(--dark-green);
+}
+
+.giftIdeasHeader p,
+.giftIdeaCard p {
+  margin: 0;
+  color: var(--dark-green);
+  line-height: 1.55;
+}
+
+.giftIdeasGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.giftIdeaCard {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgba(1, 102, 77, 0.18);
+  border-radius: 8px;
+  background: var(--lightest-green);
+  text-decoration: none;
+}
+
+.giftIdeaCard:hover,
+.giftIdeaCard:focus-visible {
+  background: var(--lighter-green);
+  outline: none;
+}
+
+.giftIdeaCard h3 {
+  margin: 0;
+  color: var(--dark-green);
+  font-size: 1.2rem;
+}
+
+.giftIdeasLink {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(1, 102, 77, 0.32);
+  border-radius: 8px;
+  color: var(--dark-green);
+  background: white;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.giftIdeasLink:hover,
+.giftIdeasLink:focus-visible {
+  background: var(--dark-orange);
+  border-color: var(--dark-orange);
+  color: white;
+  outline: none;
+}
+
 .faqSection {
   padding-bottom: 3rem;
   text-align: center;
@@ -62,4 +142,7 @@
 }
 
 @media screen and (max-width: 768px) {
+  .giftIdeasGrid {
+    grid-template-columns: 1fr;
+  }
 }

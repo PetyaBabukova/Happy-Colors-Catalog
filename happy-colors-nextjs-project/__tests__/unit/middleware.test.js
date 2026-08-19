@@ -4,6 +4,7 @@ import { LOCALE_REQUEST_HEADER } from '../../src/i18n/config.js';
 import {
   ENGLISH_UNAVAILABLE_NOTICE_QUERY,
   ENGLISH_UNAVAILABLE_NOTICE_VALUE,
+  config,
   isProtectedPagePath,
   isPublicLegacyPath,
   middleware,
@@ -39,8 +40,11 @@ describe('middleware public locale redirects', () => {
     expect(isPublicLegacyPath('/products')).toBe(true);
     expect(isPublicLegacyPath('/products/crochet-lion')).toBe(true);
     expect(isPublicLegacyPath('/blog/story-1')).toBe(true);
+    expect(isPublicLegacyPath('/gifts')).toBe(true);
+    expect(isPublicLegacyPath('/gifts/gifts-for-children')).toBe(true);
     expect(isPublicLegacyPath('/products/create')).toBe(false);
     expect(isPublicLegacyPath('/products/crochet-lion/edit')).toBe(false);
+    expect(isPublicLegacyPath('/gifts/gifts-for-children/extra')).toBe(false);
   });
 
   it('strips explicit locale prefixes while routing is disabled and preserves safe query params', () => {
@@ -231,6 +235,22 @@ describe('middleware public locale redirects', () => {
 
     expect(
       resolvePublicLocaleRedirect({
+        pathname: '/en/gifts',
+        localeRoutingEnabled: true,
+        englishEnabled: true,
+      })
+    ).toBeNull();
+
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/en/gifts/gifts-for-children',
+        localeRoutingEnabled: true,
+        englishEnabled: true,
+      })
+    ).toBeNull();
+
+    expect(
+      resolvePublicLocaleRedirect({
         pathname: '/en/cart',
         search: '?updated=1',
         localeRoutingEnabled: true,
@@ -244,6 +264,27 @@ describe('middleware public locale redirects', () => {
         'Cache-Control': 'private, max-age=0, no-store',
       },
     });
+  });
+
+  it('redirects disabled English gift routes to Bulgarian gift routes with a notice', () => {
+    expect(
+      resolvePublicLocaleRedirect({
+        pathname: '/en/gifts/gifts-for-children',
+        localeRoutingEnabled: true,
+        englishEnabled: false,
+      })
+    ).toEqual({
+      pathname: '/bg/gifts/gifts-for-children',
+      search: `?${ENGLISH_UNAVAILABLE_NOTICE_QUERY}=${ENGLISH_UNAVAILABLE_NOTICE_VALUE}`,
+      status: 307,
+      headers: {
+        'Cache-Control': 'private, max-age=0, no-store',
+      },
+    });
+  });
+
+  it('matches gift routes so locale middleware can serve them', () => {
+    expect(config.matcher).toContain('/gifts/:path*');
   });
 });
 

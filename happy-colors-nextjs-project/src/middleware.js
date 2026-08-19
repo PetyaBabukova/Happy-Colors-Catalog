@@ -28,6 +28,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/cartoons/offer',
   '/contacts',
   '/faq',
+  '/gifts',
   '/newsletter/confirm',
   '/newsletter/preferences',
   '/newsletter/unsubscribe',
@@ -37,6 +38,7 @@ const PUBLIC_EXACT_PATHS = new Set([
 ]);
 const PRODUCT_RESERVED_SEGMENTS = new Set(['create']);
 const BLOG_RESERVED_SEGMENTS = new Set(['create']);
+const GIFT_RESERVED_SEGMENTS = new Set([]);
 const TOKEN_QUERY_PARAM = 'token';
 const NEWSLETTER_TOKEN_PAGE_PATHS = new Set([
   '/newsletter/confirm',
@@ -95,6 +97,10 @@ export function isPublicLegacyPath(pathname = '') {
 
   if (isSingleChildPath(normalizedPath, '/blog')) {
     return !BLOG_RESERVED_SEGMENTS.has(getSecondPathSegment(normalizedPath));
+  }
+
+  if (isSingleChildPath(normalizedPath, '/gifts')) {
+    return !GIFT_RESERVED_SEGMENTS.has(getSecondPathSegment(normalizedPath));
   }
 
   return false;
@@ -324,6 +330,7 @@ export const config = {
     '/contacts/:path*',
     '/en/:path*',
     '/faq/:path*',
+    '/gifts/:path*',
     '/home-banners/create/:path*',
     '/home-banners/:path*/edit',
     '/homepage-featured/:path*',

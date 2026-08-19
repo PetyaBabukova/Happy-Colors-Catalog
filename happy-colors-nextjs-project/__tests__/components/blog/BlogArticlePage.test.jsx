@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const getBlogArticleMock = vi.hoisted(() => vi.fn());
 const getBlogArticlesMock = vi.hoisted(() => vi.fn());
 const buildBlogArticleJsonLdMock = vi.hoisted(() => vi.fn(() => ({ '@type': 'BlogPosting' })));
+const buildBlogArticleBreadcrumbJsonLdMock = vi.hoisted(() => vi.fn(() => ({ '@type': 'BreadcrumbList' })));
 const buildBlogMetadataMock = vi.hoisted(() => vi.fn(() => ({ title: 'Blog metadata' })));
 const shouldRenderBlogArticleJsonLdMock = vi.hoisted(() => vi.fn(() => true));
 
@@ -19,6 +20,7 @@ vi.mock('@/components/blog/BlogArticleDetails', () => ({
 }));
 
 vi.mock('@/utils/blogSeo', () => ({
+  buildBlogArticleBreadcrumbJsonLd: buildBlogArticleBreadcrumbJsonLdMock,
   buildBlogArticleJsonLd: buildBlogArticleJsonLdMock,
   buildBlogMetadata: buildBlogMetadataMock,
   shouldRenderBlogArticleJsonLd: shouldRenderBlogArticleJsonLdMock,
@@ -60,6 +62,11 @@ describe('BlogArticlePage locale wiring', () => {
       'article-1',
       'en'
     );
+    expect(buildBlogArticleBreadcrumbJsonLdMock).toHaveBeenCalledWith(
+      { _id: 'article-1', title: 'English story' },
+      'article-1',
+      'en'
+    );
   });
 
   it('omits BlogPosting JSON-LD for English fallback article content', async () => {
@@ -79,6 +86,7 @@ describe('BlogArticlePage locale wiring', () => {
 
     expect(shouldRenderBlogArticleJsonLdMock).toHaveBeenCalledWith(fallbackArticle, 'en');
     expect(buildBlogArticleJsonLdMock).not.toHaveBeenCalled();
+    expect(buildBlogArticleBreadcrumbJsonLdMock).not.toHaveBeenCalled();
   });
 
   it('generates localized noindex metadata when an English blog article is missing', async () => {

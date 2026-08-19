@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { buildPageMetadata } from '@/config/siteSeo';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
+import { stringifyJsonLd } from '@/utils/jsonLd';
 import styles from './faq.module.css';
 
 function internalLink(href, label) {
@@ -393,7 +394,7 @@ export default async function FaqPage(props = {}) {
     <main className={`${styles.faqPage} pageInline`}>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(structuredData) }}
       />
 
       <section className={styles.heroSection}>

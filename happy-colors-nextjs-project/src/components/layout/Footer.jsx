@@ -1,6 +1,9 @@
 import NewsletterSubscribeForm from '@/components/newsletter/NewsletterSubscribeForm';
 import CookieFooterLink from '@/components/privacy/CookieFooterLink';
+import { getVerifiedSocialProfiles } from '@/config/publicSocialProfiles';
+import Link from 'next/link';
 import privacyStyles from '@/components/privacy/CookieConsent.module.css';
+import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import useTranslations from '@/i18n/useTranslations';
 import styles from './Footer.module.css';
 
@@ -36,19 +39,19 @@ function InstagramIcon() {
 
 export default function Footer() {
   const { t } = useTranslations('footer');
+  const { publicHref } = useLocaleNavigation();
   const year = new Date().getFullYear();
-  const socialLinks = [
-    {
-      href: 'https://www.facebook.com/happycolors.studio',
-      label: t('facebookLabel'),
-      Icon: FacebookIcon,
-    },
-    {
-      href: 'https://www.instagram.com/happycolors.crochet/',
-      label: t('instagramLabel'),
-      Icon: InstagramIcon,
-    },
-  ];
+  const socialIcons = {
+    facebook: FacebookIcon,
+    instagram: InstagramIcon,
+  };
+  const socialLinks = getVerifiedSocialProfiles()
+    .filter(({ service, labelKey }) => Boolean(socialIcons[service]) && Boolean(labelKey))
+    .map(({ service, href, labelKey }) => ({
+      href,
+      label: t(labelKey),
+      Icon: socialIcons[service],
+    }));
 
   return (
     <footer className={styles.footer}>
@@ -60,6 +63,10 @@ export default function Footer() {
       <NewsletterSubscribeForm />
 
       <div className={styles.footerRight}>
+        <nav className={styles.siteLinks} aria-label={t('siteNavLabel')}>
+          <Link href={publicHref('/gifts')}>{t('giftsLabel')}</Link>
+        </nav>
+
         <div className={styles.socialBlock}>
           <p className={styles.socialHeading}>{t('socialHeading')}</p>
           <nav className={styles.socialLinks} aria-label={t('socialNavLabel')}>

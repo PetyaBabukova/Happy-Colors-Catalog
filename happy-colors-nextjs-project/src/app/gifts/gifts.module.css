@@ -1,0 +1,165 @@
+.page {
+  display: grid;
+  gap: 2.5rem;
+  padding-block: 2rem 3rem;
+}
+
+.hero {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 58rem;
+}
+
+.hero h1 {
+  margin: 0;
+}
+
+.intro,
+.lead,
+.sectionText,
+.cardText {
+  color: var(--dark-green);
+  line-height: 1.6;
+}
+
+.intro {
+  margin: 0;
+  font-size: clamp(1.08rem, 1.8vw, 1.35rem);
+}
+
+.lead {
+  max-width: 48rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.guideGrid,
+.supportGrid,
+.pathGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.sectionHeader {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+}
+
+.guideCard,
+.supportCard,
+.pathCard {
+  display: grid;
+  align-content: space-between;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgba(1, 102, 77, 0.18);
+  border-radius: 8px;
+  background: var(--lightest-green);
+  text-decoration: none;
+}
+
+.guideCard:hover,
+.guideCard:focus-visible,
+.supportCard:hover,
+.supportCard:focus-visible,
+.pathCard:hover,
+.pathCard:focus-visible {
+  background: var(--lighter-green);
+  outline: none;
+}
+
+.guideCard h2,
+.supportCard h3,
+.pathCard h3 {
+  margin: 0;
+  color: var(--dark-green);
+  font-size: 1.25rem;
+}
+
+.cardText {
+  margin: 0;
+}
+
+.cardAction {
+  color: var(--dark-orange);
+  font-weight: 700;
+}
+
+.article {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 58rem;
+}
+
+.articleSection {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.articleSection h2 {
+  margin: 0;
+  color: var(--dark-green);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+}
+
+.sectionText {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.primaryLink,
+.secondaryLink,
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.primaryLink {
+  background: var(--dark-green);
+  color: white;
+}
+
+.secondaryLink,
+.backLink {
+  border: 1px solid rgba(1, 102, 77, 0.32);
+  color: var(--dark-green);
+  background: white;
+}
+
+.primaryLink:hover,
+.primaryLink:focus-visible,
+.secondaryLink:hover,
+.secondaryLink:focus-visible,
+.backLink:hover,
+.backLink:focus-visible {
+  background: var(--dark-orange);
+  border-color: var(--dark-orange);
+  color: white;
+  outline: none;
+}
+
+@media (max-width: 980px) {
+  .guideGrid,
+  .supportGrid,
+  .pathGrid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -68,6 +68,7 @@ describe('Header', () => {
     });
 
     expect(screen.getByRole('link', { name: /logo/i })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Подаръци' })).toHaveAttribute('href', '/gifts');
     expect(screen.getByRole('link', { name: 'Candles' })).toHaveAttribute('href', '/products?category=candles');
     expect(screen.getByRole('link', { name: 'Decor' })).toHaveAttribute('href', '/products?category=decor');
     expect(screen.getByText(/Petya/)).toBeInTheDocument();
@@ -286,6 +287,10 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: getDictionary('en').navigation.catalog })).toHaveAttribute(
       'href',
       '/en/products'
+    );
+    expect(screen.getByRole('link', { name: getDictionary('en').navigation.gifts })).toHaveAttribute(
+      'href',
+      '/en/gifts'
     );
     expect(screen.queryByRole('link', { name: getDictionary('bg').navigation.home })).not.toBeInTheDocument();
   });

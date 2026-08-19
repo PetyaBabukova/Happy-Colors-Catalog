@@ -17,6 +17,7 @@
     "catalog": "Catalog",
     "allProducts": "All",
     "cartoons": "Caricatures",
+    "gifts": "Gifts",
     "blog": "Blog",
     "about": "About Happy Colors",
     "faq": "Questions",
@@ -34,6 +35,8 @@
     "copyright": "© {year} Happy Colors. All rights reserved.",
     "socialHeading": "Follow us:",
     "socialNavLabel": "Social profiles",
+    "siteNavLabel": "Helpful pages",
+    "giftsLabel": "Gift ideas",
     "facebookLabel": "Happy Colors on Facebook",
     "instagramLabel": "Happy Colors on Instagram",
     "creditPrefix": "Online catalog by"

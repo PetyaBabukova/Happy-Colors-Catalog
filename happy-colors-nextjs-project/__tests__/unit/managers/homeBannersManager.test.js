@@ -14,6 +14,7 @@ describe('homeBannersManager', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -62,6 +63,8 @@ describe('homeBannersManager', () => {
 
     await expect(getHomeBanners()).resolves.toEqual([]);
     await expect(getCartoonHeroBanners()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledTimes(2);
   });
 
   it('loads a single banner with credentials and no-store cache', async () => {
