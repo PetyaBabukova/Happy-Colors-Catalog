@@ -46,7 +46,7 @@
   },
   "homeHero": {
     "fallbackTitle": "Handmade crochet toys, accessories, and home decor",
-    "fallbackDescription": "Handmade pieces for gifts, cozy homes, and special occasions.",
+    "fallbackDescription": "At Happy Colors, you’ll find unique handmade gifts created with care and attention to every detail. Discover handmade crochet toys, accessories, bags and handmade home decor designed for birthdays, special occasions, children’s rooms or simply to bring a little more color into everyday life. Our collection includes original crochet gifts and handmade crochet pieces, each with its own character and charm. Browse the collection and find something special for someone you love – or for yourself.",
     "fallbackCta": "Catalog",
     "bannerCta": "Catalog",
     "carouselAriaLabel": "Home banners",
@@ -70,8 +70,8 @@
     "disabledEnglishNotice": "English is temporarily unavailable. You are viewing the Bulgarian version."
   },
   "products": {
-    "catalogTitle": "Handmade gifts – crochet toys, accessories and home decor",
-    "catalogIntro": "At Happy Colors, you can discover a variety of handmade crochet pieces, including crochet toys, women's bags, accessories, and home decor. Each design is made by hand with attention to detail and its own character. Browse the categories and find an original handmade piece for a gift or for your home.",
+    "catalogTitle": "Handmade crochet toys, accessories and home decor",
+    "catalogIntro": "Explore our collection of handmade crochet toys, bags, accessories and home decor, each created with care and attention to detail. Discover soft crochet animals, amigurumi toys, toy-and-backpack sets, handmade bags and unique crochet accessories for children and adults. Whether you are looking for a special handmade gift or a beautiful piece for your home, Happy Colors offers original handmade creations with character.",
     "uncategorizedCategory": "Uncategorized",
     "notFoundTitle": "Product not found",
     "notFoundDescription": "Try again or choose another product.",
@@ -113,7 +113,7 @@
   },
   "contacts": {
     "title": "Contacts",
-    "pageDescription": "Contact Happy Colors about product availability, custom orders, handmade crochet items and custom caricatures from photos. Send your enquiry through the contact form.",
+    "pageDescription": "Contact Happy Colors with questions about handmade crocheted toys, accessories, and home decorations.",
     "formTitle": "Send an inquiry",
     "success": "Thank you! Your message was sent successfully.",
     "submit": "Send",
