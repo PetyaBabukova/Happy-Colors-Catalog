@@ -50,10 +50,11 @@ describe('HomePage', () => {
         name: 'Handmade crochet toys, accessories, and home decor',
       })
     ).toBeInTheDocument();
-    expect(screen.getByText(/At Happy Colors you will find handmade crochet toys/)).toBeInTheDocument();
+    expect(screen.getByText(/At Happy Colors, you’ll find unique handmade gifts/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Your favorite products' })).toBeInTheDocument();
     expect(screen.getByText('Featured crochet toy')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Gift ideas' })).toBeInTheDocument();
+    expect(screen.getByText('Gifts for children image slot - 800 x 600 px')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Gifts for children/ })).toHaveAttribute(
       'href',
       '/en/gifts/gifts-for-children'

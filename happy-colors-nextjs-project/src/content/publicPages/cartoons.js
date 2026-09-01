@@ -16,7 +16,9 @@ const unavailable = {
 export const cartoonsPageContent = {
   bg: {
     metadata: {
-      title: 'Шарж по снимка за подарък с усмивка',
+      title: {
+        absolute: 'Шарж по снимка и карикатура за подарък | Happy Colors',
+      },
       description:
         'Превърнете любима снимка в забавен персонален шарж за рожден ден, юбилей, сватба, годишнина или друг специален повод.',
     },
@@ -40,9 +42,11 @@ export const cartoonsPageContent = {
   },
   en: {
     metadata: {
-      title: 'Custom caricature from a photo for a memorable gift',
+      title: {
+        absolute: 'Caricature from Photo – Personalised Gift | Happy Colors',
+      },
       description:
-        'Turn a favorite photo into a playful custom caricature for birthdays, anniversaries, weddings, new homes, retirements, or another special occasion.',
+        'Order a personalised caricature from photo – a unique gift for birthdays, anniversaries, weddings and special occasions. Digital and print options available.',
     },
     unavailable: unavailable.en,
     intro: {

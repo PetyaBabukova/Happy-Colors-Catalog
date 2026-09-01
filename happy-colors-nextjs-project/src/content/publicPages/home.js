@@ -9,7 +9,7 @@ export const homePageContent = {
     },
     intro: {
       title: 'Ръчно изработени плетени играчки, аксесоари и декорация за дома',
-      text: 'В Happy Colors ще откриете ръчно изработени плетени играчки, аксесоари и декорация за дома, създадени с внимание към всеки детайл. Колекцията включва красиви и оригинални изделия, подходящи за подарък, детска стая, празник или уютен акцент у дома. Ако нещо ви хареса, можете да се свържете с мен за наличност, въпроси и поръчка. Разгледайте галерията и открийте изделие с характер, изработено с грижа и стил.',
+      text: 'В Happy Colors ще откриете ръчно изработени подаръци, плетени играчки, аксесоари и декорация за дома, създадени с внимание към всеки детайл. Колекцията включва красиви и оригинални ръчно изработени изделия, подходящи за подарък, детска стая, празник или уютен акцент у дома. Ако търсите оригинални подаръци с характер или нещо специално, изработено на ръка, разгледайте нашите handmade предложения. Ако нещо ви хареса, можете да се свържете с мен за наличност, въпроси и поръчка.',
     },
     favoritesTitle: 'Най-любимите ви продукти',
     giftIdeas: {
@@ -47,7 +47,7 @@ export const homePageContent = {
     },
     intro: {
       title: 'Handmade crochet toys, accessories, and home decor',
-      text: 'At Happy Colors you will find handmade crochet toys, accessories, and home decorations created with attention to every detail. The collection includes beautiful and original pieces for gifts, children’s rooms, holidays, or a cozy accent at home. If something catches your eye, you can contact me about availability, questions, or a custom request. Browse the gallery and discover a piece with character, made with care and style.',
+      text: 'At Happy Colors, you’ll find unique handmade gifts created with care and attention to every detail. Discover handmade crochet toys, accessories, bags and handmade home decor designed for birthdays, special occasions, children’s rooms or simply to bring a little more color into everyday life. Our collection includes original crochet gifts and handmade crochet pieces, each with its own character and charm. Browse the collection and find something special for someone you love – or for yourself.',
     },
     favoritesTitle: 'Your favorite products',
     giftIdeas: {

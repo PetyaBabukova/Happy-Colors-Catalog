@@ -37,6 +37,47 @@ function InstagramIcon() {
   );
 }
 
+function EtsyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="10" fill="#f56400" />
+      <path
+        fill="#fff"
+        d="M7.3 6.2h9.2l.4 3.1h-.8c-.5-1.3-1.1-1.8-2.7-1.8h-2.5v3.8h1.9c1 0 1.3-.4 1.5-1.5h.8v4.4h-.8c-.2-1.1-.5-1.6-1.5-1.6h-1.9v4.1h2.7c1.7 0 2.5-.6 3.1-2.2h.8l-.6 3.5H7.3v-.8c1-.2 1.2-.4 1.2-1.3V8.3c0-.9-.2-1.1-1.2-1.3v-.8Z"
+      />
+    </svg>
+  );
+}
+
+function YouTubeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="2.5" y="5.8" width="19" height="12.4" rx="3.2" fill="#ff0033" />
+      <path fill="#fff" d="M10.1 9.1v5.8l5.2-2.9-5.2-2.9Z" />
+    </svg>
+  );
+}
+
+function TikTokIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="10" fill="#050505" />
+      <path
+        fill="#25f4ee"
+        d="M13.3 5.2h2.1c.2 1.5 1 2.6 2.4 3.1v2.2c-.9 0-1.7-.3-2.4-.8v4.9c0 2.7-1.7 4.4-4.1 4.4-2.1 0-3.8-1.4-3.8-3.5 0-2.3 1.8-3.7 4.2-3.5v2.3c-.9-.2-1.7.3-1.7 1.1 0 .7.5 1.2 1.3 1.2.9 0 1.6-.6 1.6-1.9V5.2Z"
+      />
+      <path
+        fill="#fe2c55"
+        d="M14.2 5.2h1.2c.2 1.5 1 2.6 2.4 3.1v1.3c-1.5-.4-2.8-1.4-3.6-2.7v7.7c0 2.7-1.7 4.4-4.1 4.4-.4 0-.8-.1-1.2-.2.6.5 1.4.8 2.4.8 2.4 0 4.1-1.7 4.1-4.4v-4.9c.7.5 1.5.8 2.4.8V9.6c-1.4-.5-2.2-1.6-2.4-3.1h-1.2V5.2Z"
+      />
+      <path
+        fill="#fff"
+        d="M13 5.2h1.2v9.4c0 2.7-1.7 4.4-4.1 4.4-2.1 0-3.8-1.4-3.8-3.5 0-2.3 1.8-3.7 4.2-3.5v2.3c-.9-.2-1.7.3-1.7 1.1 0 .7.5 1.2 1.3 1.2.9 0 1.6-.6 1.6-1.9V5.2H13Z"
+      />
+    </svg>
+  );
+}
+
 export default function Footer() {
   const { t } = useTranslations('footer');
   const { publicHref } = useLocaleNavigation();
@@ -44,6 +85,9 @@ export default function Footer() {
   const socialIcons = {
     facebook: FacebookIcon,
     instagram: InstagramIcon,
+    etsy: EtsyIcon,
+    youtube: YouTubeIcon,
+    tiktok: TikTokIcon,
   };
   const socialLinks = getVerifiedSocialProfiles()
     .filter(({ service, labelKey }) => Boolean(socialIcons[service]) && Boolean(labelKey))

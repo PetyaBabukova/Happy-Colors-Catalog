@@ -22,9 +22,10 @@ describe('Shop', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Плетени играчки, аксесоари и декорация',
+        name: 'Ръчно изработени плетени изделия – играчки, чанти и декорация',
       })
     ).toBeInTheDocument();
+    expect(screen.getByText(/В Happy Colors може да намерите/)).toBeInTheDocument();
     expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0);
     expect(screen.queryAllByTestId(/product-/)).toHaveLength(0);
   });
@@ -35,9 +36,10 @@ describe('Shop', () => {
     expect(
       screen.queryByRole('heading', {
         level: 1,
-        name: 'Плетени играчки, аксесоари и декорация',
+        name: 'Ръчно изработени плетени изделия – играчки, чанти и декорация',
       })
     ).not.toBeInTheDocument();
+    expect(screen.queryByText(/В Happy Colors може да намерите/)).not.toBeInTheDocument();
   });
 
   it('groups products by category and puts unavailable products last within each group', () => {

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Heart, Palette, Sparkles } from 'lucide-react';
 import {
   buildBreadcrumbListJsonLd,
   buildPageMetadata,
@@ -12,6 +13,7 @@ import {
 import {
   GIFT_GUIDE_SLUGS,
   GIFT_HUB_PATH,
+  getGiftImagePlaceholderLabel,
   getGiftGuideContent,
   getGiftsPageContent,
 } from '@/content/publicPages/gifts';
@@ -19,6 +21,9 @@ import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { stringifyJsonLd } from '@/utils/jsonLd';
 import styles from '../gifts.module.css';
+
+const HIGHLIGHT_ICONS = [Heart, Palette, Sparkles];
+const NEXT_SYMBOL = '\u203a';
 
 function getGuidePath(slug) {
   return `${GIFT_HUB_PATH}/${slug}`;
@@ -100,6 +105,12 @@ export default async function GiftGuidePage(props = {}) {
   }
 
   const publicHref = (href) => getServerPublicHref(href, locale);
+  const heroImageLabel = getGiftImagePlaceholderLabel(locale, guide.title, '1200 x 675 px');
+  const guideFeatureCards = guide.sections.map((section, index) => ({
+    section,
+    pathCard: guide.pathCards[index],
+    imageLabel: getGiftImagePlaceholderLabel(locale, section.title, '900 x 675 px'),
+  }));
   const structuredData = buildGuideStructuredData(guide, guideSlug, locale);
   const breadcrumbData = buildGuideBreadcrumb(content, guide, guideSlug, locale);
 
@@ -115,47 +126,95 @@ export default async function GiftGuidePage(props = {}) {
       />
 
       <section className={styles.hero}>
-        <Link className={styles.backLink} href={publicHref(GIFT_HUB_PATH)}>
-          {content.common.backToHub}
-        </Link>
-        <h1>{guide.title}</h1>
-        <p className={styles.intro}>{guide.summary}</p>
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>{guide.eyebrow}</p>
+          <h1>{guide.title}</h1>
+          <p className={styles.intro}>{guide.summary}</p>
+          <ul className={styles.highlightList}>
+            {guide.highlights.map((highlight, index) => {
+              const HighlightIcon = HIGHLIGHT_ICONS[index % HIGHLIGHT_ICONS.length];
+
+              return (
+                <li key={highlight}>
+                  <span className={styles.highlightIcon} aria-hidden="true">
+                    <HighlightIcon />
+                  </span>
+                  <span>{highlight}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <Link className={`${styles.primaryLink} ${styles.heroCta}`} href={publicHref(GIFT_HUB_PATH)}>
+            {content.common.backToHub}
+            <span aria-hidden="true" className={styles.arrowGroup}>
+              <span>{NEXT_SYMBOL}</span>
+              <span>{NEXT_SYMBOL}</span>
+              <span>{NEXT_SYMBOL}</span>
+            </span>
+          </Link>
+        </div>
+        <div className={styles.heroImageSlot} aria-hidden="true">
+          <span>{heroImageLabel}</span>
+        </div>
       </section>
 
-      <article className={styles.article}>
-        {guide.sections.map((section) => (
-          <section key={section.title} className={styles.articleSection}>
-            <h2>{section.title}</h2>
-            <p className={styles.sectionText}>{section.text}</p>
-          </section>
-        ))}
-      </article>
-
-      <section aria-labelledby="gift-guide-paths">
+      <section className={styles.visualGuide} aria-labelledby="gift-guide-features">
         <div className={styles.sectionHeader}>
-          <h2 id="gift-guide-paths">{content.common.guidePathsTitle}</h2>
+          <h2 id="gift-guide-features">{guide.featureSectionTitle}</h2>
         </div>
-        <div className={styles.pathGrid}>
-          {guide.pathCards.map((card) => (
-            <Link key={card.title} className={styles.pathCard} href={publicHref(card.href)}>
-              <div>
-                <h3>{card.title}</h3>
-                <p className={styles.cardText}>{card.text}</p>
+        <div className={styles.visualGuideGrid}>
+          {guideFeatureCards.map(({ section, pathCard, imageLabel }, index) => (
+            <article key={section.title} className={styles.featurePanel}>
+              <div className={styles.featureImageSlot} aria-hidden="true">
+                <span>{imageLabel}</span>
               </div>
-              <span className={styles.cardAction}>{content.hub.browseLabel}</span>
-            </Link>
+              <div className={styles.featureBody}>
+                <span className={styles.featureNumber} aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3>{section.title}</h3>
+                <p className={styles.sectionText}>{section.text}</p>
+                {pathCard && (
+                  <div className={styles.featureAction}>
+                    <p>{pathCard.text}</p>
+                    <Link className={styles.featureLink} href={publicHref(pathCard.href)}>
+                      {pathCard.title}
+                      <span aria-hidden="true" className={styles.arrowGroup}>
+                        <span>{NEXT_SYMBOL}</span>
+                        <span>{NEXT_SYMBOL}</span>
+                        <span>{NEXT_SYMBOL}</span>
+                      </span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </article>
           ))}
         </div>
       </section>
 
-      <div className={styles.actions}>
-        <Link className={styles.primaryLink} href={publicHref('/products')}>
-          {content.common.primaryCta}
-        </Link>
-        <Link className={styles.secondaryLink} href={publicHref('/contacts')}>
-          {content.common.secondaryCta}
-        </Link>
-      </div>
+      <section className={styles.ctaBand} aria-labelledby="gift-guide-cta">
+        <div>
+          <h2 id="gift-guide-cta">{guide.finalCta.title}</h2>
+          <p className={styles.sectionText}>{guide.finalCta.text}</p>
+        </div>
+        <div className={styles.actions}>
+          {guide.finalCta.actions.map((action, index) => (
+            <Link
+              key={action.href}
+              className={index === 0 ? styles.primaryLink : styles.secondaryLink}
+              href={publicHref(action.href)}
+            >
+              {action.label}
+              <span aria-hidden="true" className={styles.arrowGroup}>
+                <span>{NEXT_SYMBOL}</span>
+                <span>{NEXT_SYMBOL}</span>
+                <span>{NEXT_SYMBOL}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }

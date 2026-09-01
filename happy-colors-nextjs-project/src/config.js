@@ -43,8 +43,7 @@ if (!isServer) {
   if (siteApiUrl) {
     baseURL = siteApiUrl;
   } else {
-    const port = process.env.PORT || '3000';
-    baseURL = `http://localhost:${port}/api`;
+    baseURL = 'http://localhost:3030';
   }
 }
 

@@ -57,6 +57,42 @@ describe('products integration', () => {
     expect(aliasRes.body[0]).toMatchObject({ title: 'Red Candle' });
   });
 
+  it('does not treat category display names as public filter slugs', async () => {
+    const app = createExpressApp();
+    const owner = await createUser();
+    const category = await createCategory({
+      name: 'Приказни герои',
+      slug: 'prikazni-geroi',
+      canonicalSlug: 'prikazni-geroi',
+      sourceRevision: 1,
+      translations: {
+        en: {
+          name: 'Fairytale Characters',
+          sourceRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+    const product = await createProduct({ owner, category, title: 'Dragon Toy' });
+
+    const slugRes = await request(app)
+      .get('/products')
+      .query({ category: 'prikazni-geroi' })
+      .expect(200);
+    const bgNameRes = await request(app)
+      .get('/products')
+      .query({ category: 'Приказни герои' })
+      .expect(200);
+    const enNameRes = await request(app)
+      .get('/products')
+      .query({ locale: 'en', category: 'Fairytale Characters' })
+      .expect(200);
+
+    expect(slugRes.body.map((item) => item._id)).toEqual([String(product._id)]);
+    expect(bgNameRes.body).toEqual([]);
+    expect(enNameRes.body).toEqual([]);
+  });
+
   it('keeps old category filters working after a category rename', async () => {
     const app = createExpressApp();
     const owner = await createFullAdmin();

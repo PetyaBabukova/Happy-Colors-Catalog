@@ -249,31 +249,33 @@ export default function Header() {
             <li><Link href={publicHref('/contacts')}>{t('contacts')}</Link></li>
           </ul>
 
-          <form className={styles.searchForm} action={publicHref('/search')} method="get">
-            <input type="text" name="q" placeholder={t('searchPlaceholder')} className={styles.searchInput} />
-            <button type="submit" className={styles.searchBtn} aria-label={t('searchSubmit')}>
-              <Image src="/search_icon_green.svg" alt="" width={16} height={16} />
-            </button>
-          </form>
+          <div className={styles.navControls}>
+            <form className={styles.searchForm} action={publicHref('/search')} method="get">
+              <input type="text" name="q" placeholder={t('searchPlaceholder')} className={styles.searchInput} />
+              <button type="submit" className={styles.searchBtn} aria-label={t('searchSubmit')}>
+                <Image src="/search_icon_green.svg" alt="" width={16} height={16} />
+              </button>
+            </form>
 
-          <Suspense fallback={null}>
-            <LanguageSelector onNavigate={closeMobileMenu} />
-          </Suspense>
+            <Suspense fallback={null}>
+              <LanguageSelector onNavigate={closeMobileMenu} />
+            </Suspense>
 
-          {user?.username ? (
-            <p className={styles.userGreeting}>
-              Здравей, {user.username} | <Link href="/users/logout">Изход</Link>
-            </p>
-          ) : null}
+            {user?.username ? (
+              <p className={styles.userGreeting}>
+                Здравей, {user.username} | <Link href="/users/logout">Изход</Link>
+              </p>
+            ) : null}
 
-          {!isCatalogMode && (
-            <Link href="/cart" className={styles.cartIconWrapper}>
-              <Image className={styles.basketGreen} src="/basket_green.svg" alt={t('cart')} width={32} height={32} />
-              {cartItemCount > 0 && (
-                <span className={styles.cartBadge}>{cartItemCount}</span>
-              )}
-            </Link>
-          )}
+            {!isCatalogMode && (
+              <Link href="/cart" className={styles.cartIconWrapper}>
+                <Image className={styles.basketGreen} src="/basket_green.svg" alt={t('cart')} width={32} height={32} />
+                {cartItemCount > 0 && (
+                  <span className={styles.cartBadge}>{cartItemCount}</span>
+                )}
+              </Link>
+            )}
+          </div>
         </nav>
 
         {canCreateProduct ? (

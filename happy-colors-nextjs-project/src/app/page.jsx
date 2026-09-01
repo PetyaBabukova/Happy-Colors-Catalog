@@ -2,6 +2,7 @@ import Link from 'next/link';
 import ProductCard from './products/ProductCard';
 import HomeHeroCarousel from '@/components/home-banners/HomeHeroCarousel';
 import { buildPageMetadata } from '@/config/siteSeo';
+import { getGiftImagePlaceholderLabel } from '@/content/publicPages/gifts';
 import { getHomePageContent } from '@/content/publicPages/home';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getHomeBanners } from '@/managers/homeBannersManager';
@@ -60,6 +61,9 @@ export default async function Home(props = {}) {
         <div className={styles.giftIdeasGrid}>
           {content.giftIdeas.cards.map((card) => (
             <Link key={card.href} href={publicHref(card.href)} className={styles.giftIdeaCard}>
+              <div className={styles.giftIdeaImageSlot} aria-hidden="true">
+                <span>{getGiftImagePlaceholderLabel(locale, card.title, '800 x 600 px')}</span>
+              </div>
               <h3>{card.title}</h3>
               <p>{card.text}</p>
             </Link>

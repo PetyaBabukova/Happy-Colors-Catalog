@@ -39,6 +39,9 @@
     "giftsLabel": "Идеи за подарък",
     "facebookLabel": "Happy Colors във Facebook",
     "instagramLabel": "Happy Colors в Instagram",
+    "etsyLabel": "Happy Colors в Etsy",
+    "youtubeLabel": "Happy Colors в YouTube",
+    "tiktokLabel": "Happy Colors в TikTok",
     "creditPrefix": "Онлайн каталог от"
   },
   "homeHero": {
@@ -67,7 +70,8 @@
     "disabledEnglishNotice": "English is temporarily unavailable. You are viewing the Bulgarian version."
   },
   "products": {
-    "catalogTitle": "Плетени играчки, аксесоари и декорация",
+    "catalogTitle": "Ръчно изработени плетени изделия – играчки, чанти и декорация",
+    "catalogIntro": "В Happy Colors може да намерите разнообразни ръчно изработени плетени изделия – плетени играчки, дамски чанти, аксесоари и декорации за дома. Всеки модел е изработен на ръка с внимание към детайла и собствен характер. Разгледайте категориите и открийте оригинален handmade продукт за подарък или за вашия дом.",
     "uncategorizedCategory": "Без категория",
     "availabilityLabel": "Наличност:",
     "availableBadge": "Налично",
@@ -109,7 +113,7 @@
   },
   "contacts": {
     "title": "Контакти",
-    "pageDescription": "Свържете се с Happy Colors за въпроси относно плетени играчки, аксесоари и декорация за дома.",
+    "pageDescription": "Свържете се с Happy Colors за въпроси, наличност на изделия, индивидуални поръчки и шаржове по снимка. Изпратете запитване чрез контактната форма.",
     "formTitle": "Изпратете запитване",
     "success": "Благодарим! Съобщението е изпратено успешно.",
     "submit": "Изпрати",

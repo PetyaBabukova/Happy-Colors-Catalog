@@ -25,6 +25,12 @@ describe('Gifts pages', () => {
     const { container } = render(element, { locale: 'en' });
 
     expect(screen.getByRole('heading', { name: 'Gift ideas' })).toBeInTheDocument();
+    expect(screen.getByText('Gift ideas image slot - 1200 x 675 px')).toBeInTheDocument();
+    expect(screen.getByText('Gifts for children image slot - 800 x 600 px')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse catalog' })).toHaveAttribute(
+      'href',
+      '/en/products'
+    );
     expect(screen.getByRole('link', { name: /Gifts for children/ })).toHaveAttribute(
       'href',
       '/en/gifts/gifts-for-children'
@@ -33,6 +39,12 @@ describe('Gifts pages', () => {
       'href',
       '/en/gifts/original-handmade-gift'
     );
+    expect(screen.getAllByRole('link', { name: /View cartoons/ }).some((link) => (
+      link.getAttribute('href') === '/en/cartoons'
+    ))).toBe(true);
+    expect(screen.getByRole('heading', { name: 'How to choose more easily' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Who the gift is for' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 3, name: /Catalog of available pieces|Personal cartoon from a photo|Ordering and care questions|Inquiry for a specific occasion/ })).toHaveLength(4);
     expect(document.body.textContent).not.toMatch(/\/podaraci/);
 
     const scripts = [...container.querySelectorAll('script[type="application/ld+json"]')]
@@ -49,6 +61,18 @@ describe('Gifts pages', () => {
     });
     expect(scripts[0].mainEntity.itemListElement).toHaveLength(3);
     expect(JSON.stringify(scripts)).not.toMatch(/localhost|preview|podaraci/i);
+  });
+
+  it('links the original handmade gift guide to cartoons', async () => {
+    const element = await GiftGuidePage({
+      params: Promise.resolve({ locale: 'en', guideSlug: 'original-handmade-gift' }),
+    });
+
+    render(element, { locale: 'en' });
+
+    expect(screen.getAllByRole('link', { name: /View cartoons/ }).some((link) => (
+      link.getAttribute('href') === '/en/cartoons'
+    ))).toBe(true);
   });
 
   it('generates localized gift hub metadata', async () => {
@@ -71,7 +95,13 @@ describe('Gifts pages', () => {
     const { container } = render(element, { locale: 'en' });
 
     expect(screen.getByRole('heading', { name: 'Gifts for children' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'All gift ideas' })).toHaveAttribute('href', '/en/gifts');
+    expect(screen.getByText('Gifts for children image slot - 1200 x 675 px')).toBeInTheDocument();
+    expect(screen.getByText('Encourage creativity')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View all gifts' })).toHaveAttribute('href', '/en/gifts');
+    expect(screen.getByRole('heading', { name: 'How to choose a gift for a child' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Soft crochet toys' })).toHaveAttribute('href', '/en/products');
+    expect(screen.getByRole('link', { name: 'Safety and care questions' })).toHaveAttribute('href', '/en/faq');
+    expect(screen.getByRole('link', { name: 'Ask for a specific occasion' })).toHaveAttribute('href', '/en/contacts');
     expect(screen.getByRole('link', { name: /Browse catalog/ })).toHaveAttribute('href', '/en/products');
     expect(screen.getByRole('link', { name: /Send inquiry/ })).toHaveAttribute('href', '/en/contacts');
 

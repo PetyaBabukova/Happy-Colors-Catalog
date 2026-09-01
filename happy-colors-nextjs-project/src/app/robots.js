@@ -11,7 +11,9 @@ const AI_SEARCH_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User'];
 const PRIVATE_PRODUCTION_DISALLOW_PATHS = [
   '/analytics',
   '/api/',
-  '/cart',
+  '/cart$',
+  '/cart?',
+  '/cart/',
   '/cartoon-orders',
   '/categories',
   '/checkout',

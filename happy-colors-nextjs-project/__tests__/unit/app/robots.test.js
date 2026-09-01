@@ -1,6 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('robots', () => {
+  const privateProductionDisallowPaths = [
+    '/analytics',
+    '/api/',
+    '/cart$',
+    '/cart?',
+    '/cart/',
+    '/cartoon-orders',
+    '/categories',
+    '/checkout',
+    '/home-banners',
+    '/homepage-featured',
+    '/newsletter',
+    '/products/create',
+    '/products/*/delete',
+    '/products/*/edit',
+    '/translations',
+    '/users',
+  ];
+
+  function isPathDisallowedByRule(path, disallowPath) {
+    return disallowPath.endsWith('$')
+      ? path === disallowPath.slice(0, -1)
+      : path.startsWith(disallowPath);
+  }
+
+  function isPathDisallowed(path, disallowPaths = privateProductionDisallowPaths) {
+    return disallowPaths.some((disallowPath) => isPathDisallowedByRule(path, disallowPath));
+  }
+
   beforeEach(() => {
     vi.resetModules();
   });
@@ -36,62 +65,17 @@ describe('robots', () => {
         {
           userAgent: '*',
           allow: '/',
-          disallow: [
-            '/analytics',
-            '/api/',
-            '/cart',
-            '/cartoon-orders',
-            '/categories',
-            '/checkout',
-            '/home-banners',
-            '/homepage-featured',
-            '/newsletter',
-            '/products/create',
-            '/products/*/delete',
-            '/products/*/edit',
-            '/translations',
-            '/users',
-          ],
+          disallow: privateProductionDisallowPaths,
         },
         {
           userAgent: 'OAI-SearchBot',
           allow: '/',
-          disallow: [
-            '/analytics',
-            '/api/',
-            '/cart',
-            '/cartoon-orders',
-            '/categories',
-            '/checkout',
-            '/home-banners',
-            '/homepage-featured',
-            '/newsletter',
-            '/products/create',
-            '/products/*/delete',
-            '/products/*/edit',
-            '/translations',
-            '/users',
-          ],
+          disallow: privateProductionDisallowPaths,
         },
         {
           userAgent: 'ChatGPT-User',
           allow: '/',
-          disallow: [
-            '/analytics',
-            '/api/',
-            '/cart',
-            '/cartoon-orders',
-            '/categories',
-            '/checkout',
-            '/home-banners',
-            '/homepage-featured',
-            '/newsletter',
-            '/products/create',
-            '/products/*/delete',
-            '/products/*/edit',
-            '/translations',
-            '/users',
-          ],
+          disallow: privateProductionDisallowPaths,
         },
       ],
       host: 'https://happycolors.eu',
@@ -109,8 +93,17 @@ describe('robots', () => {
     expect(defaultRule.allow).toBe('/');
     expect(defaultRule.disallow).toContain('/api/');
     expect(defaultRule.disallow).toContain('/checkout');
+    expect(defaultRule.disallow).toContain('/cart$');
+    expect(defaultRule.disallow).toContain('/cart?');
+    expect(defaultRule.disallow).toContain('/cart/');
     expect(defaultRule.disallow).toContain('/products/create');
     expect(defaultRule.disallow).toContain('/products/*/edit');
+    expect(isPathDisallowed('/cart', defaultRule.disallow)).toBe(true);
+    expect(isPathDisallowed('/cart?ref=nav', defaultRule.disallow)).toBe(true);
+    expect(isPathDisallowed('/cart/items', defaultRule.disallow)).toBe(true);
+    expect(isPathDisallowed('/cartoons', defaultRule.disallow)).toBe(false);
+    expect(isPathDisallowed('/cartoons/offer', defaultRule.disallow)).toBe(false);
+    expect(isPathDisallowed('/products', defaultRule.disallow)).toBe(false);
     expect(defaultRule.disallow).not.toContain('/products');
     expect(defaultRule.disallow).not.toContain('/gifts');
     expect(defaultRule.disallow).not.toContain('/blog');

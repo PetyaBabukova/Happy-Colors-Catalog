@@ -3,6 +3,7 @@ import { publicPageContentModules } from '@/content/publicPages';
 import {
   GIFT_GUIDE_SLUGS,
   GIFT_HUB_PATH,
+  getGiftImagePlaceholderLabel,
   getGiftGuideCards,
   getGiftGuideContent,
   getGiftsPageContent,
@@ -97,8 +98,9 @@ describe('public page content modules', () => {
 
     expect(productsTitle).not.toBe(homeTitle);
     expect(productsMetadata.description).not.toBe(homeMetadata.description);
-    expect(productsTitle).toContain('Shop');
-    expect(productsTitle).not.toContain('Accessories, and Home Decor');
+    expect(productsTitle).toContain('Handmade Crochet Toys');
+    expect(productsTitle).toContain('Bags & Home Decor');
+    expect(productsTitle).toContain('Catalog');
   });
 
   it('keeps gift guide content complete for every shared English slug', () => {
@@ -107,6 +109,21 @@ describe('public page content modules', () => {
     for (const locale of ['bg', 'en']) {
       const content = getGiftsPageContent(locale);
       const cards = getGiftGuideCards(locale);
+
+      expect(content.hub.eyebrow, locale).toBeTruthy();
+      expect(content.hub.primaryCta?.href, locale).toMatch(/^\//);
+      expect(content.hub.primaryCta?.label, locale).toBeTruthy();
+      expect(content.hub.secondaryCta?.href, locale).toMatch(/^\//);
+      expect(content.hub.secondaryCta?.label, locale).toBeTruthy();
+      expect(content.hub.guideSectionIntro, locale).toBeTruthy();
+      expect(content.hub.decisionTitle, locale).toBeTruthy();
+      expect(content.hub.decisionIntro, locale).toBeTruthy();
+      expect(content.hub.decisionSteps, locale).toHaveLength(3);
+      expect(content.hub.decisionSteps.every((step) => step.title && step.text), locale).toBe(true);
+      expect(content.hub.supportItems, locale).toHaveLength(4);
+      expect(content.hub.supportItems.every((item) => (
+        item.title && item.text && item.cta?.href?.startsWith('/') && item.cta?.label
+      )), locale).toBe(true);
 
       expect(cards).toHaveLength(GIFT_GUIDE_SLUGS.length);
       expect(cards.map((card) => card.slug)).toEqual([...GIFT_GUIDE_SLUGS]);
@@ -118,12 +135,21 @@ describe('public page content modules', () => {
         const guide = getGiftGuideContent(slug, locale);
 
         expect(guide, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.eyebrow, `${locale}:${slug}`).toBeTruthy();
         expect(guide.metadata.title, `${locale}:${slug}`).toBeTruthy();
         expect(guide.metadata.description, `${locale}:${slug}`).toBeTruthy();
         expect(guide.title, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.featureSectionTitle, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.cardText, `${locale}:${slug}`).toBeTruthy();
         expect(guide.summary, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.highlights, `${locale}:${slug}`).toHaveLength(3);
         expect(guide.sections, `${locale}:${slug}`).toHaveLength(3);
         expect(guide.pathCards, `${locale}:${slug}`).toHaveLength(3);
+        expect(guide.pathCards, `${locale}:${slug}`).toHaveLength(guide.sections.length);
+        expect(guide.finalCta?.title, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.finalCta?.text, `${locale}:${slug}`).toBeTruthy();
+        expect(guide.finalCta?.actions?.length, `${locale}:${slug}`).toBeGreaterThanOrEqual(2);
+        expect(guide.finalCta.actions.every((action) => action.href.startsWith('/'))).toBe(true);
         expect(guide.pathCards.every((card) => card.href.startsWith('/'))).toBe(true);
       }
 
@@ -137,5 +163,14 @@ describe('public page content modules', () => {
 
     expect(serializedGiftContent).toContain('/gifts/gifts-for-children');
     expect(serializedGiftContent).not.toMatch(/\/podaraci/i);
+  });
+
+  it('formats gift image placeholder labels for both public locales', () => {
+    expect(getGiftImagePlaceholderLabel('en', 'Gift ideas', '1200 x 675 px')).toBe(
+      'Gift ideas image slot - 1200 x 675 px'
+    );
+    expect(getGiftImagePlaceholderLabel('bg', 'Идеи за подарък', '1200 x 675 px')).toBe(
+      'Място за изображение: Идеи за подарък - 1200 x 675 px'
+    );
   });
 });

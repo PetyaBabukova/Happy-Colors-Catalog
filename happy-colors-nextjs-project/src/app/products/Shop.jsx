@@ -58,7 +58,10 @@ export default function Shop({ products, showTitle = true }) {
     <>
     <section className={styles.shopPage}>
       {showTitle && (
-        <h1 className={styles.shopPageTitle}>{t('products.catalogTitle')}</h1>
+        <section className={`${styles.introSection} pageInline`}>
+          <h1>{t('products.catalogTitle')}</h1>
+          <p>{t('products.catalogIntro')}</p>
+        </section>
       )}
 
       <section className={`${styles.categories} pageInline`}>

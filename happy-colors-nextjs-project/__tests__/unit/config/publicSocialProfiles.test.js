@@ -20,14 +20,17 @@ describe('publicSocialProfiles', () => {
       {
         service: 'etsy',
         href: 'https://happycolorsartshop.etsy.com/',
+        labelKey: 'etsyLabel',
       },
       {
         service: 'youtube',
         href: 'https://www.youtube.com/@HappyColorsCrochet',
+        labelKey: 'youtubeLabel',
       },
       {
         service: 'tiktok',
         href: 'https://www.tiktok.com/@happycolorscrochet',
+        labelKey: 'tiktokLabel',
       },
     ]);
     expect(getVerifiedSameAsUrls()).toEqual([

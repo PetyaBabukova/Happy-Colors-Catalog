@@ -108,7 +108,11 @@ describe('CartoonsPage', () => {
     const { default: CartoonsPage, generateMetadata } = await importPage();
 
     await expect(generateMetadata({ params: Promise.resolve({ locale: 'en' }) })).resolves.toMatchObject({
-      title: 'Custom caricature from a photo for a memorable gift',
+      title: {
+        absolute: 'Caricature from Photo – Personalised Gift | Happy Colors',
+      },
+      description:
+        'Order a personalised caricature from photo – a unique gift for birthdays, anniversaries, weddings and special occasions. Digital and print options available.',
       alternates: {
         canonical: '/en/cartoons',
       },
@@ -126,10 +130,11 @@ describe('CartoonsPage', () => {
       enabled: true,
     });
     const { generateMetadata } = await importPage();
-    const content = getCartoonsPageContent('bg');
 
     await expect(generateMetadata()).resolves.toMatchObject({
-      title: content.metadata.title,
+      title: {
+        absolute: 'Шарж по снимка и карикатура за подарък | Happy Colors',
+      },
       alternates: {
         canonical: '/cartoons',
       },

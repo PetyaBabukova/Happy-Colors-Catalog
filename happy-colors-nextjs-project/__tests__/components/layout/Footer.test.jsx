@@ -21,7 +21,7 @@ describe('Footer', () => {
     expect(screen.getByText('Последвайте ни:')).toBeInTheDocument();
     const socialNav = screen.getByRole('navigation', { name: 'Социални профили' });
 
-    expect(within(socialNav).getAllByRole('link')).toHaveLength(2);
+    expect(within(socialNav).getAllByRole('link')).toHaveLength(5);
     expect(screen.getByRole('link', { name: /Facebook/ })).toHaveAttribute(
       'href',
       'https://www.facebook.com/happycolors.studio'
@@ -29,6 +29,18 @@ describe('Footer', () => {
     expect(screen.getByRole('link', { name: /Instagram/ })).toHaveAttribute(
       'href',
       'https://www.instagram.com/happycolors.crochet/'
+    );
+    expect(screen.getByRole('link', { name: /Etsy/ })).toHaveAttribute(
+      'href',
+      'https://happycolorsartshop.etsy.com/'
+    );
+    expect(screen.getByRole('link', { name: /YouTube/ })).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/@HappyColorsCrochet'
+    );
+    expect(screen.getByRole('link', { name: /TikTok/ })).toHaveAttribute(
+      'href',
+      'https://www.tiktok.com/@happycolorscrochet'
     );
     expect(screen.getByRole('link', { name: /webcreativeteam\.com/ })).toHaveAttribute(
       'href',

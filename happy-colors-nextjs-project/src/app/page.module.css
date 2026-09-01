@@ -37,7 +37,7 @@
 
 .giftIdeasSection {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
   padding-top: 1rem;
   padding-bottom: 2.75rem;
 }
@@ -62,6 +62,30 @@
   line-height: 1.55;
 }
 
+.giftIdeaImageSlot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  min-width: 0;
+  border: 1px dashed rgba(1, 102, 77, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 111, 97, 0.1), rgba(1, 102, 77, 0.06)),
+    var(--lightest-green);
+  color: var(--dark-green);
+  text-align: center;
+}
+
+.giftIdeaImageSlot span {
+  max-width: 16rem;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .giftIdeasGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -71,6 +95,7 @@
 .giftIdeaCard {
   display: grid;
   gap: 0.6rem;
+  align-content: start;
   min-width: 0;
   padding: 1rem;
   border: 1px solid rgba(1, 102, 77, 0.18);
