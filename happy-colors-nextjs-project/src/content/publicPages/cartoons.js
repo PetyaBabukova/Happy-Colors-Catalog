@@ -71,9 +71,11 @@ export const cartoonsPageContent = {
 export const cartoonsOfferPageContent = {
   bg: {
     metadata: {
-      title: 'Варианти и ориентировъчни цени',
+      title: {
+        absolute: 'Цени за шарж по снимка и варианти | Happy Colors',
+      },
       description:
-        'Вижте варианти за персонален шарж: печат на фотохартия, рамка, постер, добавки и ориентировъчни срокове за изработка.',
+        'Вижте ориентировъчни цени за шарж по снимка, дигитален файл, рамка и варианти за печат A4 или A3.',
     },
     unavailable: unavailable.bg,
     hero: {
@@ -156,9 +158,11 @@ export const cartoonsOfferPageContent = {
   },
   en: {
     metadata: {
-      title: 'Options and guide prices',
+      title: {
+        absolute: 'Caricature Prices and Print Options | Happy Colors',
+      },
       description:
-        'See custom caricature options, including photo-paper prints, frames, posters, add-ons, and approximate production times.',
+        'See guide prices for a caricature from photo, with digital artwork, framed prints and A4 or A3 print options.',
     },
     unavailable: unavailable.en,
     hero: {

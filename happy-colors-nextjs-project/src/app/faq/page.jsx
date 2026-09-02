@@ -14,7 +14,7 @@ const faqContent = {
     metadata: {
       title: 'Често задавани въпроси',
       description:
-        'Отговори на най-честите въпроси за ръчно изработените плетени играчки, аксесоари и декорации от Happy Colors.',
+        'Отговори за плетени играчки по поръчка, грижа, пране, материали и поддръжка на ръчно изработени изделия от Happy Colors.',
     },
     hero: {
       title: 'Често задавани въпроси',
@@ -170,7 +170,7 @@ const faqContent = {
     metadata: {
       title: 'Frequently asked questions',
       description:
-        'Answers to common questions about handmade crochet toys, accessories, home decorations, inquiries, materials, delivery, and care from Happy Colors.',
+        'Answers about crochet toy care, cleaning and washing, custom crochet toys, materials, delivery and handmade toys for children.',
     },
     hero: {
       title: 'Frequently asked questions',

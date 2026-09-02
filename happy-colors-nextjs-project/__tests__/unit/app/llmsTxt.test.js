@@ -24,6 +24,9 @@ describe('llms.txt route', () => {
     expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
     expect(body).toContain('# Happy Colors');
     expect(body).toContain('## Public Pages');
+    expect(body).toContain('handmade crochet toys, crochet gifts, handmade home decor');
+    expect(body).toContain('soft crochet animals');
+    expect(body).toContain('caricature from photo, personalised caricature gifts');
     expect(body).toContain('### Catalog');
     expect(body).toContain('### Gift Guides');
     expect(body).toContain('### Caricatures');

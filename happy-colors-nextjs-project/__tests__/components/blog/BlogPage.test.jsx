@@ -40,8 +40,18 @@ describe('BlogPage', () => {
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
     expect(metadata.title).toBe('Blog');
-    expect(metadata.description).toMatch(/Ideas, stories, and inspiration/);
+    expect(metadata.description).toMatch(/practical ideas about handmade gifts/);
     expect(metadata.alternates.canonical).toBe('/en/blog');
+  });
+
+  it('generates Bulgarian metadata for the default blog route', async () => {
+    const metadata = await generateMetadata();
+
+    expect(metadata.title).toBe('Блог');
+    expect(metadata.description).toBe(
+      'Истории и практични идеи от Happy Colors за handmade изделия, плетени играчки, детски подаръци, грижа и вдъхновение за личен жест.'
+    );
+    expect(metadata.alternates.canonical).toBe('/blog');
   });
 
   it('re-exports metadata generation from the localized blog wrapper', async () => {

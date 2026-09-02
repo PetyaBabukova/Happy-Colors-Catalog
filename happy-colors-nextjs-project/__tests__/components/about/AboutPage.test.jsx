@@ -13,6 +13,19 @@ describe('AboutPage', () => {
     vi.unstubAllEnvs();
   });
 
+  it('generates Bulgarian metadata for the default about route', async () => {
+    const metadata = await generateMetadata();
+
+    expect(metadata).toMatchObject({
+      title: {
+        absolute: 'За Happy Colors | Хепи Колорс | Плетени играчки и декорация за дома',
+      },
+      description:
+        'Научете повече за Happy Colors (Хепи Колорс) и ръчно изработените плетени играчки, handmade изделия, аксесоари и декорация за дома.',
+      alternates: { canonical: '/aboutus' },
+    });
+  });
+
   it('renders localized English content and metadata', async () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
 
@@ -24,7 +37,7 @@ describe('AboutPage', () => {
         absolute: 'About Happy Colors | Crochet Toys and Handmade Decor',
       },
       description:
-        'Learn more about Happy Colors and the handmade crochet toys, accessories, and home decorations created with care and attention to detail.',
+        'Learn about Happy Colors and its handmade crochet toys, handmade gifts, crochet accessories, bags, and home decor made with care.',
       alternates: { canonical: '/en/aboutus' },
     });
 

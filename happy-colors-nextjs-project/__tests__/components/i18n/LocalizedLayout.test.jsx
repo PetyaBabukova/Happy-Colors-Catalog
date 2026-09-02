@@ -59,7 +59,7 @@ describe('LocalizedLayout', () => {
     });
 
     expect(metadata.title).toEqual({
-      default: 'Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors',
+      default: 'Handmade Crochet Toys, Gifts & Home Decor | Happy Colors',
       template: '%s | Happy Colors',
     });
     expect(metadata.description).not.toMatch(/[\u0400-\u04FF]/);

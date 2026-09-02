@@ -13,6 +13,17 @@ describe('FaqPage', () => {
     vi.unstubAllEnvs();
   });
 
+  it('generates Bulgarian FAQ metadata for the default route', async () => {
+    const metadata = await generateMetadata();
+
+    expect(metadata).toMatchObject({
+      title: 'Често задавани въпроси',
+      description:
+        'Отговори за плетени играчки по поръчка, грижа, пране, материали и поддръжка на ръчно изработени изделия от Happy Colors.',
+      alternates: { canonical: '/faq' },
+    });
+  });
+
   it('renders localized English FAQ content and metadata', async () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
 
@@ -22,7 +33,7 @@ describe('FaqPage', () => {
     expect(metadata).toMatchObject({
       title: 'Frequently asked questions',
       description:
-        'Answers to common questions about handmade crochet toys, accessories, home decorations, inquiries, materials, delivery, and care from Happy Colors.',
+        'Answers about crochet toy care, cleaning and washing, custom crochet toys, materials, delivery and handmade toys for children.',
       alternates: { canonical: '/en/faq' },
     });
 

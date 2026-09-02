@@ -37,18 +37,18 @@ function getPublicSections() {
     {
       title: 'Homepage',
       description: isCartoonsServiceEnabled
-        ? 'Brand overview and entry point for handmade crochet toys, gifts, caricatures, and current featured content.'
-        : 'Brand overview and entry point for handmade crochet toys, gifts, and current featured content.',
+        ? 'Brand overview for handmade crochet toys, crochet gifts, handmade home decor, caricatures, and featured gift content.'
+        : 'Brand overview for handmade crochet toys, crochet gifts, handmade home decor, and featured gift content.',
       paths: ['/'],
     },
     {
       title: 'Catalog',
-      description: 'Available handmade crochet toys, accessories, and decor. Product detail pages are discoverable through the catalog and sitemap.',
+      description: 'Catalog of handmade crochet toys, soft crochet animals, handmade bags, accessories, and home decor.',
       paths: ['/products'],
     },
     {
       title: 'Gift Guides',
-      description: 'Editorial gift idea pages with shared English slugs across Bulgarian and English routes.',
+      description: 'Editorial handmade gift ideas for children, crochet gifts, and original handmade presents with shared English slugs.',
       paths: [
         GIFT_HUB_PATH,
         ...GIFT_GUIDE_SLUGS.map((slug) => `${GIFT_HUB_PATH}/${slug}`),
@@ -58,19 +58,19 @@ function getPublicSections() {
       ? [
           {
             title: 'Caricatures',
-            description: 'Public caricature service pages for custom illustrated gifts.',
+            description: 'Public pages for caricature from photo, personalised caricature gifts, prices, digital artwork, and print options.',
             paths: ['/cartoons', '/cartoons/offer'],
           },
         ]
       : []),
     {
       title: 'Blog And Help',
-      description: 'Supporting articles, frequently asked questions, and contact information.',
+      description: 'Supporting handmade gift ideas, crochet toy care, custom order information, FAQs, and contact information.',
       paths: ['/blog', '/faq', '/contacts'],
     },
     {
       title: 'About',
-      description: 'Information about Happy Colors, the handmade work behind the catalog, and public partnership information.',
+      description: 'Information about Happy Colors, handmade crochet toys, handmade gifts, crochet accessories, home decor, and public partnerships.',
       paths: ['/aboutus', '/partners'],
     },
   ];
@@ -128,8 +128,8 @@ export function buildLlmsTxt({
     ? [{ title: '', description: '', paths }]
     : sections;
   const introduction = isCartoonsServiceEnabled
-    ? 'Happy Colors is a Bulgarian handmade studio for colorful crochet toys, accessories, decor, thoughtful gift ideas, and custom caricature gifts.'
-    : 'Happy Colors is a Bulgarian handmade studio for colorful crochet toys, accessories, decor, and thoughtful gift ideas.';
+    ? 'Happy Colors is a Bulgarian handmade studio for colorful crochet toys, handmade gifts, crochet accessories, bags, home decor, thoughtful gift ideas, and custom caricature gifts.'
+    : 'Happy Colors is a Bulgarian handmade studio for colorful crochet toys, handmade gifts, crochet accessories, bags, home decor, and thoughtful gift ideas.';
 
   return [
     '# Happy Colors',

@@ -69,14 +69,24 @@ describe('HomePage', () => {
   it('generates English metadata for localized home routes', async () => {
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors');
-    expect(metadata.description).toMatch(/Handmade crochet toys/);
+    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Gifts & Home Decor | Happy Colors');
+    expect(metadata.description).toMatch(/Unique handmade gifts/);
     expect(metadata.alternates.canonical).toBe('/en');
+  });
+
+  it('generates Bulgarian metadata for the default home route', async () => {
+    const metadata = await generateMetadata();
+
+    expect(metadata.title.absolute).toBe('Ръчно изработени подаръци, плетени играчки и декорация | Happy Colors');
+    expect(metadata.description).toBe(
+      'Ръчно изработени подаръци от Happy Colors - плетени играчки, handmade изделия, аксесоари и декорация за дома с характер.'
+    );
+    expect(metadata.alternates.canonical).toBe('/');
   });
 
   it('re-exports metadata generation from the localized home wrapper', async () => {
     const metadata = await generateLocalizedMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors');
+    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Gifts & Home Decor | Happy Colors');
   });
 });

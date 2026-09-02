@@ -2,10 +2,10 @@ export const homePageContent = {
   bg: {
     metadata: {
       title: {
-        absolute: '\u041f\u043b\u0435\u0442\u0435\u043d\u0438 \u0438\u0433\u0440\u0430\u0447\u043a\u0438, \u0430\u043a\u0441\u0435\u0441\u043e\u0430\u0440\u0438 \u0438 \u0434\u0435\u043a\u043e\u0440\u0430\u0446\u0438\u044f \u0437\u0430 \u0434\u043e\u043c\u0430 | Happy Colors | \u0425\u0435\u043f\u0438 \u041a\u043e\u043b\u043e\u0440\u0441',
+        absolute: 'Ръчно изработени подаръци, плетени играчки и декорация | Happy Colors',
       },
       description:
-        '\u0420\u044a\u0447\u043d\u043e \u0438\u0437\u0440\u0430\u0431\u043e\u0442\u0435\u043d\u0438 \u043f\u043b\u0435\u0442\u0435\u043d\u0438 \u0438\u0433\u0440\u0430\u0447\u043a\u0438, \u0430\u043a\u0441\u0435\u0441\u043e\u0430\u0440\u0438 \u0438 \u0434\u0435\u043a\u043e\u0440\u0430\u0446\u0438\u044f \u0437\u0430 \u0434\u043e\u043c\u0430 \u043e\u0442 Happy Colors (\u0425\u0435\u043f\u0438 \u041a\u043e\u043b\u043e\u0440\u0441) - \u0438\u0434\u0435\u0438 \u0437\u0430 \u043f\u043e\u0434\u0430\u0440\u044a\u043a, \u0443\u044e\u0442 \u0438 \u043a\u0440\u0430\u0441\u0438\u0432\u0438 \u0438\u0437\u0434\u0435\u043b\u0438\u044f \u0441 \u0445\u0430\u0440\u0430\u043a\u0442\u0435\u0440.',
+        'Ръчно изработени подаръци от Happy Colors - плетени играчки, handmade изделия, аксесоари и декорация за дома с характер.',
     },
     intro: {
       title: 'Ръчно изработени плетени играчки, аксесоари и декорация за дома',
@@ -40,10 +40,10 @@ export const homePageContent = {
   en: {
     metadata: {
       title: {
-        absolute: 'Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors',
+        absolute: 'Handmade Crochet Toys, Gifts & Home Decor | Happy Colors',
       },
       description:
-        'Handmade crochet toys, accessories, and home decorations by Happy Colors - original gift ideas, cozy accents, and beautiful pieces with character.',
+        'Unique handmade gifts from Happy Colors: crochet toys, crochet gifts, accessories, bags and handmade home decor for colorful everyday moments.',
     },
     intro: {
       title: 'Handmade crochet toys, accessories, and home decor',

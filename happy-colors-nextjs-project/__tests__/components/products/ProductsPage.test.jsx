@@ -48,8 +48,24 @@ describe('ProductsPage', () => {
     expect(metadata.title).toEqual({
       absolute: 'Handmade Crochet Toys, Bags & Home Decor - Catalog | Happy Colors',
     });
-    expect(metadata.description).toMatch(/Shop available handmade crochet toys/);
+    expect(metadata.description).toMatch(/soft crochet animals/);
     expect(metadata.alternates.canonical).toBe('/en/products');
+  });
+
+  it('generates Bulgarian catalog metadata for the default product listing route', async () => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu/');
+
+    const { generateMetadata } = await import('@/app/products/page');
+    const metadata = await generateMetadata();
+
+    expect(metadata.title).toEqual({
+      absolute: 'Ръчно плетени играчки, аксесоари и декорация за дома - каталог | Happy Colors',
+    });
+    expect(metadata.description).toBe(
+      'Разгледайте ръчно плетени играчки на една кука, меки животинки, аксесоари, чанти и декорация за дома от Happy Colors.'
+    );
+    expect(metadata.alternates.canonical).toBe('/products');
   });
 
   it('redirects category display-name queries to the shared category slug', async () => {
