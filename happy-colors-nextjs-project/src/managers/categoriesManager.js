@@ -31,6 +31,35 @@ async function fetchVisibleCategoriesResult({ locale } = {}) {
   }
 }
 
+async function fetchVisibleCategoryRedirectsResult({ locale } = {}) {
+  try {
+    const res = await fetch(
+      buildApiUrl(baseURL, '/categories/visible/redirects', { locale }),
+      getPublicServerFetchOptions({
+        tags: ['categories', 'visible-categories', 'products'],
+        browserNoStore: false,
+      })
+    );
+
+    if (!res.ok) {
+      throw new Error('Failed to load category redirect candidates.');
+    }
+
+    const data = await readResponseJsonSafely(res);
+
+    return {
+      categories: Array.isArray(data) ? data : [],
+      loaded: true,
+    };
+  } catch (err) {
+    console.warn(err.message);
+    return {
+      categories: [],
+      loaded: false,
+    };
+  }
+}
+
 export async function getVisibleCategories(options = {}) {
   const result = await fetchVisibleCategoriesResult(options);
 
@@ -39,6 +68,16 @@ export async function getVisibleCategories(options = {}) {
 
 export async function getVisibleCategoriesSeed(options = {}) {
   return fetchVisibleCategoriesResult(options);
+}
+
+export async function getVisibleCategoryRedirectCandidates(options = {}) {
+  const result = await fetchVisibleCategoryRedirectsResult(options);
+
+  return result.categories;
+}
+
+export async function getVisibleCategoryRedirectCandidatesSeed(options = {}) {
+  return fetchVisibleCategoryRedirectsResult(options);
 }
 
 export async function onCreateCategorySubmit(

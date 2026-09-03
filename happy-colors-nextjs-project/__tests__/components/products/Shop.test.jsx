@@ -42,6 +42,19 @@ describe('Shop', () => {
     expect(screen.queryByText(/В Happy Colors може да намерите/)).not.toBeInTheDocument();
   });
 
+  it('renders a single category page H1 without the generic catalog intro', () => {
+    render(
+      <Shop
+        products={[]}
+        pageContent={{ heading: 'Плетени приказни герои' }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Плетени приказни герои' })).toBeInTheDocument();
+    expect(screen.queryByText(/В Happy Colors може да намерите/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
   it('groups products by category and puts unavailable products last within each group', () => {
     render(
       <Shop

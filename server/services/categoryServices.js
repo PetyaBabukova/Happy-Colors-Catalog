@@ -4,7 +4,12 @@ import { slugify } from '../utils/slugify.js';
 import mongoose from 'mongoose'; 
 import { revalidateProductSurfacesSafely } from '../helpers/revalidateProducts.js';
 import { buildPublicProductFilter } from '../utils/productPublication.js';
-import { getSourceRevision, projectPublicCategory } from './localization/publicProjection.js';
+import {
+  getSourceRevision,
+  hasValidCategoryTranslation,
+  hasValidProductTranslation,
+  projectPublicCategory,
+} from './localization/publicProjection.js';
 
 function getTranslationEntry(translations, locale) {
   if (!translations) {
@@ -51,6 +56,86 @@ function withTranslationDecision(category, options) {
 
 
 // 👉 Създаване на категория със slug
+function getTranslationEntryValue(category, locale, fieldName) {
+  const translation = getTranslationEntry(category?.translations, locale);
+
+  return translation?.[fieldName] || '';
+}
+
+function getObjectIdTimestamp(value) {
+  const id = value?._id || value;
+
+  return typeof id?.getTimestamp === 'function' ? id.getTimestamp() : null;
+}
+
+function getCategoryTimestamp(category, fieldName) {
+  return category?.[fieldName] || getObjectIdTimestamp(category);
+}
+
+function projectCategoryRedirectCandidate(category, locale = 'bg', { eligibleLocales = ['bg'] } = {}) {
+  const projectedCategory = projectPublicCategory(category, locale);
+
+  if (!projectedCategory) {
+    return projectedCategory;
+  }
+
+  return {
+    _id: projectedCategory._id,
+    name: projectedCategory.name,
+    contentLocale: projectedCategory.contentLocale,
+    translationPending: projectedCategory.translationPending,
+    filterSlug: projectedCategory.filterSlug,
+    slug: category?.slug || '',
+    canonicalSlug: category?.canonicalSlug || '',
+    canonicalSlugReviewed: Boolean(category?.canonicalSlugReviewed),
+    slugAliases: Array.isArray(category?.slugAliases) ? category.slugAliases : [],
+    eligibleLocales,
+    displayNames: {
+      bg: category?.name || '',
+      en: hasValidCategoryTranslation(category)
+        ? getTranslationEntryValue(category, 'en', 'name')
+        : '',
+    },
+    createdAt: getCategoryTimestamp(category, 'createdAt'),
+    updatedAt: getCategoryTimestamp(category, 'updatedAt'),
+  };
+}
+
+function getCategoryId(category) {
+  return String(category?._id || '');
+}
+
+function buildCategoryLocaleEligibility(products = []) {
+  const eligibilityByCategoryId = new Map();
+
+  for (const product of products) {
+    const category = product?.category;
+    const categoryId = getCategoryId(category);
+
+    if (!categoryId) {
+      continue;
+    }
+
+    const currentEligibility = eligibilityByCategoryId.get(categoryId) || new Set();
+
+    currentEligibility.add('bg');
+
+    if (hasValidCategoryTranslation(category) && hasValidProductTranslation(product)) {
+      currentEligibility.add('en');
+    }
+
+    eligibilityByCategoryId.set(categoryId, currentEligibility);
+  }
+
+  return eligibilityByCategoryId;
+}
+
+function getEligibleLocalesForCategory(category, eligibilityByCategoryId) {
+  const locales = eligibilityByCategoryId.get(getCategoryId(category));
+
+  return locales ? [...locales] : [];
+}
+
 function createCategoryError(message, { field = null, statusCode = 400 } = {}) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -168,6 +253,33 @@ export async function getVisibleCategories({ locale = 'bg' } = {}) {
   const categories = await Category.find({ _id: { $in: visibleCategoryIds } }).lean();
 
   return categories.map((category) => projectPublicCategory(category, locale));
+}
+
+export async function getVisibleCategoryRedirectCandidates({ locale = 'bg' } = {}) {
+  const products = await Product.find({
+    ...buildPublicProductFilter(),
+    isInCatalog: true,
+  })
+    .select('category translations sourceRevision')
+    .populate('category', 'name slug canonicalSlug slugAliases canonicalSlugReviewed translations sourceRevision createdAt updatedAt')
+    .lean();
+  const eligibilityByCategoryId = buildCategoryLocaleEligibility(products);
+  const categoriesById = new Map();
+
+  for (const product of products) {
+    const category = product?.category;
+    const categoryId = getCategoryId(category);
+
+    if (categoryId && category && typeof category === 'object' && !categoriesById.has(categoryId)) {
+      categoriesById.set(categoryId, category);
+    }
+  }
+
+  return [...categoriesById.values()].map((category) =>
+    projectCategoryRedirectCandidate(category, locale, {
+      eligibleLocales: getEligibleLocalesForCategory(category, eligibilityByCategoryId),
+    })
+  );
 }
 
 export async function deleteCategory(categoryId) {

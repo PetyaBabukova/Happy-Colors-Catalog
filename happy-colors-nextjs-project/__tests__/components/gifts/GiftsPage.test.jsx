@@ -25,8 +25,13 @@ describe('Gifts pages', () => {
     const { container } = render(element, { locale: 'en' });
 
     expect(screen.getByRole('heading', { name: 'Gift ideas' })).toBeInTheDocument();
-    expect(screen.getByText('Gift ideas image slot - 1200 x 675 px')).toBeInTheDocument();
-    expect(screen.getByText('Gifts for children image slot - 800 x 600 px')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Gift ideas' })).toHaveAttribute(
+      'src',
+      '/images/gifts/hero_gift_idea.webp'
+    );
+    expect(container.querySelector('img[src="/images/gifts/podaruci_za_deca.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/pletena_igrachka_podaruk.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/original_handmade_podaruk.webp"]')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Browse catalog' })).toHaveAttribute(
       'href',
       '/en/products'
@@ -43,8 +48,8 @@ describe('Gifts pages', () => {
       link.getAttribute('href') === '/en/cartoons'
     ))).toBe(true);
     expect(screen.getByRole('heading', { name: 'How to choose more easily' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Who the gift is for' })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 3, name: /Catalog of available pieces|Personal cartoon from a photo|Ordering and care questions|Inquiry for a specific occasion/ })).toHaveLength(4);
+    expect(screen.getByRole('heading', { name: 'Who is the gift for?' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 3, name: /Catalog of available items|Personalized caricature from a photo|Questions about ordering and care|Enquiry for a specific occasion/ })).toHaveLength(4);
     expect(document.body.textContent).not.toMatch(/\/podaraci/);
 
     const scripts = [...container.querySelectorAll('script[type="application/ld+json"]')]
@@ -68,11 +73,35 @@ describe('Gifts pages', () => {
       params: Promise.resolve({ locale: 'en', guideSlug: 'original-handmade-gift' }),
     });
 
-    render(element, { locale: 'en' });
+    const { container } = render(element, { locale: 'en' });
 
+    expect(screen.getByRole('img', { name: 'Original handmade gift' })).toHaveAttribute(
+      'src',
+      '/images/gifts/original_handmade_gift_hero.webp'
+    );
+    expect(container.querySelector('img[src="/images/gifts/original_handmade_gift_koga_e_dobur.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/original_handmade_gift_kakvi_idei.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/original_handmade_gift_izbegnete_sluchaen_izbor.webp"]')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /View cartoons/ }).some((link) => (
       link.getAttribute('href') === '/en/cartoons'
     ))).toBe(true);
+  });
+
+  it('renders the crochet toy gift guide with its curated images', async () => {
+    const element = await GiftGuidePage({
+      params: Promise.resolve({ locale: 'en', guideSlug: 'handmade-crochet-toy-gift' }),
+    });
+
+    const { container } = render(element, { locale: 'en' });
+
+    expect(screen.getByRole('heading', { name: 'Handmade crochet toy as a gift' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Handmade crochet toy as a gift' })).toHaveAttribute(
+      'src',
+      '/images/gifts/crochet_toy_gift_hero.webp'
+    );
+    expect(container.querySelector('img[src="/images/gifts/crochet_toy_gift_zashto_raboti.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/crochet_toy_gift_kak_da_izberete_model.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/crochet_toy_gift_kakvo_da_utochnim.webp"]')).toBeInTheDocument();
   });
 
   it('generates localized gift hub metadata', async () => {
@@ -95,7 +124,13 @@ describe('Gifts pages', () => {
     const { container } = render(element, { locale: 'en' });
 
     expect(screen.getByRole('heading', { name: 'Gifts for children' })).toBeInTheDocument();
-    expect(screen.getByText('Gifts for children image slot - 1200 x 675 px')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Gifts for children' })).toHaveAttribute(
+      'src',
+      '/images/gifts/gifts_for_children_hero.webp'
+    );
+    expect(container.querySelector('img[src="/images/gifts/gifts_for_children_vuzrast_izpolzvane.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/gifts_for_children_tema.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/gifts_for_children_srok.webp"]')).toBeInTheDocument();
     expect(screen.getByText('Encourage creativity')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View all gifts' })).toHaveAttribute('href', '/en/gifts');
     expect(screen.getByRole('heading', { name: 'How to choose a gift for a child' })).toBeInTheDocument();

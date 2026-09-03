@@ -40,7 +40,7 @@ describe('HomePage', () => {
 
     const element = await HomePage({ params: Promise.resolve({ locale: 'en' }) });
 
-    render(element, { locale: 'en' });
+    const { container } = render(element, { locale: 'en' });
 
     expect(getHomeBanners).toHaveBeenCalledWith({ locale: 'en' });
     expect(getHomepageFeaturedProducts).toHaveBeenCalledWith({ locale: 'en' });
@@ -54,7 +54,10 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Your favorite products' })).toBeInTheDocument();
     expect(screen.getByText('Featured crochet toy')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Gift ideas' })).toBeInTheDocument();
-    expect(screen.getByText('Gifts for children image slot - 800 x 600 px')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/gifts_for_children_hero.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/crochet_toy_gift_hero.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/original_handmade_gift_hero.webp"]')).toBeInTheDocument();
+    expect(screen.getAllByText('Explore the idea')).toHaveLength(3);
     expect(screen.getByRole('link', { name: /Gifts for children/ })).toHaveAttribute(
       'href',
       '/en/gifts/gifts-for-children'

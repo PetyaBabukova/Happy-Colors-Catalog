@@ -10,7 +10,6 @@ import {
 } from '@/config/siteSeo';
 import {
   GIFT_HUB_PATH,
-  getGiftImagePlaceholderLabel,
   getGiftGuideCards,
   getGiftsPageContent,
 } from '@/content/publicPages/gifts';
@@ -18,6 +17,29 @@ import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { stringifyJsonLd } from '@/utils/jsonLd';
 import styles from './gifts.module.css';
+
+const HERO_IMAGE = {
+  src: '/images/gifts/hero_gift_idea.webp',
+  width: 1200,
+  height: 675,
+};
+
+const GUIDE_IMAGES = {
+  'gifts-for-children': '/images/gifts/podaruci_za_deca.webp',
+  'handmade-crochet-toy-gift': '/images/gifts/pletena_igrachka_podaruk.webp',
+  'original-handmade-gift': '/images/gifts/original_handmade_podaruk.webp',
+};
+const NEXT_SYMBOL = '\u203a';
+
+function ArrowGroup() {
+  return (
+    <span aria-hidden="true" className={styles.arrowGroup}>
+      <span>{NEXT_SYMBOL}</span>
+      <span>{NEXT_SYMBOL}</span>
+      <span>{NEXT_SYMBOL}</span>
+    </span>
+  );
+}
 
 function buildGiftHubStructuredData(content, cards, locale) {
   const canonicalPath = getLocalizedCanonicalPath(GIFT_HUB_PATH, locale);
@@ -76,7 +98,6 @@ export default async function GiftsPage(props = {}) {
   const content = getGiftsPageContent(locale);
   const publicHref = (href) => getServerPublicHref(href, locale);
   const cards = getGiftGuideCards(locale);
-  const heroImageLabel = getGiftImagePlaceholderLabel(locale, content.hub.title, '1200 x 675 px');
   const structuredData = buildGiftHubStructuredData(content, cards, locale);
   const breadcrumbData = buildGiftHubBreadcrumb(content, locale);
 
@@ -100,14 +121,23 @@ export default async function GiftsPage(props = {}) {
           <div className={styles.heroActions}>
             <Link className={styles.primaryLink} href={publicHref(content.hub.primaryCta.href)}>
               {content.hub.primaryCta.label}
+              <ArrowGroup />
             </Link>
             <Link className={styles.secondaryLink} href={publicHref(content.hub.secondaryCta.href)}>
               {content.hub.secondaryCta.label}
+              <ArrowGroup />
             </Link>
           </div>
         </div>
-        <div className={styles.heroImageSlot} aria-hidden="true">
-          <span>{heroImageLabel}</span>
+        <div className={styles.heroImageSlot}>
+          <img
+            className={styles.giftImage}
+            src={HERO_IMAGE.src}
+            alt={content.hub.title}
+            width={HERO_IMAGE.width}
+            height={HERO_IMAGE.height}
+            fetchPriority="high"
+          />
         </div>
       </section>
 
@@ -119,14 +149,24 @@ export default async function GiftsPage(props = {}) {
         <div className={styles.guideGrid}>
           {cards.map((card) => (
             <Link key={card.slug} className={styles.guideCard} href={publicHref(card.href)}>
-              <div className={styles.cardImageSlot} aria-hidden="true">
-                <span>{getGiftImagePlaceholderLabel(locale, card.title, '800 x 600 px')}</span>
+              <div className={styles.cardImageSlot}>
+                <img
+                  className={styles.giftImage}
+                  src={GUIDE_IMAGES[card.slug]}
+                  alt=""
+                  width="800"
+                  height="600"
+                  loading="lazy"
+                />
               </div>
               <div>
                 <h3>{card.title}</h3>
                 <p className={styles.cardText}>{card.text}</p>
               </div>
-              <span className={styles.cardAction}>{content.hub.browseLabel}</span>
+              <span className={styles.cardAction}>
+                {content.hub.browseLabel}
+                <ArrowGroup />
+              </span>
             </Link>
           ))}
         </div>
@@ -159,7 +199,10 @@ export default async function GiftsPage(props = {}) {
                 <h3>{item.title}</h3>
                 <p className={styles.cardText}>{item.text}</p>
               </div>
-              <span className={styles.cardAction}>{item.cta.label}</span>
+              <span className={styles.cardAction}>
+                {item.cta.label}
+                <ArrowGroup />
+              </span>
             </Link>
           ))}
         </div>

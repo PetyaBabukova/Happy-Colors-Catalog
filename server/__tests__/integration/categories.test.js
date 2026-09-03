@@ -314,11 +314,145 @@ describe('categories integration', () => {
     ]);
   });
 
+  it('returns redirect candidates for visible categories without full localization internals', async () => {
+    const app = createExpressApp();
+    const owner = await createFullAdmin();
+    const visible = await createCategory({
+      name: 'Prikazni geroi',
+      slug: 'prikazni-geroi',
+      canonicalSlug: 'fairytale-characters',
+      canonicalSlugReviewed: true,
+      slugAliases: ['old-fairytale-characters'],
+      sourceRevision: 2,
+      translations: {
+        en: {
+          name: 'Fairytale Characters',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    await createCategory({
+      name: 'Hidden',
+      slug: 'hidden',
+      canonicalSlug: 'hidden',
+      canonicalSlugReviewed: true,
+    });
+    const bgOnly = await createCategory({
+      name: 'Bg Only',
+      slug: 'bg-only',
+      canonicalSlug: 'bg-only',
+      canonicalSlugReviewed: true,
+      sourceRevision: 1,
+      translations: {
+        en: {
+          name: 'English Bg Only',
+          sourceRevision: 1,
+          method: 'manual',
+        },
+      },
+    });
+    const missingCategoryTranslation = await createCategory({
+      name: 'Missing Category Translation',
+      slug: 'missing-category-translation',
+      canonicalSlug: 'missing-category-translation',
+      canonicalSlugReviewed: true,
+      sourceRevision: 1,
+    });
+    await createProduct({
+      owner,
+      category: visible,
+      sourceRevision: 2,
+      translations: {
+        en: {
+          title: 'English Product',
+          description: 'English product description',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    await createProduct({ owner, category: bgOnly });
+    await createProduct({
+      owner,
+      category: missingCategoryTranslation,
+      sourceRevision: 2,
+      translations: {
+        en: {
+          title: 'English Product Without Category Translation',
+          description: 'English product description without category translation',
+          sourceRevision: 2,
+          method: 'manual',
+        },
+      },
+    });
+    const distinctSpy = vi.spyOn(Product, 'distinct');
+
+    const res = await request(app)
+      .get('/categories/visible/redirects')
+      .query({ locale: 'en' })
+      .expect(200);
+
+    expect(res.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        _id: String(visible._id),
+        name: 'Fairytale Characters',
+        contentLocale: 'en',
+        translationPending: false,
+        filterSlug: 'fairytale-characters',
+        slug: 'prikazni-geroi',
+        canonicalSlug: 'fairytale-characters',
+        canonicalSlugReviewed: true,
+        slugAliases: ['old-fairytale-characters'],
+        eligibleLocales: ['bg', 'en'],
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+        displayNames: {
+          bg: 'Prikazni geroi',
+          en: 'Fairytale Characters',
+        },
+      }),
+      expect.objectContaining({
+        _id: String(bgOnly._id),
+        name: 'English Bg Only',
+        eligibleLocales: ['bg'],
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      }),
+      expect.objectContaining({
+        _id: String(missingCategoryTranslation._id),
+        name: 'Missing Category Translation',
+        eligibleLocales: ['bg'],
+        displayNames: {
+          bg: 'Missing Category Translation',
+          en: '',
+        },
+      }),
+    ]));
+    expect(res.body).toHaveLength(3);
+    expect(distinctSpy).not.toHaveBeenCalled();
+    for (const category of res.body) {
+      expect(new Date(category.createdAt).toString()).not.toBe('Invalid Date');
+      expect(new Date(category.updatedAt).toString()).not.toBe('Invalid Date');
+      expect(category).not.toHaveProperty('translations');
+      expect(category).not.toHaveProperty('sourceRevision');
+    }
+  });
+
+  it('serves public visible redirect candidates before dynamic category-id routes', async () => {
+    const app = createExpressApp();
+
+    const res = await request(app).get('/categories/visible/redirects').expect(200);
+
+    expect(res.body).toEqual([]);
+  });
+
   it('rejects unsupported public category locales', async () => {
     const app = createExpressApp();
 
     await request(app).get('/categories').query({ locale: 'fr' }).expect(400);
     await request(app).get('/categories/visible').query({ locale: 'fr' }).expect(400);
+    await request(app).get('/categories/visible/redirects').query({ locale: 'fr' }).expect(400);
   });
 
   it('requires authentication for category management endpoints', async () => {

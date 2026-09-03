@@ -5,6 +5,7 @@ import {
   createCategory,
   getAllCategories,
   getVisibleCategories,
+  getVisibleCategoryRedirectCandidates,
   deleteCategory, 
   getCategoryById,
   updateCategory 
@@ -36,7 +37,18 @@ router.get('/visible', async (req, res) => {
   }
 });
 
-// 🟢 Създаване на категория
+// Redirect candidates for public category URL cleanup.
+router.get('/visible/redirects', async (req, res) => {
+  try {
+    const locale = getRequestPublicLocale(req);
+    const redirectCandidates = await getVisibleCategoryRedirectCandidates({ locale });
+    res.json(redirectCandidates);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: 'Failed to load category redirect candidates.' });
+  }
+});
+
+// Create category.
 router.post('/', requireAuth, requireFullAdmin, async (req, res) => {
   try {
     const created = await createCategory(req.body);

@@ -42,20 +42,12 @@
   padding-bottom: 2.75rem;
 }
 
-.giftIdeasHeader {
-  display: grid;
-  gap: 0.45rem;
-  max-width: 52rem;
-  margin: 0 auto;
-  text-align: center;
-}
-
 .giftIdeasHeader h2 {
   margin: 0;
   color: var(--dark-green);
+  text-align: center;
 }
 
-.giftIdeasHeader p,
 .giftIdeaCard p {
   margin: 0;
   color: var(--dark-green);
@@ -63,27 +55,19 @@
 }
 
 .giftIdeaImageSlot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   aspect-ratio: 4 / 3;
   width: 100%;
   min-width: 0;
-  border: 1px dashed rgba(1, 102, 77, 0.38);
+  overflow: hidden;
+  border: 1px solid rgba(1, 102, 77, 0.18);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 111, 97, 0.1), rgba(1, 102, 77, 0.06)),
-    var(--lightest-green);
-  color: var(--dark-green);
-  text-align: center;
 }
 
-.giftIdeaImageSlot span {
-  max-width: 16rem;
-  padding: 0.75rem;
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1.35;
+.giftIdeaImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .giftIdeasGrid {
@@ -94,8 +78,8 @@
 
 .giftIdeaCard {
   display: grid;
+  grid-template-rows: auto auto 1fr auto;
   gap: 0.6rem;
-  align-content: start;
   min-width: 0;
   padding: 1rem;
   border: 1px solid rgba(1, 102, 77, 0.18);
@@ -116,27 +100,40 @@
   font-size: 1.2rem;
 }
 
+.giftIdeaCardAction {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  align-self: end;
+  margin-top: auto;
+  color: var(--dark-orange);
+  font-size: 1.05rem;
+  font-weight: 300;
+  line-height: 1.15;
+}
+
 .giftIdeasLink {
   justify-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.75rem;
-  padding: 0.65rem 1rem;
-  border: 1px solid rgba(1, 102, 77, 0.32);
-  border-radius: 8px;
-  color: var(--dark-green);
-  background: white;
+  gap: 0.15rem;
+  min-height: 2.5rem;
+  color: var(--dark-orange);
+  font-size: 1.15rem;
+  font-weight: 300;
+  line-height: 1.15;
   text-decoration: none;
-  font-weight: 700;
 }
 
 .giftIdeasLink:hover,
 .giftIdeasLink:focus-visible {
-  background: var(--dark-orange);
-  border-color: var(--dark-orange);
-  color: white;
-  outline: none;
+  color: var(--dark-green);
+}
+
+.giftIdeasLink:focus-visible {
+  outline: 2px solid var(--dark-orange);
+  outline-offset: 3px;
 }
 
 .faqSection {
@@ -159,6 +156,7 @@
   color: var(--dark-green);
 }
 
+.giftIdeasArrowGroup,
 .faqArrowGroup {
   display: inline-flex;
   align-items: center;

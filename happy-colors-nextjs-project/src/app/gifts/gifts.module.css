@@ -15,11 +15,13 @@
 .heroCopy {
   display: grid;
   gap: 0.9rem;
+  align-self: stretch;
+  align-content: center;
   max-width: 64rem;
 }
 
 .hero h1 {
-  max-width: 18ch;
+  max-width: 100%;
   margin: 0;
 }
 
@@ -56,6 +58,11 @@
   font-size: 1.05rem;
 }
 
+.sectionLead {
+  justify-self: center;
+  text-align: center;
+}
+
 .heroActions,
 .actions {
   display: flex;
@@ -64,8 +71,19 @@
   min-width: 0;
 }
 
+.actions {
+  align-self: end;
+  justify-self: end;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
 .heroActions {
   margin-top: 0.35rem;
+  align-self: end;
+  justify-self: end;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .heroImageSlot,
@@ -76,11 +94,10 @@
   justify-content: center;
   width: 100%;
   min-width: 0;
-  border: 1px dashed rgba(1, 102, 77, 0.38);
+  overflow: hidden;
+  border: 1px solid rgba(1, 102, 77, 0.18);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 111, 97, 0.1), rgba(1, 102, 77, 0.06)),
-    var(--lightest-green);
+  background: var(--lightest-green);
   color: var(--dark-green);
   text-align: center;
 }
@@ -97,6 +114,13 @@
 .featureImageSlot {
   aspect-ratio: 4 / 3;
   min-height: 0;
+}
+
+.giftImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .heroImageSlot span,
@@ -136,7 +160,6 @@
 .supportCard,
 .decisionCard {
   display: grid;
-  align-content: start;
   gap: 0.85rem;
   min-width: 0;
   padding: 1rem;
@@ -147,10 +170,12 @@
 }
 
 .guideCard {
+  grid-template-rows: auto auto 1fr;
   min-height: 14rem;
 }
 
 .supportCard {
+  grid-template-rows: 1fr auto;
   min-height: 13rem;
 }
 
@@ -180,9 +205,15 @@
 }
 
 .cardAction {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  align-self: end;
   margin-top: auto;
   color: var(--dark-orange);
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 300;
+  line-height: 1.15;
 }
 
 .stepNumber {
@@ -246,6 +277,7 @@
 
 .featurePanel {
   display: grid;
+  grid-template-rows: auto 1fr;
   align-content: start;
   gap: 0.75rem;
   min-width: 0;
@@ -257,7 +289,9 @@
 
 .featureBody {
   display: grid;
+  grid-template-rows: auto auto auto 1fr;
   gap: 0.45rem;
+  min-height: 0;
 }
 
 .featureNumber {
@@ -276,8 +310,11 @@
 
 .featureAction {
   display: grid;
+  justify-items: end;
   gap: 0.25rem;
-  margin-top: 0.15rem;
+  align-self: end;
+  margin-top: auto;
+  text-align: right;
 }
 
 .featureAction p {
@@ -321,7 +358,7 @@
 .ctaBand {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-  align-items: center;
+  align-items: end;
   gap: 1rem;
   padding: 1.2rem;
   border: 1px solid rgba(1, 102, 77, 0.18);
@@ -411,6 +448,12 @@
 
   .ctaBand {
     grid-template-columns: 1fr;
+  }
+
+  .actions,
+  .heroActions {
+    justify-self: stretch;
+    align-items: stretch;
   }
 
   .primaryLink,

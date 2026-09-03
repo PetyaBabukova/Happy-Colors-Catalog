@@ -24,9 +24,39 @@ import styles from '../gifts.module.css';
 
 const HIGHLIGHT_ICONS = [Heart, Palette, Sparkles];
 const NEXT_SYMBOL = '\u203a';
+const GUIDE_IMAGE_SETS = {
+  'gifts-for-children': {
+    hero: '/images/gifts/gifts_for_children_hero.webp',
+    features: [
+      '/images/gifts/gifts_for_children_vuzrast_izpolzvane.webp',
+      '/images/gifts/gifts_for_children_tema.webp',
+      '/images/gifts/gifts_for_children_srok.webp',
+    ],
+  },
+  'handmade-crochet-toy-gift': {
+    hero: '/images/gifts/crochet_toy_gift_hero.webp',
+    features: [
+      '/images/gifts/crochet_toy_gift_zashto_raboti.webp',
+      '/images/gifts/crochet_toy_gift_kak_da_izberete_model.webp',
+      '/images/gifts/crochet_toy_gift_kakvo_da_utochnim.webp',
+    ],
+  },
+  'original-handmade-gift': {
+    hero: '/images/gifts/original_handmade_gift_hero.webp',
+    features: [
+      '/images/gifts/original_handmade_gift_koga_e_dobur.webp',
+      '/images/gifts/original_handmade_gift_kakvi_idei.webp',
+      '/images/gifts/original_handmade_gift_izbegnete_sluchaen_izbor.webp',
+    ],
+  },
+};
 
 function getGuidePath(slug) {
   return `${GIFT_HUB_PATH}/${slug}`;
+}
+
+function getGuideImageSet(slug) {
+  return GUIDE_IMAGE_SETS[slug] || null;
 }
 
 function buildGuideStructuredData(guide, slug, locale) {
@@ -105,11 +135,13 @@ export default async function GiftGuidePage(props = {}) {
   }
 
   const publicHref = (href) => getServerPublicHref(href, locale);
+  const guideImageSet = getGuideImageSet(guideSlug);
   const heroImageLabel = getGiftImagePlaceholderLabel(locale, guide.title, '1200 x 675 px');
   const guideFeatureCards = guide.sections.map((section, index) => ({
     section,
     pathCard: guide.pathCards[index],
     imageLabel: getGiftImagePlaceholderLabel(locale, section.title, '900 x 675 px'),
+    imageSrc: guideImageSet?.features?.[index] || '',
   }));
   const structuredData = buildGuideStructuredData(guide, guideSlug, locale);
   const breadcrumbData = buildGuideBreadcrumb(content, guide, guideSlug, locale);
@@ -153,8 +185,19 @@ export default async function GiftGuidePage(props = {}) {
             </span>
           </Link>
         </div>
-        <div className={styles.heroImageSlot} aria-hidden="true">
-          <span>{heroImageLabel}</span>
+        <div className={styles.heroImageSlot}>
+          {guideImageSet?.hero ? (
+            <img
+              className={styles.giftImage}
+              src={guideImageSet.hero}
+              alt={guide.title}
+              width="1200"
+              height="675"
+              fetchPriority="high"
+            />
+          ) : (
+            <span>{heroImageLabel}</span>
+          )}
         </div>
       </section>
 
@@ -163,10 +206,21 @@ export default async function GiftGuidePage(props = {}) {
           <h2 id="gift-guide-features">{guide.featureSectionTitle}</h2>
         </div>
         <div className={styles.visualGuideGrid}>
-          {guideFeatureCards.map(({ section, pathCard, imageLabel }, index) => (
+          {guideFeatureCards.map(({ section, pathCard, imageLabel, imageSrc }, index) => (
             <article key={section.title} className={styles.featurePanel}>
-              <div className={styles.featureImageSlot} aria-hidden="true">
-                <span>{imageLabel}</span>
+              <div className={styles.featureImageSlot}>
+                {imageSrc ? (
+                  <img
+                    className={styles.giftImage}
+                    src={imageSrc}
+                    alt=""
+                    width="900"
+                    height="675"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span>{imageLabel}</span>
+                )}
               </div>
               <div className={styles.featureBody}>
                 <span className={styles.featureNumber} aria-hidden="true">

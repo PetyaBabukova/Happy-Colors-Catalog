@@ -20,8 +20,10 @@ function isOtherCategory(categoryName, category) {
   return OTHER_CATEGORY_NAMES.has(normalizedName) || OTHER_CATEGORY_SLUGS.has(normalizedSlug);
 }
 
-export default function Shop({ products, showTitle = true }) {
+export default function Shop({ products, showTitle = true, pageContent = null }) {
   const { locale, t } = useTranslations();
+  const pageHeading = pageContent?.heading || t('products.catalogTitle');
+  const pageIntro = pageContent ? '' : t('products.catalogIntro');
   const grouped = {};
 
   products.forEach((product) => {
@@ -59,8 +61,8 @@ export default function Shop({ products, showTitle = true }) {
     <section className={styles.shopPage}>
       {showTitle && (
         <section className={`${styles.introSection} pageInline`}>
-          <h1>{t('products.catalogTitle')}</h1>
-          <p>{t('products.catalogIntro')}</p>
+          <h1>{pageHeading}</h1>
+          {pageIntro && <p>{pageIntro}</p>}
         </section>
       )}
 

@@ -19,17 +19,17 @@ export const homePageContent = {
       cards: [
         {
           title: 'Подаръци за деца',
-          text: 'Меки плетени играчки, цветни герои и идеи според възрастта и повода.',
+          text: 'Плетени играчки, цветни герои и оригинални идеи за различни поводи. Аксесоари и декорации за детската стая, малки изненади за празник и подаръци, които внасят цвят в ежедневието и остават мил спомен.',
           href: '/gifts/gifts-for-children',
         },
         {
-          title: 'Плетена играчка като подарък',
-          text: 'Кога crochet toy е мил, личен и запомнящ се избор.',
+          title: 'Плетената играчка като подарък',
+          text: 'Мил и запомнящ се избор, който носи топлина и насърчава детското въображение и творческата игра. Подарявате не просто играчка, а любим плюшен приятел, който може да е част от безброй игри и приключения.',
           href: '/gifts/handmade-crochet-toy-gift',
         },
         {
-          title: 'Оригинален handmade подарък',
-          text: 'Идеи за подарък с характер, текстура и лично усещане.',
+          title: 'Оригинални handmade подаръци',
+          text: 'Всеки handmade подарък има свой характер и носи частица лично отношение. Подходящ избор, когато търсите нещо различно, красиво и създадено специално, а не просто поредния подарък.',
           href: '/gifts/original-handmade-gift',
         },
       ],
@@ -57,17 +57,17 @@ export const homePageContent = {
       cards: [
         {
           title: 'Gifts for children',
-          text: 'Soft crochet toys, colorful characters, and age-aware ideas.',
+          text: 'Crochet toys, colorful characters, and original gift ideas for different occasions. Accessories and decorations for a child’s room, little surprises for special celebrations, and gifts that bring color to everyday life and become cherished keepsakes.',
           href: '/gifts/gifts-for-children',
         },
         {
           title: 'Crochet toy as a gift',
-          text: 'When a handmade crochet toy feels personal and memorable.',
+          text: 'A sweet and memorable choice that brings warmth and encourages a child’s imagination and creative play. You’re giving more than just a toy – you’re giving a favorite cuddly friend who can become part of countless games and adventures.',
           href: '/gifts/handmade-crochet-toy-gift',
         },
         {
           title: 'Original handmade gift',
-          text: 'Gift ideas with texture, character, and a more personal feeling.',
+          text: 'Every handmade gift has its own character and carries a personal touch. A perfect choice when you’re looking for something different, beautiful, and specially made – not just another ordinary gift.',
           href: '/gifts/original-handmade-gift',
         },
       ],

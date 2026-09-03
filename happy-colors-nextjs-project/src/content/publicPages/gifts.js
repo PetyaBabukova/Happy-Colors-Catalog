@@ -33,7 +33,7 @@ export const giftsPageContent = {
       secondaryCta: link('/cartoons', 'Виж шаржовете'),
       guideSectionTitle: 'Изберете посока',
       guideSectionIntro:
-        'Трите теми по-долу покриват най-честите търсения: подарък за дете, плетена играчка като подарък и по-оригинален handmade жест.',
+        'Подарък за дете, плетена играчка като подарък, оригинален handmade жест.',
       browseLabel: 'Разгледай идеята',
       decisionTitle: 'Как да изберете по-лесно',
       decisionIntro:
@@ -41,37 +41,37 @@ export const giftsPageContent = {
       decisionSteps: [
         {
           title: 'За кого е подаръкът',
-          text: 'Възраст, любими цветове, повод и характер на човека насочват избора много по-добре от общо търсене.',
+          text: 'Помислете за човека, когото искате да зарадвате - какво обича, кои са любимите му цветове и какво би го накарало да се усмихне. Така изборът става много по-личен.',
         },
         {
           title: 'Готово изделие или персонална идея',
-          text: 'Ако срокът е кратък, започнете от наличния каталог. Ако има време, изпратете запитване за близка цветова или тематична посока.',
+          text: 'Ако подаръкът ви трябва скоро, разгледайте наличните предложения. А ако разполагате с повече време, можем да обсъдим идея, вдъхновена от любим цвят, тема или повод.',
         },
         {
           title: 'Какво усещане искате да остави',
-          text: 'Меко и детско, забавно и лично, или по-уютно и декоративно - това е най-полезният филтър.',
+          text: 'Весело и цветно, нежно и уютно или лично и запомнящо се? Помислете какво искате да носи подаръкът като настроение - това често е най-добрият ориентир.',
         },
       ],
       supportTitle: 'Следваща стъпка',
       supportItems: [
         {
           title: 'Каталог с налични изделия',
-          text: 'Разгледайте плетени играчки, аксесоари и декорации, които могат да се поръчат след потвърждение.',
+          text: 'Разгледайте плетени играчки, аксесоари и декорации, създадени с внимание към детайла. Може би точният подарък вече ви очаква в каталога.',
           cta: link('/products', 'Към каталога'),
         },
         {
           title: 'Персонален шарж по снимка',
-          text: 'Подходящ избор, когато подаръкът трябва да бъде по-личен, забавен и свързан с конкретен човек.',
+          text: 'Подарък с настроение, хумор и лично послание. Шаржът по снимка превръща любим човек, момент или история в оригинален и запомнящ се подарък.',
           cta: link('/cartoons', 'Към шаржовете'),
         },
         {
           title: 'Въпроси за поръчка и грижа',
-          text: 'Вижте информация за наличност, материали, доставка, поддръжка и уточнения преди поръчка.',
+          text: 'Имате въпрос за изделие, материали, наличност, доставка или поддръжка? Тук ще намерите полезна информация, която да ви помогне преди избора и поръчката.',
           cta: link('/faq', 'Към въпросите'),
         },
         {
           title: 'Запитване за конкретен повод',
-          text: 'Пишете, ако търсите подарък за рожден ден, дете, празник или идея с определени цветове.',
+          text: 'Рожден ден, празник или специална изненада? Разкажете ни за повода, човека и идеята си, а ние ще ви помогнем да се насочите към подходящ подарък.',
           cta: link('/contacts', 'Контакт'),
         },
       ],
@@ -81,21 +81,21 @@ export const giftsPageContent = {
         metadata: {
           title: 'Подаръци за деца - ръчно изработени идеи',
           description:
-            'Идеи за ръчно изработени подаръци за деца от Happy Colors - меки плетени играчки, цветни герои и handmade изделия с внимание към детайла.',
+            'Идеи за ръчно изработени подаръци за деца от Happy Colors - пухкави плетени играчки, цветни герои и handmade изделия с внимание към детайла.',
         },
         eyebrow: 'Подарък за дете',
         title: 'Подаръци за деца',
         featureSectionTitle: 'Как да изберете подарък за дете',
         cardText:
-          'Меки плетени играчки, цветни герои и малки handmade изделия, избрани според възраст, повод и любими цветове.',
+          'Пухкави плетени играчки, цветни герои и малки handmade изделия, избрани според възраст, повод и любими цветове.',
         summary:
-          'Подаръкът за дете е най-хубав, когато е мек, цветен и лесен за обикване. Плетените играчки и малките handmade изделия могат да бъдат мил спомен за рожден ден, детска стая или специален празник.',
-        highlights: ['Меки плетени играчки', 'Цветни герои с характер', 'Развиват детската креативност'],
+          'Една плетена играчка може да бъде много повече от подарък – мек приятел за гушкане, герой в детските игри и мил спомен от специален повод. Тя насърчава въображението и творческата игра и дава на детето свободата да измисля свои истории и приключения.',
+        highlights: ['Пухкави плетени играчки', 'Цветни герои с характер', 'Развиват детската креативност'],
         sections: [
           {
             title: 'Започнете от възрастта и начина на ползване',
             text:
-              'Изберете мека играчка според възрастта и начина на ползване - за игра, гушкане, снимки или детска стая.',
+              'Изберете играчка според възрастта и начина на ползване - за игра, гушкане, снимки или детска стая.',
           },
           {
             title: 'Изберете тема, не просто предмет',
@@ -110,7 +110,7 @@ export const giftsPageContent = {
         ],
         pathCards: [
           {
-            title: 'Меки плетени играчки',
+            title: 'Плетени играчки',
             text: 'Добър избор за мил, цветен и запомнящ се детски подарък.',
             href: '/products',
           },
@@ -141,29 +141,29 @@ export const giftsPageContent = {
           description:
             'Кога плетената играчка е добър подарък и как да изберете ръчно изработено изделие от Happy Colors според човека, повода и стила.',
         },
-        eyebrow: 'Ръчно плетена идея',
+        eyebrow: 'Ръчно плетен подарък',
         title: 'Плетена играчка като подарък',
         featureSectionTitle: 'Как да изберете плетена играчка',
         cardText:
           'Кога плетената играчка е подходящ подарък и как да изберете модел според цвят, характер и повод.',
         summary:
           'Плетената играчка носи усещане за топлина и личен избор. Тя не е просто предмет, а малък герой с цвят, форма и настроение, който може да остане като спомен.',
-        highlights: ['handmade играчка', 'топъл личен жест', 'подарък с характер'],
+        highlights: ['Handmade играчка', 'Топъл личен жест', 'Подарък с характер'],
         sections: [
           {
             title: 'Защо работи като подарък',
             text:
-              'Ръчно изработената играчка е подходяща, когато искате нещо по-меко и лично от стандартен подарък. Тя може да бъде за дете, за човек, който обича уютни детайли, или като част от тематична изненада.',
+              'Ръчно изработената играчка е подходяща, когато искате нещо по-мило и лично от стандартен подарък. Тя може да бъде за дете, за човек, който държи на детайла, или като част от тематична изненада.',
           },
           {
             title: 'Как да изберете модел',
             text:
-              'Изберете според цветовете, размера и характера на човека. Веселите животни и герои са добри за детски подаръци, а по-нежните модели могат да стоят красиво и като декорация.',
+              'Изберете според цветовете, модела и характера на човека. Веселите животнинки и герои са добри за детски подаръци, а по-нежните модели могат да стоят красиво и като декорация.',
           },
           {
             title: 'Какво да уточните преди поръчка',
             text:
-              'Проверете дали изделието е налично, какви са материалите и дали има дребни детайли. Ако искате конкретна цветова посока, изпратете запитване преди избора.',
+              'Проверете дали изделието е налично, ако не е - дали срокът за изработката ви устройва. Ако искате конкретна цветова посока, изпратете запитване преди избора.',
           },
         ],
         pathCards: [
@@ -205,8 +205,8 @@ export const giftsPageContent = {
         cardText:
           'Идеи за подарък с по-лично усещане: плетени изделия, уютни handmade детайли и персонален шарж по снимка.',
         summary:
-          'Оригиналният подарък не е задължително да бъде голям. Често е достатъчно да има ясна мисъл: цвят, текстура, тема или малък детайл, който пасва на човека.',
-        highlights: ['ръчно изработен подарък', 'лична идея', 'шарж по снимка'],
+          'Понякога най-запомнящият се подарък е този, който е създаден с внимание и носи нещо лично. Handmade изделията са чудесен избор, когато търсите нещо различно, красиво и с характер.',
+        highlights: ['Handmade подарък', 'Лична идея', 'Шарж по снимка'],
         sections: [
           {
             title: 'Кога handmade подаръкът е добър избор',
@@ -216,7 +216,7 @@ export const giftsPageContent = {
           {
             title: 'Какви идеи да разгледате',
             text:
-              'Плетените играчки са по-емоционални, аксесоарите са практични и цветни, а декорациите добавят уют. Когато търсите нещо още по-персонално, шарж по снимка може да бъде забавен подарък, създаден за конкретен човек.',
+              'Плетените играчки са по-емоционални, аксесоарите са практични и цветни, а декорациите добавят уют. Когато търсите нещо още по-персонално, шаржът по снимка може да бъде забавен подарък, създаден за конкретен човек.',
           },
           {
             title: 'Как да избегнете случаен избор',
@@ -288,38 +288,38 @@ export const giftsPageContent = {
         'You do not need a finished idea. A few simple clues are enough to make the choice clearer.',
       decisionSteps: [
         {
-          title: 'Who the gift is for',
-          text: 'Age, favorite colors, occasion, and personality guide the choice much better than a general search.',
+          title: 'Who is the gift for?',
+          text: 'Think about the person you want to make happy - what they love, their favorite colors, and what would make them smile. This makes the choice feel much more personal.',
         },
         {
-          title: 'Available piece or personal idea',
-          text: 'If time is short, start with the available catalog. If there is time, ask about a close color or theme direction.',
+          title: 'Ready-made item or personalized idea',
+          text: 'If you need the gift soon, take a look at the available items. If you have more time, we can discuss an idea inspired by a favorite color, theme, or special occasion.',
         },
         {
-          title: 'The feeling it should leave',
-          text: 'Soft and childlike, funny and personal, or cozy and decorative - this is the most useful filter.',
+          title: 'What feeling do you want the gift to create?',
+          text: 'Cheerful and colorful, soft and cozy, or personal and memorable? Think about the mood you want the gift to bring - it is often the best guide when choosing.',
         },
       ],
       supportTitle: 'Next step',
       supportItems: [
         {
-          title: 'Catalog of available pieces',
-          text: 'Browse crochet toys, accessories, and decorations that can be ordered after confirmation.',
+          title: 'Catalog of available items',
+          text: 'Explore crochet toys, accessories, and decorations made with attention to detail. The perfect gift may already be waiting for you in the catalog.',
           cta: link('/products', 'Go to catalog'),
         },
         {
-          title: 'Personal cartoon from a photo',
-          text: 'A good choice when the gift should feel more personal, playful, and tied to a specific person.',
+          title: 'Personalized caricature from a photo',
+          text: 'A gift with personality, humor, and a personal touch. A caricature from a photo turns a favorite person, moment, or story into an original and memorable gift.',
           cta: link('/cartoons', 'View cartoons'),
         },
         {
-          title: 'Ordering and care questions',
-          text: 'Check information about availability, materials, delivery, care, and order details.',
+          title: 'Questions about ordering and care',
+          text: 'Have a question about an item, materials, availability, delivery, or care? Here you will find useful information to help you before choosing and placing an order.',
           cta: link('/faq', 'Open FAQ'),
         },
         {
-          title: 'Inquiry for a specific occasion',
-          text: 'Send a note if you are choosing for a birthday, child, holiday, or color direction.',
+          title: 'Enquiry for a specific occasion',
+          text: 'Birthday, celebration, or special surprise? Tell us about the occasion, the person, and your idea, and we will help you find the right gift.',
           cta: link('/contacts', 'Contact'),
         },
       ],
@@ -335,10 +335,10 @@ export const giftsPageContent = {
         title: 'Gifts for children',
         featureSectionTitle: 'How to choose a gift for a child',
         cardText:
-          'Soft crochet toys, colorful characters, and small handmade pieces chosen by age, occasion, and favorite colors.',
+          'Crochet toys, colorful characters, and small handmade pieces chosen by age, occasion, and favorite colors.',
         summary:
-          'A gift for a child feels best when it is soft, colorful, and easy to love. Crochet toys and small handmade pieces can become a sweet memory for a birthday, nursery, or special celebration.',
-        highlights: ['Soft crochet toys', 'Colorful characters', 'Encourage creativity'],
+          'A crochet toy can be much more than just a gift – a soft friend to cuddle, a character in a child’s games, and a cherished reminder of a special occasion. It encourages imagination and creative play, giving children the freedom to invent their own stories and adventures.',
+        highlights: ['Crochet toys', 'Colorful characters', 'Encourage creativity'],
         sections: [
           {
             title: 'Start with age and use',
@@ -395,7 +395,7 @@ export const giftsPageContent = {
         cardText:
           'When a crochet toy is the right gift and how to choose a model by color, character, and occasion.',
         summary:
-          'A crochet toy carries warmth and intention. It is not just an object, but a small character with color, shape, and mood that can stay as a memory.',
+          'A crochet toy brings a sense of warmth and a personal touch. It is more than just an object – it is a little character with its own color, shape, and personality that can become a cherished keepsake.',
         highlights: ['handmade toy', 'warm personal gesture', 'gift with character'],
         sections: [
           {
@@ -453,7 +453,7 @@ export const giftsPageContent = {
         cardText:
           'Gift ideas with a more personal feeling: crochet pieces, cozy handmade details, and a personal cartoon from a photo.',
         summary:
-          'An original gift does not have to be large. Often it simply needs a clear thought: a color, texture, theme, or small detail that fits the person.',
+          'Sometimes the most memorable gift is one that is made with care and has a personal touch. Handmade pieces are a wonderful choice when you’re looking for something different, beautiful, and full of character.',
         highlights: ['handmade gift', 'personal idea', 'cartoon from photo'],
         sections: [
           {

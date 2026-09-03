@@ -294,10 +294,16 @@ export function buildPageMetadata({
   indexable = true,
   image = SITE_OG_IMAGE_PATH,
   imageAlt,
+  alternateLocales,
+  includeXDefault = true,
 }) {
   const canIndexThisPage = shouldIndexSite && indexable;
   const titleText = getMetadataTitleText(title);
-  const alternateLocale = getOpenGraphAlternateLocales(locale);
+  const alternatesOptions = {
+    ...(Array.isArray(alternateLocales) ? { enabledLocales: alternateLocales } : {}),
+    includeXDefault,
+  };
+  const alternateLocale = getOpenGraphAlternateLocales(locale, alternatesOptions);
   const canonicalPath = path ? getLocalizedCanonicalPath(path, locale) : '';
 
   return {
@@ -309,7 +315,7 @@ export function buildPageMetadata({
     },
     ...(canIndexThisPage && path
       ? {
-          alternates: buildLocalizedAlternates(path, locale),
+          alternates: buildLocalizedAlternates(path, locale, alternatesOptions),
           openGraph: {
             title: titleText,
             description,

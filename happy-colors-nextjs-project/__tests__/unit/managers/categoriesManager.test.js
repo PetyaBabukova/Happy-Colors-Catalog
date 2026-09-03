@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getVisibleCategoryRedirectCandidates,
+  getVisibleCategoryRedirectCandidatesSeed,
   getVisibleCategories,
   getVisibleCategoriesSeed,
   onCreateCategorySubmit,
@@ -38,7 +40,7 @@ describe('categoriesManager', () => {
     );
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/categories',
+      'http://localhost:3030/categories',
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',
@@ -92,7 +94,7 @@ describe('categoriesManager', () => {
     await expect(getVisibleCategories({ locale: 'en' })).resolves.toEqual(categories);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/categories/visible?locale=en',
+      'http://localhost:3030/categories/visible?locale=en',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -100,6 +102,34 @@ describe('categoriesManager', () => {
         },
       })
     );
+  });
+
+  it('loads visible category redirect candidates with public cache tags and locale separation', async () => {
+    const categories = [{ _id: 'cat-1', canonicalSlug: 'fairytale-characters' }];
+    fetch.mockResolvedValueOnce(jsonResponse({ body: categories }));
+
+    await expect(getVisibleCategoryRedirectCandidates({ locale: 'en' })).resolves.toEqual(categories);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3030/categories/visible/redirects?locale=en',
+      expect.objectContaining({
+        next: {
+          revalidate: 60,
+          tags: ['categories', 'visible-categories', 'products'],
+        },
+      })
+    );
+  });
+
+  it('marks failed visible category redirect candidate seeds so pages can fail open', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
+
+    await expect(getVisibleCategoryRedirectCandidatesSeed({ locale: 'en' })).resolves.toEqual({
+      categories: [],
+      loaded: false,
+    });
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('returns an empty visible category list for failed public reads', async () => {

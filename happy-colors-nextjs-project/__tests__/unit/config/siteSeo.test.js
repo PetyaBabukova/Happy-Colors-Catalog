@@ -135,6 +135,34 @@ describe('siteSeo', () => {
     });
   });
 
+  it('can limit page metadata alternates to an eligible locale subset', async () => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu/');
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    const metadata = siteSeo.buildPageMetadata({
+      title: { absolute: 'Fairytale Characters | Happy Colors' },
+      description: 'Browse fairytale characters from Happy Colors.',
+      path: '/products?category=fairytale-characters',
+      locale: 'bg',
+      alternateLocales: ['bg'],
+      includeXDefault: true,
+    });
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/products?category=fairytale-characters',
+      languages: {
+        bg: '/bg/products?category=fairytale-characters',
+        'x-default': '/bg/products?category=fairytale-characters',
+      },
+    });
+    expect(metadata.openGraph).not.toHaveProperty('alternateLocale');
+    expect(metadata).not.toHaveProperty('keywords');
+  });
+
   it('filters unsupported alternates and can omit x-default', async () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
