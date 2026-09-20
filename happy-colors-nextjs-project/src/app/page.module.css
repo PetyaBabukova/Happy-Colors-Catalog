@@ -2,6 +2,7 @@
 
 .introSection,
 .favoriteSection,
+.giftIdeasSection,
 .faqSection {
   width: 100%;
   margin: 0 auto;
@@ -34,6 +35,107 @@
   text-align: center;
 }
 
+.giftIdeasSection {
+  display: grid;
+  gap: 1.25rem;
+  padding-top: 1rem;
+  padding-bottom: 2.75rem;
+}
+
+.giftIdeasHeader h2 {
+  margin: 0;
+  color: var(--dark-green);
+  text-align: center;
+}
+
+.giftIdeaCard p {
+  margin: 0;
+  color: var(--dark-green);
+  line-height: 1.55;
+}
+
+.giftIdeaImageSlot {
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(1, 102, 77, 0.18);
+  border-radius: 8px;
+}
+
+.giftIdeaImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.giftIdeasGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.giftIdeaCard {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgba(1, 102, 77, 0.18);
+  border-radius: 8px;
+  background: var(--lightest-green);
+  text-decoration: none;
+}
+
+.giftIdeaCard:hover,
+.giftIdeaCard:focus-visible {
+  background: var(--lighter-green);
+  outline: none;
+}
+
+.giftIdeaCard h3 {
+  margin: 0;
+  color: var(--dark-green);
+  font-size: 1.2rem;
+}
+
+.giftIdeaCardAction {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  align-self: end;
+  margin-top: auto;
+  color: var(--dark-orange);
+  font-size: 1.05rem;
+  font-weight: 300;
+  line-height: 1.15;
+}
+
+.giftIdeasLink {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 2.5rem;
+  color: var(--dark-orange);
+  font-size: 1.15rem;
+  font-weight: 300;
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.giftIdeasLink:hover,
+.giftIdeasLink:focus-visible {
+  color: var(--dark-green);
+}
+
+.giftIdeasLink:focus-visible {
+  outline: 2px solid var(--dark-orange);
+  outline-offset: 3px;
+}
+
 .faqSection {
   padding-bottom: 3rem;
   text-align: center;
@@ -54,6 +156,7 @@
   color: var(--dark-green);
 }
 
+.giftIdeasArrowGroup,
 .faqArrowGroup {
   display: inline-flex;
   align-items: center;
@@ -62,4 +165,7 @@
 }
 
 @media screen and (max-width: 768px) {
+  .giftIdeasGrid {
+    grid-template-columns: 1fr;
+  }
 }

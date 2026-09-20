@@ -5,8 +5,9 @@ import ClientLayout from './ClientLayout';
 import { Roboto } from 'next/font/google';
 import { cookies, headers } from 'next/headers';
 import {
+  buildOrganizationJsonLd,
+  buildWebsiteJsonLd,
   metadataBaseUrl,
-  currentSiteUrl,
   shouldIndexSite,
 } from '@/config/siteSeo';
 import {
@@ -20,6 +21,7 @@ import {
 import { getDictionary } from '@/i18n/getDictionary';
 import { getVisibleCategoriesSeed } from '@/managers/categoriesManager';
 import { hasAuthSessionHint } from '@/context/authSessionHint';
+import { stringifyJsonLd } from '@/utils/jsonLd';
 
 const roboto = Roboto({
   subsets: ['latin', 'cyrillic'],
@@ -56,15 +58,6 @@ export const metadata = {
   },
 };
 
-const organizationJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Organization',
-  name: 'Happy Colors',
-  alternateName: ['Хепи Колорс', 'Хепи Калърс'],
-  url: currentSiteUrl,
-  logo: new URL('/logo_64pxH.svg', currentSiteUrl).toString(),
-};
-
 async function resolveLayoutLocale() {
   if (!isLocaleRoutingEnabled()) {
     return DEFAULT_LOCALE;
@@ -92,7 +85,11 @@ export default async function RootLayout({ children }) {
       <body className={roboto.className}>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, '\\u003c') }}
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(buildOrganizationJsonLd()) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(buildWebsiteJsonLd(locale)) }}
         />
         <ClientLayout
           dictionary={dictionary}

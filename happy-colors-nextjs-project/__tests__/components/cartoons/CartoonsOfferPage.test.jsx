@@ -86,6 +86,22 @@ describe('CartoonsOfferPage', () => {
     });
     expect(screen.getByRole('link', { name: 'contact form' })).toHaveAttribute('href', '/en/contacts');
     expect(screen.getByRole('link', { name: 'View gallery' })).toHaveAttribute('href', '/en/cartoons');
+
+    const scripts = [...container.querySelectorAll('script[type="application/ld+json"]')]
+      .map((script) => JSON.parse(script.textContent));
+
+    expect(scripts.map((script) => script['@type'])).toEqual(['Service', 'BreadcrumbList']);
+    expect(scripts[0]).toMatchObject({
+      '@id': 'https://happycolors.eu/en/cartoons/offer#service',
+      url: 'https://happycolors.eu/en/cartoons/offer',
+      provider: {
+        '@id': 'https://happycolors.eu/#organization',
+      },
+      inLanguage: 'en-US',
+    });
+    expect(scripts[0]).not.toHaveProperty('offers');
+    expect(scripts[1].itemListElement).toHaveLength(3);
+    expect(JSON.stringify(scripts)).not.toMatch(/localhost|preview|onrender|vercel|netlify/i);
   });
 
   it('uses default-locale canonical metadata when no locale params are provided', async () => {
@@ -93,10 +109,13 @@ describe('CartoonsOfferPage', () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
     const { importPage } = setupCartoonsOfferPage({ enabled: true });
     const { generateMetadata } = await importPage();
-    const content = getCartoonsOfferPageContent('bg');
 
     await expect(generateMetadata()).resolves.toMatchObject({
-      title: content.metadata.title,
+      title: {
+        absolute: 'Цени за шарж по снимка и варианти | Happy Colors',
+      },
+      description:
+        'Вижте ориентировъчни цени за шарж по снимка, дигитален файл, рамка и варианти за печат A4 или A3.',
       alternates: {
         canonical: '/cartoons/offer',
       },
@@ -136,7 +155,11 @@ describe('CartoonsOfferPage', () => {
     const { default: CartoonsOfferPage, generateMetadata } = await importPage();
 
     await expect(generateMetadata({ params: Promise.resolve({ locale: 'en' }) })).resolves.toMatchObject({
-      title: 'Options and guide prices',
+      title: {
+        absolute: 'Caricature Prices and Print Options | Happy Colors',
+      },
+      description:
+        'See guide prices for a caricature from photo, with digital artwork, framed prints and A4 or A3 print options.',
       alternates: {
         canonical: '/en/cartoons/offer',
       },

@@ -29,6 +29,7 @@ describe('productsManager', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -43,7 +44,7 @@ describe('productsManager', () => {
     await expect(getProducts('Свещи и подаръци')).resolves.toEqual(products);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8+%D0%B8+%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
+      'http://localhost:3030/products?category=%D0%A1%D0%B2%D0%B5%D1%89%D0%B8+%D0%B8+%D0%BF%D0%BE%D0%B4%D0%B0%D1%80%D1%8A%D1%86%D0%B8',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -66,7 +67,7 @@ describe('productsManager', () => {
 
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/products?locale=en&category=English+Toys',
+      'http://localhost:3030/products?locale=en&category=English+Toys',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -76,7 +77,7 @@ describe('productsManager', () => {
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/products/homepage-featured?locale=en',
+      'http://localhost:3030/products/homepage-featured?locale=en',
       expect.objectContaining({
         next: expect.objectContaining({
           tags: ['products', 'homepage-featured-products'],
@@ -85,7 +86,7 @@ describe('productsManager', () => {
     );
     expect(fetch).toHaveBeenNthCalledWith(
       3,
-      'http://localhost:3000/api/products/cartoon-gallery?locale=en',
+      'http://localhost:3030/products/cartoon-gallery?locale=en',
       expect.objectContaining({
         next: expect.objectContaining({
           tags: ['products', 'cartoon-gallery-products'],
@@ -102,7 +103,7 @@ describe('productsManager', () => {
     await expect(getProducts()).resolves.toEqual(products);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/products',
+      'http://localhost:3030/products',
       expect.objectContaining({ cache: 'no-store' })
     );
     expect(fetch.mock.calls[0][1]).not.toHaveProperty('next');
@@ -112,6 +113,8 @@ describe('productsManager', () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getProducts()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('loads homepage featured products with the homepage cache tag', async () => {
@@ -121,7 +124,7 @@ describe('productsManager', () => {
     await expect(getHomepageFeaturedProducts()).resolves.toEqual(products);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/products/homepage-featured',
+      'http://localhost:3030/products/homepage-featured',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -142,7 +145,7 @@ describe('productsManager', () => {
 
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/products/homepage-featured?locale=bg',
+      'http://localhost:3030/products/homepage-featured?locale=bg',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -152,7 +155,7 @@ describe('productsManager', () => {
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/products/homepage-featured?locale=en',
+      'http://localhost:3030/products/homepage-featured?locale=en',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -173,7 +176,7 @@ describe('productsManager', () => {
 
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/products/homepage-featured',
+      'http://localhost:3030/products/homepage-featured',
       expect.objectContaining({
         next: expect.objectContaining({
           tags: ['products', 'homepage-featured-products'],
@@ -182,7 +185,7 @@ describe('productsManager', () => {
     );
     expect(fetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/products/cartoon-gallery',
+      'http://localhost:3030/products/cartoon-gallery',
       expect.objectContaining({
         next: expect.objectContaining({
           tags: ['products', 'cartoon-gallery-products'],
@@ -201,7 +204,7 @@ describe('productsManager', () => {
     await expect(getCartoonGalleryProducts()).resolves.toEqual(products);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/products/cartoon-gallery',
+      'http://localhost:3030/products/cartoon-gallery',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -221,12 +224,16 @@ describe('productsManager', () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getCartoonGalleryProducts()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('returns an empty list instead of leaking homepage featured product load failures', async () => {
     fetch.mockResolvedValueOnce(jsonResponse({ ok: false, body: { message: 'boom' } }));
 
     await expect(getHomepageFeaturedProducts()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledOnce();
   });
 
   it('updates homepage featured products through the backend mutation', async () => {
@@ -237,7 +244,7 @@ describe('productsManager', () => {
 
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/products/homepage-featured',
+      'http://localhost:3030/products/homepage-featured',
       expect.objectContaining({
         method: 'PUT',
         credentials: 'include',
@@ -272,7 +279,7 @@ describe('productsManager', () => {
     const createCall = fetch.mock.calls[0];
     const payload = JSON.parse(createCall[1].body);
 
-    expect(createCall[0]).toBe('http://localhost:3000/api/products');
+    expect(createCall[0]).toBe('http://localhost:3030/products');
     expect(createCall[1]).toMatchObject({
       method: 'POST',
       credentials: 'include',
@@ -410,7 +417,7 @@ describe('productsManager', () => {
     const updateCall = fetch.mock.calls[0];
     const payload = JSON.parse(updateCall[1].body);
 
-    expect(updateCall[0]).toBe('http://localhost:3000/api/products/product-1');
+    expect(updateCall[0]).toBe('http://localhost:3030/products/product-1');
     expect(updateCall[1]).toMatchObject({
       method: 'PUT',
       credentials: 'include',
@@ -521,7 +528,7 @@ describe('productsManager', () => {
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/products/product-1/image',
+      'http://localhost:3030/products/product-1/image',
       expect.objectContaining({
         method: 'DELETE',
         credentials: 'include',
@@ -536,3 +543,4 @@ describe('productsManager', () => {
     await expect(deleteProductVideo('product-1', 'https://cdn.test/video.mp4')).rejects.toThrow('Not allowed');
   });
 });
+

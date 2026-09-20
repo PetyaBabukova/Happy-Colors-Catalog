@@ -5,6 +5,7 @@ import {
   shouldExposeSitemap,
 } from '@/config/siteSeo';
 import { isCartoonsServiceEnabled } from '@/config/cartoonsFeature';
+import { GIFT_GUIDE_SLUGS, GIFT_HUB_PATH } from '@/content/publicPages/gifts';
 import {
   DEFAULT_LOCALE,
   getEnabledPublicLocales,
@@ -15,8 +16,10 @@ import { localizePath } from '@/i18n/routing';
 export const revalidate = 3600;
 
 const PRODUCTS_API_URL = `${PROD_SITE_URL}/api/products`;
+const CATEGORY_REDIRECTS_API_URL = `${PROD_SITE_URL}/api/categories/visible/redirects`;
 const BLOG_API_URL = `${PROD_SITE_URL}/api/blog-articles`;
 const TARGET_LOCALE = 'en';
+const CATEGORY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function absoluteUrl(path) {
   return new URL(path, PROD_SITE_URL).toString();
@@ -70,10 +73,12 @@ function buildSitemapEntry(path, locale, locales, fields) {
   };
 }
 
-async function fetchSitemapEntries(apiUrl, tag, buildEntry, errorMessage) {
+async function fetchSitemapEntries(apiUrl, tags, buildEntry, errorMessage) {
+  const fetchTags = Array.isArray(tags) ? tags : [tags];
+
   try {
     const res = await fetch(apiUrl, {
-      next: { revalidate: 3600, tags: [tag] },
+      next: { revalidate: 3600, tags: fetchTags },
     });
 
     if (!res.ok) {
@@ -106,6 +111,11 @@ function buildStaticEntries(now) {
       : []),
     ['/aboutus', { changeFrequency: 'monthly', priority: 0.7 }],
     ['/faq', { changeFrequency: 'monthly', priority: 0.6 }],
+    [GIFT_HUB_PATH, { changeFrequency: 'monthly', priority: 0.75 }],
+    ...GIFT_GUIDE_SLUGS.map((slug) => [
+      `${GIFT_HUB_PATH}/${slug}`,
+      { changeFrequency: 'monthly', priority: 0.7 },
+    ]),
     ['/blog', { changeFrequency: 'weekly', priority: 0.7 }],
     ['/contacts', { changeFrequency: 'monthly', priority: 0.7 }],
     ['/partners', { changeFrequency: 'monthly', priority: 0.6 }],
@@ -127,6 +137,40 @@ function buildDynamicEntries(item, path, fields) {
   return locales.map((locale) => buildSitemapEntry(path, locale, locales, fields));
 }
 
+function getCategoryCanonicalSlug(category) {
+  return String(category?.canonicalSlug || category?.filterSlug || '').trim();
+}
+
+function getEligibleCategoryLocales(category) {
+  return Array.isArray(category?.eligibleLocales) && category.eligibleLocales.length > 0
+    ? category.eligibleLocales
+    : [DEFAULT_LOCALE];
+}
+
+function canIncludeCategoryInSitemap(category) {
+  const canonicalSlug = getCategoryCanonicalSlug(category);
+
+  return Boolean(category?.canonicalSlugReviewed) && CATEGORY_SLUG_PATTERN.test(canonicalSlug);
+}
+
+function buildCategoryEntries(category, now) {
+  if (!canIncludeCategoryInSitemap(category)) {
+    return [];
+  }
+
+  const canonicalSlug = getCategoryCanonicalSlug(category);
+  const item = {
+    ...category,
+    availableLocales: getEligibleCategoryLocales(category),
+  };
+
+  return buildDynamicEntries(item, `/products?category=${encodeURIComponent(canonicalSlug)}`, {
+    lastModified: new Date(category.updatedAt || category.createdAt || now),
+    changeFrequency: 'daily',
+    priority: 0.75,
+  });
+}
+
 export default async function sitemap() {
   if (!shouldExposeSitemap) {
     return [];
@@ -134,7 +178,7 @@ export default async function sitemap() {
 
   const now = new Date();
 
-  const [productEntries, blogEntries] = await Promise.all([
+  const [productEntries, categoryEntries, blogEntries] = await Promise.all([
     fetchSitemapEntries(
       PRODUCTS_API_URL,
       'products',
@@ -145,6 +189,12 @@ export default async function sitemap() {
           priority: 0.8,
         }),
       'Error generating product sitemap entries:'
+    ),
+    fetchSitemapEntries(
+      CATEGORY_REDIRECTS_API_URL,
+      ['categories', 'products'],
+      (category) => buildCategoryEntries(category, now),
+      'Error generating category sitemap entries:'
     ),
     fetchSitemapEntries(
       BLOG_API_URL,
@@ -162,6 +212,7 @@ export default async function sitemap() {
   return [
     ...buildStaticEntries(now),
     ...productEntries,
+    ...categoryEntries,
     ...blogEntries,
   ];
 }

@@ -135,6 +135,34 @@ describe('siteSeo', () => {
     });
   });
 
+  it('can limit page metadata alternates to an eligible locale subset', async () => {
+    vi.stubEnv('RENDER_GIT_BRANCH', 'main');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu/');
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    const metadata = siteSeo.buildPageMetadata({
+      title: { absolute: 'Fairytale Characters | Happy Colors' },
+      description: 'Browse fairytale characters from Happy Colors.',
+      path: '/products?category=fairytale-characters',
+      locale: 'bg',
+      alternateLocales: ['bg'],
+      includeXDefault: true,
+    });
+
+    expect(metadata.alternates).toEqual({
+      canonical: '/bg/products?category=fairytale-characters',
+      languages: {
+        bg: '/bg/products?category=fairytale-characters',
+        'x-default': '/bg/products?category=fairytale-characters',
+      },
+    });
+    expect(metadata.openGraph).not.toHaveProperty('alternateLocale');
+    expect(metadata).not.toHaveProperty('keywords');
+  });
+
   it('filters unsupported alternates and can omit x-default', async () => {
     vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_ENGLISH_LOCALE_ENABLED', 'true');
@@ -148,6 +176,75 @@ describe('siteSeo', () => {
       bg: '/bg/blog',
       en: '/en/blog',
     });
+  });
+
+  it('builds production-safe structured data URLs and ids from local or preview origins', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'preview');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happy-colors-preview.onrender.com');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+
+    expect(siteSeo.buildStructuredDataUrl('/products/product-1')).toBe(
+      'https://happycolors.eu/products/product-1'
+    );
+    expect(siteSeo.buildStructuredDataUrl('http://localhost:3000/blog/story?draft=true#main')).toBe(
+      'https://happycolors.eu/blog/story?draft=true#main'
+    );
+    expect(siteSeo.buildStructuredDataUrl('https://preview.example.com/logo.svg')).toBe(
+      'https://happycolors.eu/logo.svg'
+    );
+    expect(siteSeo.buildStructuredDataUrl('https://storage.googleapis.com/test/image.webp')).toBe(
+      'https://storage.googleapis.com/test/image.webp'
+    );
+    expect(siteSeo.buildStructuredDataUrl('javascript:alert(1)')).toBe(
+      'https://happycolors.eu/alert(1)'
+    );
+    expect(siteSeo.buildStructuredDataId('/products/product-1', 'product')).toBe(
+      'https://happycolors.eu/products/product-1#product'
+    );
+    expect(siteSeo.isUnsafeStructuredDataUrl('https://happy-colors-preview.onrender.com/page')).toBe(true);
+    expect(siteSeo.isUnsafeStructuredDataUrl('https://happycolors.eu/page')).toBe(false);
+  });
+
+  it('builds enriched Organization and WebSite JSON-LD with durable production identifiers', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'development');
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'http://localhost:3000');
+
+    const siteSeo = await import('../../../src/config/siteSeo.js');
+    const organization = siteSeo.buildOrganizationJsonLd();
+    const website = siteSeo.buildWebsiteJsonLd('en');
+
+    expect(organization).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      '@id': 'https://happycolors.eu/#organization',
+      name: 'Happy Colors',
+      url: 'https://happycolors.eu/',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://happycolors.eu/logo_64pxH.svg',
+      },
+      sameAs: [
+        'https://www.facebook.com/happycolors.studio',
+        'https://www.instagram.com/happycolors.crochet/',
+        'https://happycolorsartshop.etsy.com/',
+        'https://www.youtube.com/@HappyColorsCrochet',
+        'https://www.tiktok.com/@happycolorscrochet',
+      ],
+    });
+    expect(website).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      '@id': 'https://happycolors.eu/#website',
+      name: 'Happy Colors',
+      url: 'https://happycolors.eu/',
+      publisher: {
+        '@id': 'https://happycolors.eu/#organization',
+      },
+      inLanguage: 'en-US',
+    });
+    expect(website).not.toHaveProperty('potentialAction');
+    expect(JSON.stringify([organization, website])).not.toMatch(/localhost|preview|onrender|vercel|netlify/i);
   });
 
   it('blocks indexing for pull-request previews even when production env is set', async () => {

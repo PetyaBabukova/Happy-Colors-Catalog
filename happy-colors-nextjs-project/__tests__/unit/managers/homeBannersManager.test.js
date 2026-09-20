@@ -14,6 +14,7 @@ describe('homeBannersManager', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -28,7 +29,7 @@ describe('homeBannersManager', () => {
     await expect(getHomeBanners({ locale: 'en' })).resolves.toEqual(banners);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/home-banners?locale=en',
+      'http://localhost:3030/home-banners?locale=en',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -45,7 +46,7 @@ describe('homeBannersManager', () => {
     await expect(getCartoonHeroBanners({ locale: 'en' })).resolves.toEqual(banners);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/home-banners?placement=cartoons&locale=en',
+      'http://localhost:3030/home-banners?placement=cartoons&locale=en',
       expect.objectContaining({
         next: {
           revalidate: 60,
@@ -62,6 +63,8 @@ describe('homeBannersManager', () => {
 
     await expect(getHomeBanners()).resolves.toEqual([]);
     await expect(getCartoonHeroBanners()).resolves.toEqual([]);
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledTimes(2);
   });
 
   it('loads a single banner with credentials and no-store cache', async () => {
@@ -71,7 +74,7 @@ describe('homeBannersManager', () => {
     await expect(getHomeBannerById('banner-1')).resolves.toEqual(banner);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/home-banners/banner-1',
+      'http://localhost:3030/home-banners/banner-1',
       expect.objectContaining({
         credentials: 'include',
         cache: 'no-store',
@@ -109,7 +112,7 @@ describe('homeBannersManager', () => {
     await editHomeBanner('banner-1', { placement: 'cartoons', title: 'Hero' }, { previousPlacement: 'home' });
 
     expect(fetch.mock.calls.map((call) => call[0])).toEqual([
-      'http://localhost:3000/api/home-banners/banner-1',
+      'http://localhost:3030/home-banners/banner-1',
       '/api/revalidate/home-banners',
       '/api/revalidate/cartoon-hero-banners',
     ]);
@@ -124,7 +127,7 @@ describe('homeBannersManager', () => {
     await expect(editHomeBanner('banner-1', { title: 'Hero' })).resolves.toEqual({ _id: 'banner-1' });
 
     expect(fetch.mock.calls.map((call) => call[0])).toEqual([
-      'http://localhost:3000/api/home-banners/banner-1',
+      'http://localhost:3030/home-banners/banner-1',
       '/api/revalidate/home-banners',
       '/api/revalidate/cartoon-hero-banners',
     ]);
@@ -143,7 +146,7 @@ describe('homeBannersManager', () => {
 
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/home-banners/banner-1',
+      'http://localhost:3030/home-banners/banner-1',
       expect.objectContaining({
         method: 'PUT',
         credentials: 'include',
@@ -164,7 +167,7 @@ describe('homeBannersManager', () => {
     await expect(deleteHomeBanner('banner-1')).resolves.toBeUndefined();
 
     expect(fetch.mock.calls.map((call) => call[0])).toEqual([
-      'http://localhost:3000/api/home-banners/banner-1',
+      'http://localhost:3030/home-banners/banner-1',
       '/api/revalidate/home-banners',
       '/api/revalidate/cartoon-hero-banners',
     ]);
@@ -177,3 +180,4 @@ describe('homeBannersManager', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+

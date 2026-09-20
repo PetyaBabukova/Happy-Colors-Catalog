@@ -4,10 +4,9 @@
 }
 
 .mainNav {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    flex-wrap: nowrap;
     padding-block: 1em;
     background-color: var(--light-green-transparent);
     gap: 1rem;
@@ -27,15 +26,17 @@
 .mainNavList {
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 0;
-    flex-wrap: nowrap;
-    white-space: nowrap;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.2rem;
+    white-space: normal;
     min-width: 0;
 }
 
 .mainNavList li {
   list-style: none;
-  margin: 0 1em;
+  margin: 0;
   font-size: 1.2rem;
   font-weight: normal;
 }
@@ -117,10 +118,21 @@
     gap: 0.5em;
     align-items: center;
     justify-content: center;
+    justify-self: end;
+    min-width: 0;
     flex-shrink: 0;
 }
 
+.navControls {
+    display: flex;
+    align-items: center;
+    justify-self: end;
+    gap: 1rem;
+    min-width: 0;
+}
+
 .searchInput {
+    width: clamp(8rem, 14vw, 12rem);
     padding: 0.3em 0.8em;
     border: 1px solid var(--dark-green);
     border-radius: 0.5em;
@@ -314,11 +326,17 @@
 
 
     .mainNav {
+        display: flex;
         flex-direction: row;
         align-items: stretch;
         flex-wrap: wrap;
+        justify-content: space-between;
         gap: 1rem;
         padding-block: var(--page-inline-padding);
+    }
+
+    .navControls {
+        display: contents;
     }
 
     .headerTop {

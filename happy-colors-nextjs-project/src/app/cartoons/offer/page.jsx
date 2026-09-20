@@ -7,6 +7,11 @@ import { getCartoonsOfferPageContent } from '@/content/publicPages/cartoons';
 import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
+import {
+  buildCartoonServiceJsonLd,
+  buildCartoonsBreadcrumbJsonLd,
+} from '@/utils/cartoonsSeo';
+import { stringifyJsonLd } from '@/utils/jsonLd';
 import styles from './offer.module.css';
 
 function renderRichTextParts(parts, publicHref) {
@@ -57,9 +62,27 @@ export default async function CartoonsOfferPage(props = {}) {
   const locale = params?.locale || DEFAULT_LOCALE;
   const content = getCartoonsOfferPageContent(locale);
   const publicHref = (href) => getServerPublicHref(href, locale);
+  const serviceData = buildCartoonServiceJsonLd({
+    content,
+    path: '/cartoons/offer',
+    locale,
+  });
+  const breadcrumbData = buildCartoonsBreadcrumbJsonLd({
+    currentName: content.hero.title,
+    path: '/cartoons/offer',
+    locale,
+  });
 
   return (
     <main className={styles.page}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(serviceData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(breadcrumbData) }}
+      />
       <section className={styles.hero}>
         <picture className={styles.heroPicture}>
           <source

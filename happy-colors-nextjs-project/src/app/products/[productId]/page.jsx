@@ -6,6 +6,7 @@ import { getDictionary } from '@/i18n/getDictionary';
 import { getProduct } from '@/lib/getProduct';
 import { getReleasedServiceContext } from '@/config/cartoonsFeature';
 import {
+  buildProductBreadcrumbJsonLd,
   buildProductJsonLd,
   buildProductMetadata,
   shouldRenderProductJsonLd,
@@ -44,8 +45,12 @@ export default async function ProductDetailsPage({ params: paramsPromise, search
     notFound();
   }
 
-  const productJsonLd = shouldRenderProductJsonLd(product, locale)
-    ? buildProductJsonLd(product, locale)
+  const shouldRenderStructuredData = shouldRenderProductJsonLd(product, locale);
+  const productJsonLd = shouldRenderStructuredData
+    ? buildProductJsonLd(product, locale, productId)
+    : null;
+  const breadcrumbJsonLd = shouldRenderStructuredData
+    ? buildProductBreadcrumbJsonLd(product, locale, productId)
     : null;
 
   return (
@@ -54,6 +59,12 @@ export default async function ProductDetailsPage({ params: paramsPromise, search
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: stringifyJsonLd(productJsonLd) }}
+        />
+      ) : null}
+      {breadcrumbJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(breadcrumbJsonLd) }}
         />
       ) : null}
       <ProductDetails product={product} serviceContext={serviceContext} />

@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 import { createTranslationMapSchema } from './localizationSchemas.js';
 
-const categorySchema = new mongoose.Schema({
+const categorySchema = new mongoose.Schema(
+  {
   name: {
     type: String,
     required: [true, 'Името е задължително.'],
@@ -43,6 +44,8 @@ const categorySchema = new mongoose.Schema({
       maxlength: 120,
     },
   }),
-});
+  },
+  { timestamps: true }
+);
 
 export default mongoose.models.Category || mongoose.model('Category', categorySchema);

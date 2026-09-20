@@ -1,13 +1,19 @@
 import {
   SITE_OG_IMAGE_PATH,
+  buildBreadcrumbListJsonLd,
   buildLocalizedAlternates,
+  buildStructuredDataId,
+  buildStructuredDataUrl,
   currentSiteUrl,
   getLocalizedCanonicalPath,
+  getOrganizationLogoSchema,
+  getOrganizationReference,
   getOpenGraphAlternateLocales,
   getOpenGraphLocale,
+  getStructuredDataLanguage,
 } from '@/config/siteSeo';
 import { DEFAULT_LOCALE } from '@/i18n/config';
-import { stringifyJsonLd } from '@/utils/productSeo';
+import { stringifyJsonLd } from '@/utils/jsonLd';
 
 function absoluteUrl(url) {
   if (!url) {
@@ -115,28 +121,52 @@ export function buildBlogMetadata(article, articleId, locale) {
 
 export function buildBlogArticleJsonLd(article, articleId, locale) {
   const canonicalPath = getLocalizedCanonicalPath(`/blog/${articleId}`, locale);
-  const imageUrl = absoluteUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
+  const articleUrl = buildStructuredDataUrl(canonicalPath);
+  const imageUrl = buildStructuredDataUrl(article?.heroImageUrl || article?.thumbnailImageUrl || SITE_OG_IMAGE_PATH);
+  const organizationReference = getOrganizationReference();
 
   return {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
+    '@id': buildStructuredDataId(canonicalPath, 'blogposting'),
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': articleUrl,
+    },
     headline: article?.title || '',
     description: buildBlogSeoDescription(article, locale),
-    url: absoluteUrl(canonicalPath),
+    url: articleUrl,
+    inLanguage: getStructuredDataLanguage(locale),
     ...(imageUrl ? { image: [imageUrl] } : {}),
     ...(article?.publishedAt ? { datePublished: article.publishedAt } : {}),
     ...(article?.updatedAt ? { dateModified: article.updatedAt } : {}),
     author: {
-      '@type': 'Organization',
-      name: 'Happy Colors',
-      alternateName: ['Хепи Колорс', 'Хепи Калърс'],
+      ...organizationReference,
     },
     publisher: {
-      '@type': 'Organization',
-      name: 'Happy Colors',
-      alternateName: ['Хепи Колорс', 'Хепи Калърс'],
+      ...organizationReference,
+      logo: getOrganizationLogoSchema(),
     },
   };
+}
+
+export function buildBlogArticleBreadcrumbJsonLd(article, articleId, locale = DEFAULT_LOCALE) {
+  const canonicalPath = getLocalizedCanonicalPath(`/blog/${articleId}`, locale);
+
+  return buildBreadcrumbListJsonLd([
+    {
+      name: locale === 'en' ? 'Home' : 'Начало',
+      path: getLocalizedCanonicalPath('/', locale),
+    },
+    {
+      name: locale === 'en' ? 'Blog' : 'Блог',
+      path: getLocalizedCanonicalPath('/blog', locale),
+    },
+    {
+      name: article?.title || (locale === 'en' ? 'Article' : 'Статия'),
+      path: canonicalPath,
+    },
+  ]);
 }
 
 export { stringifyJsonLd };

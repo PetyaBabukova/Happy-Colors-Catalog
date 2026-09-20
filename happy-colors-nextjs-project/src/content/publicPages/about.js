@@ -5,7 +5,7 @@ export const aboutPageContent = {
         absolute: 'За Happy Colors | Хепи Колорс | Плетени играчки и декорация за дома',
       },
       description:
-        'Научи повече за Happy Colors (Хепи Колорс) и за ръчно изработените плетени играчки, аксесоари и декорация за дома, създадени с внимание към детайла.',
+        'Научете повече за Happy Colors (Хепи Колорс) и ръчно изработените плетени играчки, handmade изделия, аксесоари и декорация за дома.',
     },
     hero: {
       imageAlt: 'Плетено лъвче, раничка и цветни прежди от Happy Colors',
@@ -82,7 +82,7 @@ export const aboutPageContent = {
         absolute: 'About Happy Colors | Crochet Toys and Handmade Decor',
       },
       description:
-        'Learn more about Happy Colors and the handmade crochet toys, accessories, and home decorations created with care and attention to detail.',
+        'Learn about Happy Colors and its handmade crochet toys, handmade gifts, crochet accessories, bags, and home decor made with care.',
     },
     hero: {
       imageAlt: 'Crocheted lion, small backpack, and colorful yarn from Happy Colors',

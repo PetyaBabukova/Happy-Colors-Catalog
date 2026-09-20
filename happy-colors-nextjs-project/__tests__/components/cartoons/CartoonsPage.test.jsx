@@ -108,7 +108,11 @@ describe('CartoonsPage', () => {
     const { default: CartoonsPage, generateMetadata } = await importPage();
 
     await expect(generateMetadata({ params: Promise.resolve({ locale: 'en' }) })).resolves.toMatchObject({
-      title: 'Custom caricature from a photo for a memorable gift',
+      title: {
+        absolute: 'Caricature from Photo – Personalised Gift | Happy Colors',
+      },
+      description:
+        'Order a personalised caricature from photo – a unique gift for birthdays, anniversaries, weddings and special occasions. Digital and print options available.',
       alternates: {
         canonical: '/en/cartoons',
       },
@@ -126,10 +130,13 @@ describe('CartoonsPage', () => {
       enabled: true,
     });
     const { generateMetadata } = await importPage();
-    const content = getCartoonsPageContent('bg');
 
     await expect(generateMetadata()).resolves.toMatchObject({
-      title: content.metadata.title,
+      title: {
+        absolute: 'Шарж по снимка и карикатура за подарък | Happy Colors',
+      },
+      description:
+        'Поръчайте персонален шарж по снимка или карикатура за подарък. Оригинална идея за рожден ден, юбилей, сватба и други специални поводи.',
       alternates: {
         canonical: '/cartoons',
       },
@@ -147,7 +154,7 @@ describe('CartoonsPage', () => {
     const { default: CartoonsPage } = await importPage();
     const element = await CartoonsPage({ params: Promise.resolve({ locale: 'en' }) });
 
-    render(element);
+    const { container } = render(element);
 
     expect(screen.getByTestId('cartoons-hero')).toHaveTextContent('1');
     expect(screen.getByRole('heading', { name: 'Custom caricature from a photo for a memorable gift' })).toBeInTheDocument();
@@ -171,6 +178,21 @@ describe('CartoonsPage', () => {
       'href',
       '/products/product-1?service=cartoons'
     );
+
+    const scripts = [...container.querySelectorAll('script[type="application/ld+json"]')]
+      .map((script) => JSON.parse(script.textContent));
+
+    expect(scripts.map((script) => script['@type'])).toEqual(['Service', 'BreadcrumbList']);
+    expect(scripts[0]).toMatchObject({
+      '@id': 'https://happycolors.eu/en/cartoons#service',
+      url: 'https://happycolors.eu/en/cartoons',
+      provider: {
+        '@id': 'https://happycolors.eu/#organization',
+      },
+      inLanguage: 'en-US',
+    });
+    expect(scripts[0]).not.toHaveProperty('offers');
+    expect(JSON.stringify(scripts)).not.toMatch(/localhost|preview|onrender|vercel|netlify/i);
   });
 
   it('keeps default-locale links unprefixed when locale routing is off', async () => {

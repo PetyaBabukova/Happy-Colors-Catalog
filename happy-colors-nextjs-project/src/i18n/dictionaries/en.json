@@ -17,6 +17,7 @@
     "catalog": "Catalog",
     "allProducts": "All",
     "cartoons": "Caricatures",
+    "gifts": "Gifts",
     "blog": "Blog",
     "about": "About Happy Colors",
     "faq": "Questions",
@@ -34,13 +35,18 @@
     "copyright": "© {year} Happy Colors. All rights reserved.",
     "socialHeading": "Follow us:",
     "socialNavLabel": "Social profiles",
+    "siteNavLabel": "Helpful pages",
+    "giftsLabel": "Gift ideas",
     "facebookLabel": "Happy Colors on Facebook",
     "instagramLabel": "Happy Colors on Instagram",
+    "etsyLabel": "Happy Colors on Etsy",
+    "youtubeLabel": "Happy Colors on YouTube",
+    "tiktokLabel": "Happy Colors on TikTok",
     "creditPrefix": "Online catalog by"
   },
   "homeHero": {
     "fallbackTitle": "Handmade crochet toys, accessories, and home decor",
-    "fallbackDescription": "Handmade pieces for gifts, cozy homes, and special occasions.",
+    "fallbackDescription": "At Happy Colors, you’ll find unique handmade gifts created with care and attention to every detail. Discover handmade crochet toys, accessories, bags and handmade home decor designed for birthdays, special occasions, children’s rooms or simply to bring a little more color into everyday life. Our collection includes original crochet gifts and handmade crochet pieces, each with its own character and charm. Browse the collection and find something special for someone you love – or for yourself.",
     "fallbackCta": "Catalog",
     "bannerCta": "Catalog",
     "carouselAriaLabel": "Home banners",
@@ -64,7 +70,8 @@
     "disabledEnglishNotice": "English is temporarily unavailable. You are viewing the Bulgarian version."
   },
   "products": {
-    "catalogTitle": "Handmade crochet toys, accessories, and decor",
+    "catalogTitle": "Handmade crochet toys, accessories and home decor",
+    "catalogIntro": "Explore our collection of handmade crochet toys, bags, accessories and home decor, each created with care and attention to detail. Discover soft crochet animals, amigurumi toys, toy-and-backpack sets, handmade bags and unique crochet accessories for children and adults. Whether you are looking for a special handmade gift or a beautiful piece for your home, Happy Colors offers original handmade creations with character.",
     "uncategorizedCategory": "Uncategorized",
     "notFoundTitle": "Product not found",
     "notFoundDescription": "Try again or choose another product.",
@@ -106,7 +113,7 @@
   },
   "contacts": {
     "title": "Contacts",
-    "pageDescription": "Contact Happy Colors with questions about handmade crocheted toys, accessories, and home decorations.",
+    "pageDescription": "Contact Happy Colors about product availability, custom orders, handmade crochet items and custom caricatures from photos. Send your enquiry through the contact form.",
     "formTitle": "Send an inquiry",
     "success": "Thank you! Your message was sent successfully.",
     "submit": "Send",

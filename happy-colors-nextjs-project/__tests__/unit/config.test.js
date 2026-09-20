@@ -58,7 +58,7 @@ describe('config baseURL', () => {
     expect(baseURL).toBe('https://preview.happycolors.eu/api');
   });
 
-  it('defaults to the local server API URL when no override is configured', async () => {
+  it('defaults to the local backend URL when no override is configured', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
     vi.stubEnv('NEXT_PUBLIC_BASE_URL', '');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
@@ -66,7 +66,7 @@ describe('config baseURL', () => {
 
     const { default: baseURL } = await import('../../src/config.js');
 
-    expect(baseURL).toBe('http://localhost:3000/api');
+    expect(baseURL).toBe('http://localhost:3030');
   });
 
   it('allows next image previews from the configured GCS bucket', async () => {

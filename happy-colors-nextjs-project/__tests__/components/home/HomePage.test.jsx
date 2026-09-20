@@ -40,7 +40,7 @@ describe('HomePage', () => {
 
     const element = await HomePage({ params: Promise.resolve({ locale: 'en' }) });
 
-    render(element, { locale: 'en' });
+    const { container } = render(element, { locale: 'en' });
 
     expect(getHomeBanners).toHaveBeenCalledWith({ locale: 'en' });
     expect(getHomepageFeaturedProducts).toHaveBeenCalledWith({ locale: 'en' });
@@ -50,9 +50,19 @@ describe('HomePage', () => {
         name: 'Handmade crochet toys, accessories, and home decor',
       })
     ).toBeInTheDocument();
-    expect(screen.getByText(/At Happy Colors you will find handmade crochet toys/)).toBeInTheDocument();
+    expect(screen.getByText(/At Happy Colors, you’ll find unique handmade gifts/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Your favorite products' })).toBeInTheDocument();
     expect(screen.getByText('Featured crochet toy')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Gift ideas' })).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/gifts_for_children_hero.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/crochet_toy_gift_hero.webp"]')).toBeInTheDocument();
+    expect(container.querySelector('img[src="/images/gifts/original_handmade_gift_hero.webp"]')).toBeInTheDocument();
+    expect(screen.getAllByText('Explore the idea')).toHaveLength(3);
+    expect(screen.getByRole('link', { name: /Gifts for children/ })).toHaveAttribute(
+      'href',
+      '/en/gifts/gifts-for-children'
+    );
+    expect(screen.getByRole('link', { name: /All gift ideas/ })).toHaveAttribute('href', '/en/gifts');
     expect(screen.getByRole('link', { name: /Frequently asked questions/ })).toHaveAttribute(
       'href',
       '/en/faq'
@@ -62,14 +72,24 @@ describe('HomePage', () => {
   it('generates English metadata for localized home routes', async () => {
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors');
-    expect(metadata.description).toMatch(/Handmade crochet toys/);
+    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Gifts & Home Decor | Happy Colors');
+    expect(metadata.description).toMatch(/Unique handmade gifts/);
     expect(metadata.alternates.canonical).toBe('/en');
+  });
+
+  it('generates Bulgarian metadata for the default home route', async () => {
+    const metadata = await generateMetadata();
+
+    expect(metadata.title.absolute).toBe('Ръчно изработени подаръци, плетени играчки и декорация | Happy Colors');
+    expect(metadata.description).toBe(
+      'Ръчно изработени подаръци от Happy Colors - плетени играчки, handmade изделия, аксесоари и декорация за дома с характер.'
+    );
+    expect(metadata.alternates.canonical).toBe('/');
   });
 
   it('re-exports metadata generation from the localized home wrapper', async () => {
     const metadata = await generateLocalizedMetadata({ params: Promise.resolve({ locale: 'en' }) });
 
-    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Accessories, and Home Decor | Happy Colors');
+    expect(metadata.title.absolute).toBe('Handmade Crochet Toys, Gifts & Home Decor | Happy Colors');
   });
 });

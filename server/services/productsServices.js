@@ -464,12 +464,9 @@ function categoryMatchesPublicFilter(category, filterValue) {
     return true;
   }
 
-  const englishTranslation = getTranslationEntry(category?.translations, 'en');
   const candidates = [
     category?.canonicalSlug,
     category?.slug,
-    category?.name,
-    englishTranslation?.name,
     ...(Array.isArray(category?.slugAliases) ? category.slugAliases : []),
   ];
 

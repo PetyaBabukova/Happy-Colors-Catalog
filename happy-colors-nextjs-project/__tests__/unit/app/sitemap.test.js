@@ -25,7 +25,7 @@ describe('sitemap', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('adds static, product, and blog entries for the production sitemap', async () => {
+  it('adds static, product, category, and blog entries for the production sitemap', async () => {
     vi.stubEnv('NEXT_PUBLIC_SITE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://happycolors.eu');
     vi.stubGlobal(
@@ -43,7 +43,36 @@ describe('sitemap', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => [
-            { _id: 'blog-1', updatedAt: '2026-05-03T12:00:00.000Z' },
+            {
+              _id: 'cat-1',
+              canonicalSlug: 'fairytale-characters',
+              canonicalSlugReviewed: true,
+              eligibleLocales: ['bg'],
+              updatedAt: '2026-05-02T12:00:00.000Z',
+              slugAliases: ['old-fairytale-characters'],
+              displayNames: { bg: 'Prikazni geroi' },
+            },
+            {
+              _id: 'cat-2',
+              canonicalSlug: 'unreviewed-category',
+              canonicalSlugReviewed: false,
+              eligibleLocales: ['bg'],
+            },
+            {
+              _id: 'cat-3',
+              canonicalSlug: 'invalid category',
+              canonicalSlugReviewed: true,
+              eligibleLocales: ['bg'],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
+              _id: 'blog-1',
+              updatedAt: '2026-05-03T12:00:00.000Z',
+            },
             { title: 'Missing id' },
             { _id: 'blog-2', publishedAt: '2026-05-02T10:00:00.000Z' },
           ],
@@ -55,6 +84,9 @@ describe('sitemap', () => {
 
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/products', {
       next: { revalidate: 3600, tags: ['products'] },
+    });
+    expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/categories/visible/redirects', {
+      next: { revalidate: 3600, tags: ['categories', 'products'] },
     });
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
       next: { revalidate: 3600, tags: ['blog-articles'] },
@@ -86,6 +118,30 @@ describe('sitemap', () => {
         priority: 0.6,
       },
       {
+        url: 'https://happycolors.eu/gifts',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.75,
+      },
+      {
+        url: 'https://happycolors.eu/gifts/gifts-for-children',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
+        url: 'https://happycolors.eu/gifts/handmade-crochet-toy-gift',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
+        url: 'https://happycolors.eu/gifts/original-handmade-gift',
+        lastModified: new Date('2026-05-07T09:00:00.000Z'),
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
         url: 'https://happycolors.eu/blog',
         lastModified: new Date('2026-05-07T09:00:00.000Z'),
         changeFrequency: 'weekly',
@@ -114,6 +170,12 @@ describe('sitemap', () => {
         lastModified: new Date('2026-04-28T10:00:00.000Z'),
         changeFrequency: 'weekly',
         priority: 0.8,
+      },
+      {
+        url: 'https://happycolors.eu/products?category=fairytale-characters',
+        lastModified: new Date('2026-05-02T12:00:00.000Z'),
+        changeFrequency: 'daily',
+        priority: 0.75,
       },
       {
         url: 'https://happycolors.eu/blog/blog-1',
@@ -171,6 +233,30 @@ describe('sitemap', () => {
           ok: true,
           json: async () => [
             {
+              _id: 'cat-translated',
+              canonicalSlug: 'fairytale-characters',
+              canonicalSlugReviewed: true,
+              eligibleLocales: ['bg', 'en'],
+            },
+            {
+              _id: 'cat-bg-only',
+              canonicalSlug: 'crochet-animals',
+              canonicalSlugReviewed: true,
+              eligibleLocales: ['bg'],
+            },
+            {
+              _id: 'cat-alias-only',
+              canonicalSlug: 'old-alias',
+              canonicalSlugReviewed: false,
+              eligibleLocales: ['bg', 'en'],
+              slugAliases: ['historic-alias'],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
               _id: 'translated-blog',
               publishedAt: '2026-05-03T12:00:00.000Z',
               availableLocales: ['bg', 'en'],
@@ -191,12 +277,22 @@ describe('sitemap', () => {
     expect(urls.every((url) => /^https:\/\/happycolors\.eu\/(?:bg|en)(?:\/|$)/.test(url))).toBe(true);
     expect(urls).toContain('https://happycolors.eu/bg');
     expect(urls).toContain('https://happycolors.eu/en');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts');
+    expect(urls).toContain('https://happycolors.eu/en/gifts');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts/gifts-for-children');
+    expect(urls).toContain('https://happycolors.eu/en/gifts/gifts-for-children');
     expect(urls).toContain('https://happycolors.eu/bg/partners');
     expect(urls).toContain('https://happycolors.eu/en/partners');
     expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
     expect(urls).toContain('https://happycolors.eu/en/products/translated-product');
     expect(urls).toContain('https://happycolors.eu/bg/products/fallback-product');
     expect(urls).not.toContain('https://happycolors.eu/en/products/fallback-product');
+    expect(urls).toContain('https://happycolors.eu/bg/products?category=fairytale-characters');
+    expect(urls).toContain('https://happycolors.eu/en/products?category=fairytale-characters');
+    expect(urls).toContain('https://happycolors.eu/bg/products?category=crochet-animals');
+    expect(urls).not.toContain('https://happycolors.eu/en/products?category=crochet-animals');
+    expect(urls).not.toContain('https://happycolors.eu/bg/products?category=old-alias');
+    expect(urls).not.toContain('https://happycolors.eu/bg/products?category=historic-alias');
     expect(urls).toContain('https://happycolors.eu/bg/blog/translated-blog');
     expect(urls).toContain('https://happycolors.eu/en/blog/translated-blog');
     expect(urls).toContain('https://happycolors.eu/bg/blog/bg-only-blog');
@@ -218,12 +314,38 @@ describe('sitemap', () => {
         },
       },
     });
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/en/products?category=fairytale-characters')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/products?category=fairytale-characters',
+          en: 'https://happycolors.eu/en/products?category=fairytale-characters',
+          'x-default': 'https://happycolors.eu/bg/products?category=fairytale-characters',
+        },
+      },
+    });
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/bg/products?category=crochet-animals')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/products?category=crochet-animals',
+          'x-default': 'https://happycolors.eu/bg/products?category=crochet-animals',
+        },
+      },
+    });
     expect(entries.find((entry) => entry.url === 'https://happycolors.eu/en')).toMatchObject({
       alternates: {
         languages: {
           bg: 'https://happycolors.eu/bg',
           en: 'https://happycolors.eu/en',
           'x-default': 'https://happycolors.eu/bg',
+        },
+      },
+    });
+    expect(entries.find((entry) => entry.url === 'https://happycolors.eu/en/gifts/gifts-for-children')).toMatchObject({
+      alternates: {
+        languages: {
+          bg: 'https://happycolors.eu/bg/gifts/gifts-for-children',
+          en: 'https://happycolors.eu/en/gifts/gifts-for-children',
+          'x-default': 'https://happycolors.eu/bg/gifts/gifts-for-children',
         },
       },
     });
@@ -252,6 +374,17 @@ describe('sitemap', () => {
           ok: true,
           json: async () => [
             {
+              _id: 'cat-translated',
+              canonicalSlug: 'fairytale-characters',
+              canonicalSlugReviewed: true,
+              eligibleLocales: ['bg', 'en'],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [
+            {
               _id: 'translated-blog',
               publishedAt: '2026-05-03T12:00:00.000Z',
               availableLocales: ['bg', 'en'],
@@ -265,7 +398,10 @@ describe('sitemap', () => {
     const urls = entries.map((entry) => entry.url);
 
     expect(urls).toContain('https://happycolors.eu/bg');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts');
+    expect(urls).toContain('https://happycolors.eu/bg/gifts/original-handmade-gift');
     expect(urls).toContain('https://happycolors.eu/bg/products/translated-product');
+    expect(urls).toContain('https://happycolors.eu/bg/products?category=fairytale-characters');
     expect(urls).toContain('https://happycolors.eu/bg/blog/translated-blog');
     expect(urls.some((url) => url.includes('https://happycolors.eu/en'))).toBe(false);
     expect(entries.find((entry) => entry.url === 'https://happycolors.eu/bg/products/translated-product')).toMatchObject({
@@ -289,15 +425,22 @@ describe('sitemap', () => {
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/products', {
       next: { revalidate: 3600, tags: ['products'] },
     });
+    expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/categories/visible/redirects', {
+      next: { revalidate: 3600, tags: ['categories', 'products'] },
+    });
     expect(fetch).toHaveBeenCalledWith('https://happycolors.eu/api/blog-articles', {
       next: { revalidate: 3600, tags: ['blog-articles'] },
     });
-    expect(entries).toHaveLength(7);
+    expect(entries).toHaveLength(11);
     expect(entries.map((entry) => entry.url)).toEqual([
       'https://happycolors.eu/',
       'https://happycolors.eu/products',
       'https://happycolors.eu/aboutus',
       'https://happycolors.eu/faq',
+      'https://happycolors.eu/gifts',
+      'https://happycolors.eu/gifts/gifts-for-children',
+      'https://happycolors.eu/gifts/handmade-crochet-toy-gift',
+      'https://happycolors.eu/gifts/original-handmade-gift',
       'https://happycolors.eu/blog',
       'https://happycolors.eu/contacts',
       'https://happycolors.eu/partners',

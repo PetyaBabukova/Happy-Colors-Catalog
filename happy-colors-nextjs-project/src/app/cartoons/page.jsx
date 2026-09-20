@@ -11,6 +11,11 @@ import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { getCartoonHeroBanners } from '@/managers/homeBannersManager';
 import { getCartoonGalleryProducts } from '@/managers/productsManager';
 import { buildCartoonServiceContactHref } from '@/utils/cartoonServiceRoutes';
+import {
+  buildCartoonServiceJsonLd,
+  buildCartoonsBreadcrumbJsonLd,
+} from '@/utils/cartoonsSeo';
+import { stringifyJsonLd } from '@/utils/jsonLd';
 import styles from './cartoons.module.css';
 
 function renderRichTextParts(parts, publicHref) {
@@ -61,6 +66,16 @@ export default async function CartoonsPage(props = {}) {
   const locale = params?.locale || DEFAULT_LOCALE;
   const content = getCartoonsPageContent(locale);
   const publicHref = (href) => getServerPublicHref(href, locale);
+  const serviceData = buildCartoonServiceJsonLd({
+    content,
+    path: '/cartoons',
+    locale,
+  });
+  const breadcrumbData = buildCartoonsBreadcrumbJsonLd({
+    currentName: content.intro.title,
+    path: '/cartoons',
+    locale,
+  });
 
   const [banners, galleryProducts] = await Promise.all([
     getCartoonHeroBanners({ locale }),
@@ -69,6 +84,14 @@ export default async function CartoonsPage(props = {}) {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(serviceData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(breadcrumbData) }}
+      />
       <CartoonsHeroCarousel banners={banners} />
 
       <main className={styles.page}>
