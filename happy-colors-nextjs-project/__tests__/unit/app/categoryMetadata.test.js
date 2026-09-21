@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCategoryProductsBreadcrumbJsonLd,
   buildCategoryProductsMetadata,
   buildCategoryProductsPageContent,
 } from '../../../src/app/products/categoryMetadata';
@@ -111,5 +112,64 @@ describe('category products metadata', () => {
       alternateLocales: ['en'],
       includeXDefault: false,
     });
+  });
+
+  it('builds localized category breadcrumbs with the canonical query URL', () => {
+    expect(
+      buildCategoryProductsBreadcrumbJsonLd(
+        {
+          name: 'Fallback category name',
+          canonicalSlug: 'fairytale-characters',
+          eligibleLocales: ['bg', 'en'],
+        },
+        'en'
+      )
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: 'https://happycolors.eu/en',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Products',
+          item: 'https://happycolors.eu/en/products',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: 'Crochet Fairytale Characters',
+          item: 'https://happycolors.eu/en/products?category=fairytale-characters',
+        },
+      ],
+    });
+  });
+
+  it('uses the visible Bulgarian category name in Bulgarian breadcrumbs', () => {
+    const breadcrumb = buildCategoryProductsBreadcrumbJsonLd(
+      {
+        name: 'Плетени приказни герои',
+        canonicalSlug: 'fairytale-characters',
+        eligibleLocales: ['bg'],
+      },
+      'bg'
+    );
+
+    expect(breadcrumb.itemListElement).toHaveLength(3);
+    expect(breadcrumb.itemListElement[0]).toMatchObject({ name: 'Начало', item: 'https://happycolors.eu/' });
+    expect(breadcrumb.itemListElement[1]).toMatchObject({ name: 'Продукти', item: 'https://happycolors.eu/products' });
+    expect(breadcrumb.itemListElement[2]).toMatchObject({
+      name: 'Плетени приказни герои',
+      item: 'https://happycolors.eu/products?category=fairytale-characters',
+    });
+  });
+
+  it('returns no breadcrumb when the category has no canonical slug', () => {
+    expect(buildCategoryProductsBreadcrumbJsonLd({ name: 'No slug' }, 'bg')).toBeNull();
   });
 });

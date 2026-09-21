@@ -4,9 +4,10 @@ import { getProducts } from '@/managers/productsManager';
 import { getVisibleCategoryRedirectCandidatesSeed } from '@/managers/categoriesManager';
 import { buildPageMetadata } from '@/config/siteSeo';
 import { getProductsPageContent } from '@/content/publicPages/products';
-import { getServerPublicHref } from '@/i18n/serverNavigation';
+import { getServerRedirectHref } from '@/i18n/serverNavigation';
 import { permanentRedirect, redirect } from 'next/navigation';
 import {
+  buildCategoryProductsBreadcrumbJsonLd,
   buildCategoryProductsMetadata,
   buildCategoryProductsPageContent,
 } from './categoryMetadata';
@@ -16,6 +17,7 @@ import {
   resolveCategoryRedirect,
 } from './categoryRedirects';
 import Shop from './Shop';
+import { stringifyJsonLd } from '@/utils/jsonLd';
 
 export async function generateMetadata(props = {}) {
   const params = await props.params;
@@ -71,11 +73,11 @@ export default async function ProductsPage(props) {
     : null;
 
   if (categoryRedirect?.type === 'permanent') {
-    permanentRedirect(getServerPublicHref(categoryRedirect.target, locale));
+    permanentRedirect(getServerRedirectHref(categoryRedirect.target, locale));
   }
 
   if (categoryRedirect?.type === 'temporary') {
-    redirect(getServerPublicHref(categoryRedirect.target, locale));
+    redirect(getServerRedirectHref(categoryRedirect.target, locale));
   }
 
   const indexableCategory =
@@ -87,15 +89,26 @@ export default async function ProductsPage(props) {
         })
       : null;
   const allProducts = await getProducts(category, { locale });
+  const breadcrumbJsonLd = indexableCategory
+    ? buildCategoryProductsBreadcrumbJsonLd(indexableCategory, locale)
+    : null;
 
   return (
-    <Shop
-      products={allProducts}
-      pageContent={
-        indexableCategory
-          ? buildCategoryProductsPageContent(indexableCategory, locale)
-          : null
-      }
-    />
+    <>
+      {breadcrumbJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: stringifyJsonLd(breadcrumbJsonLd) }}
+        />
+      ) : null}
+      <Shop
+        products={allProducts}
+        pageContent={
+          indexableCategory
+            ? buildCategoryProductsPageContent(indexableCategory, locale)
+            : null
+        }
+      />
+    </>
   );
 }

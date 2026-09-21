@@ -1,4 +1,8 @@
 import { DEFAULT_LOCALE } from '@/i18n/config';
+import {
+  buildBreadcrumbListJsonLd,
+  getLocalizedCanonicalPath,
+} from '@/config/siteSeo';
 
 const REVIEWED_CATEGORY_SEO_CONTENT = {
   'fairytale-characters': {
@@ -115,4 +119,30 @@ export function buildCategoryProductsPageContent(category, locale = DEFAULT_LOCA
   return {
     heading: reviewedContent?.heading || getCategoryName(category),
   };
+}
+
+export function buildCategoryProductsBreadcrumbJsonLd(category, locale = DEFAULT_LOCALE) {
+  const categorySlug = getCategorySlug(category);
+
+  if (!categorySlug) {
+    return null;
+  }
+
+  const categoryName = buildCategoryProductsPageContent(category, locale).heading;
+  const categoryPath = `/products?category=${encodeURIComponent(categorySlug)}`;
+
+  return buildBreadcrumbListJsonLd([
+    {
+      name: locale === 'en' ? 'Home' : 'Начало',
+      path: getLocalizedCanonicalPath('/', locale),
+    },
+    {
+      name: locale === 'en' ? 'Products' : 'Продукти',
+      path: getLocalizedCanonicalPath('/products', locale),
+    },
+    {
+      name: categoryName,
+      path: getLocalizedCanonicalPath(categoryPath, locale),
+    },
+  ]);
 }

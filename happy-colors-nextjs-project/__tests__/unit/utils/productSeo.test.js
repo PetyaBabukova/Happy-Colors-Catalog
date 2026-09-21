@@ -53,17 +53,58 @@ describe('productSeo', () => {
     expect(buildProductSeoTitle(product)).toBe('Colorful Candle | Candles');
   });
 
-  it('builds fallback SEO text for products without a category', async () => {
+  it('uses the visible product description before the SEO fallback', async () => {
     const { buildProductSeoDescription, buildProductSeoTitle } = await import('../../../src/utils/productSeo.js');
-    const uncategorizedProduct = { title: 'Gift Box' };
+    const uncategorizedProduct = { title: 'Gift Box', description: 'Handmade gift box' };
+
+    expect(buildProductSeoTitle(uncategorizedProduct)).toBe('Gift Box');
+    expect(buildProductSeoDescription(uncategorizedProduct)).toBe('Handmade gift box');
+  });
+
+  it('normalizes markup and truncates visible descriptions at a word boundary', async () => {
+    const { normalizeProductDescriptionForSeo } = await import('../../../src/utils/productSeo.js');
+    const description = '<p>Handmade   candle with <strong>bright colors</strong> and a [special finish](https://example.com) for a thoughtful gift.</p>';
+
+    expect(normalizeProductDescriptionForSeo(description)).toBe(
+      'Handmade candle with bright colors and a special finish for a thoughtful gift.'
+    );
+
+    const longDescription = Array.from({ length: 50 }, () => 'handmade').join(' ');
+    const normalizedLongDescription = normalizeProductDescriptionForSeo(longDescription);
+
+    expect(normalizedLongDescription.length).toBeLessThanOrEqual(160);
+    expect(normalizedLongDescription).not.toMatch(/\s$/);
+    expect(normalizeProductDescriptionForSeo('a'.repeat(240))).toHaveLength(160);
+  });
+
+  it('decodes common HTML entities before using descriptions in SEO output', async () => {
+    const { normalizeProductDescriptionForSeo } = await import('../../../src/utils/productSeo.js');
+
+    expect(normalizeProductDescriptionForSeo('Salt &amp; Pepper&nbsp;for &quot;gifts&quot;')).toBe(
+      'Salt & Pepper for "gifts"'
+    );
+    expect(normalizeProductDescriptionForSeo('Suitable for &lt; 3 &amp; &gt; 1 year')).toBe(
+      'Suitable for < 3 & > 1 year'
+    );
+    expect(normalizeProductDescriptionForSeo('&lt;script&gt;alert(1)&lt;/script&gt;Gift')).toBe(
+      'alert(1) Gift'
+    );
+    expect(normalizeProductDescriptionForSeo('Salt &#38; Pepper &#x26;')).toBe('Salt & Pepper &');
+  });
+
+  it('builds fallback SEO text for products without a visible description', async () => {
+    const { buildProductSeoDescription, buildProductSeoTitle } = await import('../../../src/utils/productSeo.js');
+    const uncategorizedProduct = { title: 'Gift Box', description: '   ' };
 
     expect(buildProductSeoTitle(uncategorizedProduct)).toBe('Gift Box');
     expect(buildProductSeoDescription(uncategorizedProduct)).toContain('Gift Box');
+    expect(buildProductSeoDescription(uncategorizedProduct)).toContain('от Happy Colors');
+    expect(buildProductSeoDescription(uncategorizedProduct)).not.toContain('РѕС‚ Happy Colors');
   });
 
   it('builds English SEO descriptions without Bulgarian fallback copy', async () => {
     const { buildProductSeoDescription } = await import('../../../src/utils/productSeo.js');
-    const description = buildProductSeoDescription(product, 'en');
+    const description = buildProductSeoDescription({ ...product, description: '' }, 'en');
 
     expect(description).toContain('Colorful Candle - candles from Happy Colors');
     expect(description).toContain('A handmade piece crafted with attention to detail');
@@ -123,6 +164,16 @@ describe('productSeo', () => {
     expect(jsonLd).not.toHaveProperty('review');
     expect(jsonLd).not.toHaveProperty('aggregateRating');
     expect(JSON.stringify(jsonLd)).not.toMatch(/shipping|return/i);
+  });
+
+  it('keeps JSON-LD description aligned with the normalized SEO description', async () => {
+    const { buildProductJsonLd, normalizeProductDescriptionForSeo } = await import('../../../src/utils/productSeo.js');
+    const longDescription = `${'<p>'}${Array.from({ length: 50 }, () => 'handmade').join(' ')}${'</p>'}`;
+    const normalizedDescription = normalizeProductDescriptionForSeo(longDescription);
+
+    expect(buildProductJsonLd({ ...product, description: longDescription }).description).toBe(
+      normalizedDescription
+    );
   });
 
   it('localizes generated English video JSON-LD copy', async () => {
@@ -252,6 +303,9 @@ describe('productSeo', () => {
     const metadata = buildProductMetadata(product, product._id);
 
     expect(metadata.title).toBe('Colorful Candle | Candles');
+    expect(metadata.description).toBe('Handmade candle');
+    expect(metadata.openGraph.description).toBe('Handmade candle');
+    expect(metadata.twitter.description).toBe('Handmade candle');
     expect(metadata.alternates.canonical).toBe('/products/product-1');
     expect(metadata.alternates.languages).toEqual({
       bg: '/products/product-1',

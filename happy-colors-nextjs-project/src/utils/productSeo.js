@@ -17,6 +17,38 @@ import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 
 export { stringifyJsonLd };
 
+const PRODUCT_SEO_DESCRIPTION_MAX_LENGTH = 160;
+const HTML_ENTITY_MAP = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  hellip: '…',
+  lt: '<',
+  mdash: '—',
+  nbsp: ' ',
+  ndash: '–',
+  quot: '"',
+};
+
+function decodeHtmlEntities(value) {
+  return value.replace(/&(#x?[0-9a-f]+|amp|apos|gt|hellip|lt|mdash|nbsp|ndash|quot);/gi, (match, entity) => {
+    const normalizedEntity = entity.toLowerCase();
+
+    if (normalizedEntity.startsWith('#x') || normalizedEntity.startsWith('#')) {
+      const codePoint = Number.parseInt(
+        normalizedEntity.startsWith('#x') ? normalizedEntity.slice(2) : normalizedEntity.slice(1),
+        normalizedEntity.startsWith('#x') ? 16 : 10
+      );
+
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    }
+
+    return HTML_ENTITY_MAP[normalizedEntity] || match;
+  });
+}
+
 function absoluteUrl(url) {
   if (!url) {
     return '';
@@ -86,13 +118,57 @@ function normalizeOfferPrice(value) {
   return normalizedValue;
 }
 
+export function normalizeProductDescriptionForSeo(description) {
+  const normalizedDescription = String(description || '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<\/?[A-Za-z][^>]*>/g, ' ')
+    .replace(/&(#x?[0-9a-f]+|amp|apos|gt|hellip|lt|mdash|nbsp|ndash|quot);/gi, (match, entity) => (
+      decodeHtmlEntities(`&${entity};`)
+    ))
+    .replace(/<\/?[A-Za-z][^>]*>/g, ' ')
+    .replace(/[`*_~]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (normalizedDescription.length <= PRODUCT_SEO_DESCRIPTION_MAX_LENGTH) {
+    return normalizedDescription;
+  }
+
+  const truncatedDescription = Array.from(normalizedDescription)
+    .slice(0, PRODUCT_SEO_DESCRIPTION_MAX_LENGTH)
+    .join('');
+  const lastWhitespaceIndex = truncatedDescription.lastIndexOf(' ');
+
+  return (lastWhitespaceIndex > 0
+    ? truncatedDescription.slice(0, lastWhitespaceIndex)
+    : truncatedDescription
+  ).trim();
+}
+
 export function buildProductSeoDescription(product, locale = DEFAULT_LOCALE) {
+  const visibleDescription = normalizeProductDescriptionForSeo(product?.description);
+
+  if (visibleDescription) {
+    return visibleDescription;
+  }
+
   const categoryName = getProductSeoCategoryName(product, locale);
 
   if (locale === 'en') {
-    return categoryName
-      ? `${product.title} - ${categoryName.toLowerCase()} from Happy Colors. A handmade piece crafted with attention to detail, suitable as a gift, home decoration, or for a special occasion.`
-      : `${product.title} from Happy Colors. A handmade piece crafted with attention to detail, suitable as a gift, home decoration, or for a special occasion.`;
+    return normalizeProductDescriptionForSeo(
+      categoryName
+        ? `${product.title} - ${categoryName.toLowerCase()} from Happy Colors. A handmade piece crafted with attention to detail, suitable as a gift, home decoration, or for a special occasion.`
+        : `${product.title} from Happy Colors. A handmade piece crafted with attention to detail, suitable as a gift, home decoration, or for a special occasion.`
+    );
+  }
+
+  if (locale === DEFAULT_LOCALE) {
+    const fallbackDescription = categoryName
+      ? `${product.title} – ${categoryName.toLowerCase()} от Happy Colors (Хепи Колорс). Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`
+      : `${product.title} от Happy Colors (Хепи Колорс). Ръчно изработено изделие с внимание към детайла, подходящо за подарък, декорация за дома или специален повод.`;
+
+    return normalizeProductDescriptionForSeo(fallbackDescription);
   }
 
   return categoryName
@@ -139,7 +215,7 @@ export function buildProductJsonLd(product, locale = DEFAULT_LOCALE, productId =
     '@type': 'Product',
     '@id': buildStructuredDataId(canonicalPath, 'product'),
     name: product.title,
-    description: product.description || buildProductSeoDescription(product, locale),
+    description: buildProductSeoDescription(product, locale),
     url: productUrl,
     brand: organizationReference,
     inLanguage: getStructuredDataLanguage(locale),
@@ -167,7 +243,7 @@ export function buildProductJsonLd(product, locale = DEFAULT_LOCALE, productId =
             name: locale === 'en'
               ? `${product.title} - video ${index + 1}`
               : `${product.title} - видео ${index + 1}`,
-            description: product.description || buildProductSeoDescription(product, locale),
+            description: buildProductSeoDescription(product, locale),
             thumbnailUrl: buildStructuredDataUrl(video.posterUrl),
             ...(normalizeUploadDate(video.uploadDate)
               ? { uploadDate: normalizeUploadDate(video.uploadDate) }
