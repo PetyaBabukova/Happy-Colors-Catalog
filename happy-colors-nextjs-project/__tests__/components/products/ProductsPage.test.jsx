@@ -241,7 +241,9 @@ describe('ProductsPage', () => {
     expect(redirectMock).not.toHaveBeenCalled();
     expect(getVisibleCategoryRedirectCandidatesSeedMock).toHaveBeenCalledWith({ locale: 'bg' });
     expect(getProductsMock).toHaveBeenCalledWith('fairytale-characters', { locale: 'bg' });
-    expect(page.props.pageContent).toEqual({ heading: 'Плетени приказни герои' });
+    expect(page.props.children[0].props).toMatchObject({ type: 'application/ld+json' });
+    expect(page.props.children[0].props.dangerouslySetInnerHTML.__html).toContain('BreadcrumbList');
+    expect(page.props.children[1].props.pageContent).toEqual({ heading: 'Плетени приказни герои' });
   });
 
   it('temporarily redirects unmatched category queries to the current locale generic catalog', async () => {
@@ -256,6 +258,26 @@ describe('ProductsPage', () => {
 
     expect(getVisibleCategoryRedirectCandidatesSeedMock).toHaveBeenCalledWith({ locale: 'bg' });
     expect(redirectMock).toHaveBeenCalledWith('/products');
+    expect(permanentRedirectMock).not.toHaveBeenCalled();
+    expect(getProductsMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves approved tracking params when an English category falls back to the catalog', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    const { default: ProductsPage } = await import('@/app/products/page');
+
+    await expect(
+      ProductsPage({
+        params: Promise.resolve({ locale: 'en' }),
+        searchParams: Promise.resolve({
+          category: 'missing-category',
+          utm_campaign: 'summer',
+          foo: 'drop-me',
+        }),
+      })
+    ).rejects.toThrow('NEXT_TEMPORARY_REDIRECT:/en/products?utm_campaign=summer');
+
+    expect(redirectMock).toHaveBeenCalledWith('/en/products?utm_campaign=summer');
     expect(permanentRedirectMock).not.toHaveBeenCalled();
     expect(getProductsMock).not.toHaveBeenCalled();
   });
@@ -293,6 +315,30 @@ describe('ProductsPage', () => {
 
     expect(redirectMock).toHaveBeenCalledWith(
       '/products?category=fairytale-characters&utm_source=newsletter'
+    );
+    expect(permanentRedirectMock).not.toHaveBeenCalled();
+    expect(getProductsMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves approved tracking params on English alias redirects', async () => {
+    vi.stubEnv('NEXT_PUBLIC_LOCALE_ROUTES_ENABLED', 'true');
+    const { default: ProductsPage } = await import('@/app/products/page');
+
+    await expect(
+      ProductsPage({
+        params: Promise.resolve({ locale: 'en' }),
+        searchParams: Promise.resolve({
+          category: 'old-fairytale-characters',
+          utm_campaign: 'summer',
+          foo: 'drop-me',
+        }),
+      })
+    ).rejects.toThrow(
+      'NEXT_TEMPORARY_REDIRECT:/en/products?category=fairytale-characters&utm_campaign=summer'
+    );
+
+    expect(redirectMock).toHaveBeenCalledWith(
+      '/en/products?category=fairytale-characters&utm_campaign=summer'
     );
     expect(permanentRedirectMock).not.toHaveBeenCalled();
     expect(getProductsMock).not.toHaveBeenCalled();
@@ -341,7 +387,8 @@ describe('ProductsPage', () => {
     expect(redirectMock).not.toHaveBeenCalled();
     expect(permanentRedirectMock).not.toHaveBeenCalled();
     expect(getProductsMock).toHaveBeenCalledWith('unreviewed-category', { locale: 'bg' });
-    expect(page.props.pageContent).toBeNull();
+    expect(page.props.children[0]).toBeNull();
+    expect(page.props.children[1].props.pageContent).toBeNull();
   });
 
   it('keeps the locale prefix when redirecting English fallback categories to the generic catalog', async () => {
