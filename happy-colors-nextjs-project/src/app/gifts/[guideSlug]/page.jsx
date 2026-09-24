@@ -20,6 +20,7 @@ import {
 import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { stringifyJsonLd } from '@/utils/jsonLd';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import styles from '../gifts.module.css';
 
 const HIGHLIGHT_ICONS = [Heart, Palette, Sparkles];
@@ -187,16 +188,19 @@ export default async function GiftGuidePage(props = {}) {
         </div>
         <div className={styles.heroImageSlot}>
           {guideImageSet?.hero ? (
-            <img
-              className={styles.giftImage}
-              src={guideImageSet.hero}
-              alt={guide.title}
-              width="1200"
-              height="675"
-              fetchPriority="high"
-            />
+            <>
+              <img
+                className={styles.giftImage}
+                src={guideImageSet.hero}
+                alt={guide.title}
+                width="1200"
+                height="675"
+                fetchPriority="high"
+              />
+              <AiVisualLabel locale={locale} />
+            </>
           ) : (
-            <span>{heroImageLabel}</span>
+            <span className={styles.imagePlaceholder}>{heroImageLabel}</span>
           )}
         </div>
       </section>
@@ -210,16 +214,19 @@ export default async function GiftGuidePage(props = {}) {
             <article key={section.title} className={styles.featurePanel}>
               <div className={styles.featureImageSlot}>
                 {imageSrc ? (
-                  <img
-                    className={styles.giftImage}
-                    src={imageSrc}
-                    alt=""
-                    width="900"
-                    height="675"
-                    loading="lazy"
-                  />
+                  <>
+                    <img
+                      className={styles.giftImage}
+                      src={imageSrc}
+                      alt=""
+                      width="900"
+                      height="675"
+                      loading="lazy"
+                    />
+                    <AiVisualLabel locale={locale} />
+                  </>
                 ) : (
-                  <span>{imageLabel}</span>
+                  <span className={styles.imagePlaceholder}>{imageLabel}</span>
                 )}
               </div>
               <div className={styles.featureBody}>

@@ -11,6 +11,7 @@ import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import useTranslations from '@/i18n/useTranslations';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import styles from './shop.module.css';
 
 function buildCardMediaSlides(product) {
@@ -31,7 +32,7 @@ function buildCardMediaSlides(product) {
 }
 
 export default function ProductCard({ product, serviceContext = '' }) {
-  const { publicHref } = useLocaleNavigation();
+  const { locale, publicHref } = useLocaleNavigation();
   const { t } = useTranslations();
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -128,6 +129,7 @@ export default function ProductCard({ product, serviceContext = '' }) {
             loading="lazy"
           />
         ) : null}
+        {currentSlide ? <AiVisualLabel locale={locale} /> : null}
       </div>
       <h4 className={styles.productTitle} lang={isTranslationPending ? 'bg' : undefined}>
         {product.title}

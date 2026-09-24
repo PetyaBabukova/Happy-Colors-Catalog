@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import useTranslations from '@/i18n/useTranslations';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import { deleteHomeBanner } from '@/managers/homeBannersManager';
 import styles from './HomeHeroCarousel.module.css';
 
@@ -14,7 +15,7 @@ const SWIPE_THRESHOLD_PX = 50;
 export default function CartoonsHeroCarousel({ banners = [] }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useTranslations('cartoonsHero');
+  const { locale, t } = useTranslations('cartoonsHero');
   const activeBanners = useMemo(() => banners.filter((banner) => banner?.imageUrl), [banners]);
   const pointerIdRef = useRef(null);
   const dragStartXRef = useRef(0);
@@ -128,6 +129,7 @@ export default function CartoonsHeroCarousel({ banners = [] }) {
             fetchPriority={safeCurrentIndex === 0 ? 'high' : 'auto'}
           />
         </picture>
+        <AiVisualLabel locale={locale} />
 
         {canManageBanners && (
           <div className={styles.operatorControls} aria-label="Управление на банера">

@@ -16,6 +16,7 @@ import {
 import { DEFAULT_LOCALE } from '@/i18n/config';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
 import { stringifyJsonLd } from '@/utils/jsonLd';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import styles from './gifts.module.css';
 
 const HERO_IMAGE = {
@@ -138,6 +139,7 @@ export default async function GiftsPage(props = {}) {
             height={HERO_IMAGE.height}
             fetchPriority="high"
           />
+          <AiVisualLabel locale={locale} />
         </div>
       </section>
 
@@ -158,6 +160,7 @@ export default async function GiftsPage(props = {}) {
                   height="600"
                   loading="lazy"
                 />
+                <AiVisualLabel locale={locale} />
               </div>
               <div>
                 <h3>{card.title}</h3>

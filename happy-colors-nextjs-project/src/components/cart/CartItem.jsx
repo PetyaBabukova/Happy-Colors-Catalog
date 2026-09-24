@@ -5,19 +5,25 @@
 import { useCart } from '@/context/CartContext';
 import styles from './Cart.module.css';
 import Image from 'next/image';
+import useTranslations from '@/i18n/useTranslations';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 
 export default function CartItem({ item }) {
   const { removeFromCart, increaseQuantity, decreaseQuantity } = useCart();
+  const { locale } = useTranslations();
 
   return (
     <div className={styles.cartItem} data-testid="cart-item">
-      <Image
-        src={item.image}
-        alt={item.title}
-        width={80}
-        height={80}
-        className={styles.productImage}
-      />
+      <div className={styles.imageWrap}>
+        <Image
+          src={item.image}
+          alt={item.title}
+          width={80}
+          height={80}
+          className={styles.productImage}
+        />
+        <AiVisualLabel locale={locale} />
+      </div>
 
       <div className={styles.details}>
         <h4>{item.title}</h4>
