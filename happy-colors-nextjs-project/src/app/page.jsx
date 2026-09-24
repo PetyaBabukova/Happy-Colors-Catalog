@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import ProductCard from './products/ProductCard';
 import HomeHeroCarousel from '@/components/home-banners/HomeHeroCarousel';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import { buildPageMetadata } from '@/config/siteSeo';
 import { getGiftsPageContent } from '@/content/publicPages/gifts';
 import { getHomePageContent } from '@/content/publicPages/home';
@@ -83,7 +84,7 @@ export default async function Home(props = {}) {
             return (
               <Link key={card.href} href={publicHref(card.href)} className={styles.giftIdeaCard}>
                 {imageSrc && (
-                  <div className={styles.giftIdeaImageSlot} aria-hidden="true">
+                  <div className={styles.giftIdeaImageSlot}>
                     <Image
                       src={imageSrc}
                       alt=""
@@ -92,6 +93,7 @@ export default async function Home(props = {}) {
                       sizes="(max-width: 768px) 100vw, 33vw"
                       className={styles.giftIdeaImage}
                     />
+                    <AiVisualLabel locale={locale} />
                   </div>
                 )}
                 <h3>{card.title}</h3>

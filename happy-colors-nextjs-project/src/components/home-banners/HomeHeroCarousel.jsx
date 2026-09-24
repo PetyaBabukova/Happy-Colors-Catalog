@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import useTranslations from '@/i18n/useTranslations';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import { deleteHomeBanner } from '@/managers/homeBannersManager';
 import styles from './HomeHeroCarousel.module.css';
 
@@ -26,7 +27,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
   const router = useRouter();
   const { user } = useAuth();
   const { publicHref } = useLocaleNavigation();
-  const { t } = useTranslations('homeHero');
+  const { locale, t } = useTranslations('homeHero');
   const activeBanners = useMemo(() => banners.filter((banner) => banner?.imageUrl), [banners]);
   const pointerIdRef = useRef(null);
   const dragStartXRef = useRef(0);
@@ -65,6 +66,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
               fetchPriority="high"
             />
           </picture>
+          <AiVisualLabel locale={locale} />
           <div className={styles.content}>
             <div className={styles.textPanel}>
               <h2>{t('fallbackTitle')}</h2>
@@ -177,6 +179,7 @@ export default function HomeHeroCarousel({ banners = [] }) {
             fetchPriority={safeCurrentIndex === 0 ? 'high' : 'auto'}
           />
         </picture>
+        <AiVisualLabel locale={locale} />
         <div className={styles.content}>
           <div className={styles.textPanel}>
             <h2>{bannerTitle}</h2>

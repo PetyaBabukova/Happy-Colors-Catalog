@@ -14,6 +14,7 @@ import useImageSlideshow from '@/hooks/useImageSlideshow';
 import { normalizeImageUrls } from '@/utils/normalizeImageUrls';
 import { normalizeProductVideosForSeo } from '@/utils/productSeo';
 import MessageBox from '@/components/ui/MessageBox';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import { approveAdminProduct, rejectAdminProduct } from '@/managers/usersAdminManager';
 import TranslationDecisionModal from '@/components/translations/TranslationDecisionModal';
 import { acceptCurrentTranslation, generateTranslation } from '@/managers/translationsManager';
@@ -62,7 +63,7 @@ function buildMediaSlides(imageUrls, videos) {
 export default function ProductDetails({ product, serviceContext = '' }) {
 	const { user } = useAuth();
 	const { addToCart } = useCart();
-	const { publicHref } = useLocaleNavigation();
+	const { locale, publicHref } = useLocaleNavigation();
 	const { t } = useTranslations();
 	const isFullAdmin = user?.role === 'full_admin';
 	const isCartoonServiceContext = isCartoonsServiceContext(serviceContext);
@@ -731,6 +732,7 @@ export default function ProductDetails({ product, serviceContext = '' }) {
 							›
 						</button>
 					)}
+					{mediaSlides.length > 0 ? <AiVisualLabel locale={locale} /> : null}
 				</div>
 			</div>
 		</section>

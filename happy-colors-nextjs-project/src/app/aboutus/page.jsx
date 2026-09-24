@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { buildPageMetadata } from '@/config/siteSeo';
 import { getAboutPageContent } from '@/content/publicPages/about';
 import { getServerPublicHref } from '@/i18n/serverNavigation';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import styles from './about.module.css';
 
 const iconByName = {
@@ -94,6 +95,7 @@ export default async function AboutUs(props = {}) {
             fetchPriority="high"
           />
         </picture>
+        <AiVisualLabel locale={locale} />
 
         <div className={styles.heroContent}>
           <h1 id="about-title">{content.hero.title}</h1>

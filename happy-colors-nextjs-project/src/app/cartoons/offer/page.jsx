@@ -12,6 +12,7 @@ import {
   buildCartoonsBreadcrumbJsonLd,
 } from '@/utils/cartoonsSeo';
 import { stringifyJsonLd } from '@/utils/jsonLd';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import styles from './offer.module.css';
 
 function renderRichTextParts(parts, publicHref) {
@@ -98,6 +99,7 @@ export default async function CartoonsOfferPage(props = {}) {
             sizes="100vw"
           />
         </picture>
+        <AiVisualLabel locale={locale} />
         <div className={`${styles.heroContent} pageInline`}>
           <Image
             className={styles.logo}
@@ -146,6 +148,7 @@ export default async function CartoonsOfferPage(props = {}) {
             fill
             sizes="(max-width: 768px) 100vw, 42vw"
           />
+          <AiVisualLabel locale={locale} />
         </div>
         <div className={styles.addOnsPanel}>
           <p className={styles.kicker}>{content.addOns.kicker}</p>

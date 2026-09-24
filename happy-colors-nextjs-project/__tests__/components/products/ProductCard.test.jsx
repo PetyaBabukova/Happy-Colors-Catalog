@@ -110,6 +110,19 @@ describe('ProductCard', () => {
     expect(screen.queryByText('Налично')).not.toBeInTheDocument();
   });
 
+  it('does not render the visual label when the product has no media', () => {
+    useImageSlideshow.mockReturnValueOnce({
+      currentItem: null,
+      isInView: true,
+      pause,
+      resume,
+    });
+
+    render(<ProductCard product={{ ...product, imageUrls: [], videos: [] }} />);
+
+    expect(screen.queryByText('AI визуализация')).not.toBeInTheDocument();
+  });
+
   it('marks Bulgarian fallback products as translation pending', () => {
     render(
       <ProductCard

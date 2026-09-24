@@ -23,6 +23,13 @@
   object-fit: cover;
 }
 
+.imageWrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  flex: 0 0 80px;
+}
+
 .details {
   flex-grow: 1;
 }

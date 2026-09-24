@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import useLocaleNavigation from '@/i18n/useLocaleNavigation';
 import useTranslations from '@/i18n/useTranslations';
+import AiVisualLabel from '@/components/ui/AiVisualLabel';
 import BlogArticleActions from './BlogArticleActions';
 import styles from './blogPublic.module.css';
 
@@ -19,7 +20,7 @@ function formatDate(value, formatter) {
 }
 
 export default function BlogArticleDetails({ article, articles = [] }) {
-  const { t, formatVisibleDate } = useTranslations('blog');
+  const { locale, t, formatVisibleDate } = useTranslations('blog');
   const { publicHref } = useLocaleNavigation();
   const publishedAt = article.publishedAt || article.createdAt;
   const publishedDate = formatDate(publishedAt, formatVisibleDate);
@@ -36,6 +37,7 @@ export default function BlogArticleDetails({ article, articles = [] }) {
             className={styles.heroImage}
             loading="eager"
           />
+          <AiVisualLabel locale={locale} />
         </div>
       )}
 
@@ -84,6 +86,7 @@ export default function BlogArticleDetails({ article, articles = [] }) {
                           alt=""
                           className={styles.asideImage}
                         />
+                        <AiVisualLabel locale={locale} />
                       </span>
                     )}
                     <span>
