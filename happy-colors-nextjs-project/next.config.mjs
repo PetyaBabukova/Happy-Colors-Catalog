@@ -37,6 +37,10 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    if (process.env.NEXT_PUBLIC_SITE_URL || process.env.RENDER_EXTERNAL_URL) {
+      return [];
+    }
+
     return [
       {
         source: '/api/users/:path*',
