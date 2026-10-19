@@ -5,11 +5,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
 const backendBaseUrl = String(
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.NEXT_PUBLIC_BASE_URL ||
-  (siteUrl ? `${siteUrl}/api` : 'http://localhost:3030')
+  'http://localhost:3030'
 ).replace(/\/+$/, '');
 const gcsBucketName = String(
   process.env.GCS_BUCKET_NAME ||
@@ -38,6 +37,10 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    if (process.env.NEXT_PUBLIC_SITE_URL || process.env.RENDER_EXTERNAL_URL) {
+      return [];
+    }
+
     return [
       {
         source: '/api/users/:path*',
